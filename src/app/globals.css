@@ -417,3 +417,5 @@ a { text-decoration: none; }
 @keyframes stamp { 0% { opacity: 0; transform: rotate(-8deg) scale(2); } 60% { opacity: 1; transform: rotate(-8deg) scale(.92); } 100% { transform: rotate(-8deg) scale(1); } }
 .emo-key { font-size: 26px; min-height: 46px; border-radius: 12px; border: 2px solid var(--line); background: #fff; box-shadow: 0 3px 0 var(--line); cursor: pointer; padding: 0; }
 .emo-key:active { transform: translateY(3px); box-shadow: none; }
+.emo-key.banned { position: relative; opacity: .35; filter: grayscale(1); box-shadow: none; cursor: not-allowed; }
+.emo-key.banned::after { content: ""; position: absolute; left: 8%; right: 8%; top: 50%; height: 3px; border-radius: 2px; background: var(--cherry-edge); transform: rotate(-35deg); }

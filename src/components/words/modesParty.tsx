@@ -319,6 +319,9 @@ export function EmojiMode({ room, v, send, say, nameOf }: ModeProps) {
           {v.emoji.map((e: string, i: number) => <span key={i} className="pop" style={{ width: 52, height: 52, borderRadius: 16, background: "#fff", boxShadow: "0 4px 0 #C9B8FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>{e}</span>)}
         </span>
         <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".04em", background: "#fff", color: "#5B3CC4", padding: "5px 10px", borderRadius: 10 }}>{cat.toUpperCase()}</span>
+        {describer && playing && v.banned.length > 0 && (
+          <span style={{ fontSize: 13, fontWeight: 900, color: "#fff" }}>Too easy, not allowed: {(v.banned as string[]).join(" ")}</span>
+        )}
       </section>
       {!describer && playing && <div style={{ display: "flex", justifyContent: "center" }}><Tiles text={v.pattern.map((n: number) => "_".repeat(n)).join(" ")} size={24} /></div>}
       {!playing && !g.done && <p style={{ margin: 0, textAlign: "center", fontSize: 17, fontWeight: 900, padding: "10px 12px", borderRadius: 14, background: v.solved ? "#D7FFB8" : "var(--mist)", color: v.solved ? "#2F6E00" : "var(--ink)" }}>{v.solved ? `Solved with ${v.history[0]?.emoji.length ?? v.emoji.length} emoji! +${v.pts}` : "Not this time"}</p>}
@@ -330,7 +333,12 @@ export function EmojiMode({ room, v, send, say, nameOf }: ModeProps) {
             {EMOJI.map((e, i) => <button key={e.group} className="seg" role="tab" aria-selected={tab === i} aria-pressed={tab === i} style={{ padding: "0 12px", minHeight: 38, flexShrink: 0 }} onClick={() => setTab(i)}>{e.group}</button>)}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 6 }}>
-            {EMOJI[tab].list.map((e) => <button key={e} className="emo-key" aria-label={`Add ${e}`} onClick={() => { feedback.tap(); void send("emoji", { text: e }); }}>{e}</button>)}
+            {EMOJI[tab].list.map((e) => {
+              const banned = (v.banned as string[]).includes(e);
+              return (
+                <button key={e} className={`emo-key${banned ? " banned" : ""}`} disabled={banned} aria-label={banned ? `${e} is banned for this word` : `Add ${e}`} onClick={() => { feedback.tap(); void send("emoji", { text: e }); }}>{e}</button>
+              );
+            })}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
             <button className="btn btn-white" style={{ fontSize: 15 }} disabled={!v.emoji.length} onClick={() => void send("undo")}>Undo emoji</button>

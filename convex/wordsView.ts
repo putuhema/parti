@@ -204,6 +204,7 @@ export const view = query({
         view = {
           describer: m.describer,
           riddle: describer || reveal ? m.order[g.round] : null,
+          banned: describer || reveal ? r.ban : [],
           pattern: shownWord.split(" ").map((w) => w.length),
           cat: r.cat,
           emoji: m.emoji,

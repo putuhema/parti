@@ -769,6 +769,7 @@ function emoji(g: WordGame, me: PId, action: string, x: Input, now: number) {
   if (action === "emoji") {
     if (me !== m.describer || g.phase !== "play") fail("Your friend is describing this one");
     if (!ALL_EMOJI.has(x.text)) fail("Pick an emoji from the list");
+    if (RIDDLES[m.order[g.round]].ban.includes(x.text)) fail("Too easy! That emoji is banned for this word");
     if (m.emoji.length >= 8) fail("That's the most emoji you can use");
     m.emoji.push(x.text);
     return;
