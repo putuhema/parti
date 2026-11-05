@@ -84,6 +84,18 @@ export default function ChessHome() {
         <span className="btn btn-green" style={{ minHeight: 46, fontSize: 17 }}>{next ? `${done ? "Continue" : "Start"} · ${next.name}` : "Practice again"}</span>
       </Link>
 
+      <h2 className="label" style={{ marginTop: 2 }}>Solo challenges</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+        <Link href="/chess/rush" onClick={() => { feedback.unlock(); feedback.tap(); }} style={{ borderRadius: 18, background: "#FFF0DB", border: "2px solid #FFC880", boxShadow: "0 4px 0 #FFC880", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#E08600" }}><Icon.Flame size={24} /><span style={{ fontSize: 16, fontWeight: 900, color: "#9A5200" }}>Puzzle Rush</span></span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#9A5200", lineHeight: 1.25 }}>Endless puzzles. Build your streak.</span>
+        </Link>
+        <Link href="/chess/journey" onClick={() => { feedback.unlock(); feedback.tap(); }} style={{ borderRadius: 18, background: "#F3E2FF", border: "2px solid #DDB3FF", boxShadow: "0 4px 0 #DDB3FF", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Icon.Crown size={24} /><span style={{ fontSize: 16, fontWeight: 900, color: "#8A4FB5" }}>Journey</span></span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#8A4FB5", lineHeight: 1.25 }}>Roguelike run with power-ups.</span>
+        </Link>
+      </div>
+
       <h2 className="label" style={{ marginTop: 2 }}>Play with a friend</h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
         {MODES.map((m) => (
