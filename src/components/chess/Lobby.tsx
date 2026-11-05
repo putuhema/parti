@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { Avatar, Icon, roomPaints } from "@/components/ui";
+import { Avatar, Icon, Sheet, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
@@ -32,6 +32,7 @@ export function ChessLobby({ room }: { room: ChessView }) {
   const leave = useMutation(api.chess.leave);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [starting, setStarting] = useState(false);
   const host = room.isHost;
   const mode = modeInfo(room.mode);
@@ -90,38 +91,36 @@ export function ChessLobby({ room }: { room: ChessView }) {
         <button className="icon-btn" style={{ border: "2px solid var(--line)", boxShadow: "0 3px 0 var(--line)" }} aria-label={copied ? "Link copied" : "Share invite link"} onClick={share}><Icon.Share size={18} /></button>
       </header>
 
-      <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900 }}>{host ? "Pick a mode" : `${room.members.find((m) => m.isHost)?.name ?? "Host"} is picking`}</h1>
-
-      <div className="mode-grid" role="radiogroup" aria-label="Game mode">
-        {MODES.map((m) => {
-          const on = m.id === room.mode;
-          return (
-            <button
-              key={m.id}
-              className="mode-tile"
-              role="radio"
-              aria-checked={on}
-              disabled={!host}
-              onClick={() => set({ mode: m.id })}
-              style={on ? { background: m.soft, borderColor: m.edge, boxShadow: `0 4px 0 ${m.edge}` } : undefined}
-            >
-              <ModeIcon mode={m} size={34} />
-              <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                <span className="nm">{m.name}</span>
-                <span className="who">{m.who}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <section className="rise" key={room.mode} style={{ borderRadius: 18, background: mode.soft, border: `2px solid ${mode.line}`, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }} aria-live="polite">
-        <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <span style={{ fontSize: 19, fontWeight: 900 }}>{mode.name}</span>
-          {mode.party && <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".06em", color: "#fff", background: "var(--cherry-edge)", padding: "3px 7px", borderRadius: 8 }}>PARTY MODE</span>}
+      <section className="rise" key={room.mode} style={{ borderRadius: 22, background: mode.soft, border: `2px solid ${mode.line}`, boxShadow: `0 4px 0 ${mode.line}`, padding: 16, display: "flex", flexDirection: "column", gap: 10 }} aria-live="polite">
+        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <ModeIcon mode={mode} size={48} />
+          <span style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".06em", color: mode.ink }}>{mode.party ? "PARTY MODE · " : ""}{mode.who.toUpperCase()}</span>
+            <span style={{ fontSize: 22, fontWeight: 900 }}>{mode.name}</span>
+          </span>
+          {host && <button className="btn btn-white btn-sm" onClick={() => { feedback.tap(); setPicking(true); }}>Change</button>}
         </span>
         <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.4, color: mode.ink }}>{mode.rule}</span>
+        {!host && <span style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>{room.members.find((m) => m.isHost)?.name ?? "The host"} picked this game</span>}
       </section>
+
+      <Sheet open={picking} onClose={() => setPicking(false)} label="Change game mode">
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, textAlign: "center" }}>Change mode</h2>
+        <div className="mode-grid" role="radiogroup" aria-label="Game mode">
+          {MODES.map((m) => {
+            const on = m.id === room.mode;
+            return (
+              <button key={m.id} className="mode-tile" role="radio" aria-checked={on} onClick={() => { set({ mode: m.id }); setPicking(false); }} style={on ? { background: m.soft, borderColor: m.edge, boxShadow: `0 4px 0 ${m.edge}` } : undefined}>
+                <ModeIcon mode={m} size={34} />
+                <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <span className="nm">{m.name}</span>
+                  <span className="who">{m.who}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
 
       {usesClock && (
         <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>

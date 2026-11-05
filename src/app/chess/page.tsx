@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { ChessMode } from "../../../convex/lib/chess";
-import { BotFace, ModeIcon, modeInfo } from "@/components/chess/bits";
+import { BotFace, MODES, ModeIcon } from "@/components/chess/bits";
 import { GameSwitch, Icon, Mascot, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
@@ -84,37 +84,17 @@ export default function ChessHome() {
         <span className="btn btn-green" style={{ minHeight: 46, fontSize: 17 }}>{next ? `${done ? "Continue" : "Start"} · ${next.name}` : "Practice again"}</span>
       </Link>
 
-      <h2 className="label" style={{ marginTop: 2 }}>Play with friends</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <button className="card" style={{ padding: "14px 16px" }} onClick={() => open("classic")} disabled={busy}>
-          <ModeIcon mode={modeInfo("classic")} size={52} />
-          <span className="col">
-            <span className="title">1 vs 1</span>
-            <span className="sub">Chess with a friend. Pick a mode and a clock.</span>
-          </span>
-          <Icon.Chevron />
-        </button>
-        <button className="card" style={{ padding: "14px 16px" }} onClick={() => open("team")} disabled={busy}>
-          <ModeIcon mode={modeInfo("team")} size={52} />
-          <span className="col">
-            <span className="title">Team vs Bot</span>
-            <span className="sub">Two of you share one army against Bolt.</span>
-          </span>
-          <Icon.Chevron />
-        </button>
-      </div>
-
-      <h2 className="label" style={{ marginTop: 2 }}>Party modes</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-        {(["coach", "powerups", "puzzles"] as ChessMode[]).map((id) => {
-          const m = modeInfo(id);
-          return (
-            <button key={id} onClick={() => open(id)} disabled={busy} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "12px 6px", borderRadius: 18, background: m.soft, border: `2px solid ${m.line}`, boxShadow: `0 4px 0 ${m.line}`, cursor: "pointer" }}>
-              <ModeIcon mode={m} size={40} />
-              <span style={{ fontSize: 15, fontWeight: 900 }}>{m.name}</span>
-            </button>
-          );
-        })}
+      <h2 className="label" style={{ marginTop: 2 }}>Play with a friend</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+        {MODES.map((m) => (
+          <button key={m.id} className="card" disabled={busy} onClick={() => open(m.id)} style={{ padding: "9px 10px", gap: 8, minHeight: 64, borderRadius: 18 }}>
+            <ModeIcon mode={m} size={34} />
+            <span style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 15, fontWeight: 900, lineHeight: 1.15 }}>{m.name}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.short}</span>
+            </span>
+          </button>
+        ))}
       </div>
 
       <Link href="/chess/bot" className="card" style={{ padding: "12px 16px" }} onClick={() => feedback.tap()}>

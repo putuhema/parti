@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
-import { Avatar, Icon, roomPaints } from "@/components/ui";
+import { Avatar, Icon, Sheet, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
@@ -18,6 +18,7 @@ export function WordsLobby({ room }: { room: WordsView }) {
   const leave = useMutation(api.words.leave);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [starting, setStarting] = useState(false);
   const host = room.isHost;
   const mode = wordMode(room.mode);
@@ -70,27 +71,33 @@ export function WordsLobby({ room }: { room: WordsView }) {
         <button className="icon-btn" style={{ border: "2px solid var(--line)", boxShadow: "0 3px 0 var(--line)" }} aria-label={copied ? "Link copied" : "Share invite link"} onClick={share}><Icon.Share size={18} /></button>
       </header>
 
-      <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>{host ? "Pick a word game" : `${room.members.find((m) => m.isHost)?.name ?? "Host"} is picking`}</h1>
-
-      <div className="mode-grid" role="radiogroup" aria-label="Word game">
-        {WORD_MODES.map((m) => {
-          const on = m.id === room.mode;
-          return (
-            <button key={m.id} className="mode-tile" role="radio" aria-checked={on} disabled={!host} onClick={() => set({ mode: m.id })} style={{ minHeight: 52, ...(on ? { background: m.soft, borderColor: m.edge, boxShadow: `0 4px 0 ${m.edge}` } : {}) }}>
-              <ModeChip mode={m} size={30} />
-              <span className="nm" style={{ fontSize: 14 }}>{m.en[0]}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <section className="rise" key={room.mode} style={{ borderRadius: 18, background: mode.soft, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }} aria-live="polite">
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 18, fontWeight: 900 }}>{mode.en[0]}</span>
-          <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".06em", color: mode.ink }}>{mode.coop ? "CO-OP" : mode.id === "scramble" ? "2–4 PLAYERS" : "1 VS 1"}</span>
+      <section className="rise" key={room.mode} style={{ borderRadius: 22, background: mode.soft, border: `2px solid ${mode.edge}33`, boxShadow: `0 4px 0 ${mode.edge}55`, padding: 16, display: "flex", flexDirection: "column", gap: 10 }} aria-live="polite">
+        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <ModeChip mode={mode} size={48} />
+          <span style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".06em", color: mode.ink }}>{mode.coop ? "CO-OP" : mode.id === "scramble" ? "2\u20134 PLAYERS" : "1 VS 1"}</span>
+            <span style={{ fontSize: 22, fontWeight: 900 }}>{mode.en[0]}</span>
+          </span>
+          {host && <button className="btn btn-white btn-sm" onClick={() => { feedback.tap(); setPicking(true); }}>Change</button>}
         </span>
         <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.4, color: mode.ink }}>{mode.rule}</span>
+        {!host && <span style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>{room.members.find((m) => m.isHost)?.name ?? "The host"} picked this game</span>}
       </section>
+
+      <Sheet open={picking} onClose={() => setPicking(false)} label="Change word game">
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, textAlign: "center" }}>Change game</h2>
+        <div className="mode-grid" role="radiogroup" aria-label="Word game">
+          {WORD_MODES.map((m) => {
+            const on = m.id === room.mode;
+            return (
+              <button key={m.id} className="mode-tile" role="radio" aria-checked={on} onClick={() => { set({ mode: m.id }); setPicking(false); }} style={{ minHeight: 52, ...(on ? { background: m.soft, borderColor: m.edge, boxShadow: `0 4px 0 ${m.edge}` } : {}) }}>
+                <ModeChip mode={m} size={30} />
+                <span className="nm" style={{ fontSize: 14 }}>{m.en[0]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <span className="label">Words in</span>
