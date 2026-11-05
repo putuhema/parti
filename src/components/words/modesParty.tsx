@@ -2,8 +2,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState } from "react";
-import { CATEGORIES, EMOJI, PROMPTS, RIDDLES } from "../../../convex/lib/words/content";
-import { Avatar, Heart, roomPaints } from "@/components/ui";
+import { EMOJI, PROMPTS, RIDDLES } from "../../../convex/lib/words/content";
+import { Avatar, FRIENDS, Heart, roomPaints } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
 import { AnswerBox, ScoreBar, Tiles, TimerBar, WordsHeader } from "./common";
@@ -51,8 +51,8 @@ export function ChemistryMode({ room, v, send, nameOf }: ModeProps) {
       {!reveal && <TimerBar deadline={g.deadline} total={25_000} />}
       {reveal ? (
         <section style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-          <Reveal who="You" word={v.mine ?? ""} paint={paints.get(room.meId)!} />
-          <Reveal who={nameOf(opp)} word={v.theirs ?? ""} paint={paints.get(opp)!} delay={150} />
+          <Reveal who="You" word={v.mine ?? ""} paint={paints.get(room.meId) ?? FRIENDS[0]} />
+          <Reveal who={nameOf(opp)} word={v.theirs ?? ""} paint={paints.get(opp) ?? FRIENDS[0]} delay={150} />
           <span className="stamp" style={{ position: "absolute", left: "50%", top: "50%", margin: "-24px 0 0 -70px", width: 140, height: 48, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, letterSpacing: ".06em", color: "#fff", background: v.match ? "var(--lime)" : "#AFAFAF", boxShadow: `0 4px 0 ${v.match ? "var(--lime-edge)" : "#8F8F8F"}`, animationDelay: "350ms" }}>{v.match ? "MATCH!" : "NO MATCH"}</span>
         </section>
       ) : v.mine ? (
@@ -89,18 +89,19 @@ const WHY: Record<string, string> = { banned: "banned word!", repeat: "said befo
 export function DontSayMode({ room, v, send, nameOf }: ModeProps) {
   const g = room.game!;
   const [text, setText] = useDraft(g.round);
-  const c = CATEGORIES[v.cat];
+  const c = v.catName as { en: string; id: string };
   const opp = g.players.find((x) => x !== room.meId)!;
   const paints = roomPaints(room.members);
   const reveal = g.phase === "reveal";
-  const bans = c.ban.filter((b, i, a) => a.indexOf(b) === i);
+  const bans: string[] | null = v.ban;
+  const hitMine = reveal && Object.values(v.verdict).some((x: any) => x.why === "banned");
   return (
     <>
       <WordsHeader room={room} right={<span style={{ fontSize: 15, fontWeight: 900, color: "var(--muted)" }}>Round {g.round + 1}</span>} />
       <section style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
         {g.players.map((id) => (
           <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 16, border: "2px solid var(--line)" }}>
-            <Avatar name={room.members.find((m) => m.id === id)?.name ?? "?"} paint={paints.get(id)!} size={30} />
+            <Avatar name={room.members.find((m) => m.id === id)?.name ?? "?"} paint={paints.get(id)} size={30} />
             <span style={{ display: "flex", flexDirection: "column", flex: 1, gap: 2 }}>
               <span style={{ fontSize: 14, fontWeight: 900 }}>{nameOf(id)}</span>
               <span style={{ display: "flex", gap: 2 }} aria-label={`${v.hearts[id]} hearts`}>{[0, 1, 2].map((k) => <Heart key={k} on={k < v.hearts[id]} size={16} />)}</span>
@@ -110,12 +111,19 @@ export function DontSayMode({ room, v, send, nameOf }: ModeProps) {
         ))}
       </section>
       <section className="panel" style={{ background: "var(--tangerine)", boxShadow: "0 5px 0 var(--tangerine-edge)", alignItems: "center", textAlign: "center", color: "#fff" }}>
-        <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#3C2400" }}>CATEGORY · {"★".repeat(c.tier)}</span>
+        <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#3C2400" }}>CATEGORY · {"★".repeat(v.tier)}</span>
         <span style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1, textShadow: "0 3px 0 #C26F00" }}>{say2(room.lang, c.en, c.id)}</span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", color: "#B81F1F", padding: "7px 12px", borderRadius: 14, boxShadow: "0 4px 0 #E08600", fontSize: 17, fontWeight: 900 }}>
-          DON&apos;T SAY: <span style={{ textDecoration: "line-through" }}>{bans.map((b) => b.toUpperCase()).join(" / ")}</span>
-        </span>
-        {c.tier >= 3 && <span style={{ fontSize: 13, fontWeight: 900, color: "#3C2400", background: "#FFE2B8", padding: "4px 10px", borderRadius: 10 }}>Only a few answers left. No repeats!</span>}
+        {bans ? (
+          <span className={hitMine ? "stamp" : "pop"} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", color: "#B81F1F", padding: "7px 12px", borderRadius: 14, boxShadow: "0 4px 0 #E08600", fontSize: 17, fontWeight: 900 }}>
+            {hitMine ? "BOOM! " : ""}THE SECRET WORD WAS: <span style={{ textDecoration: "line-through" }}>{bans.map((b) => b.toUpperCase()).join(" / ")}</span>
+          </span>
+        ) : (
+          <span style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", color: "#B81F1F", padding: "7px 12px", borderRadius: 14, boxShadow: "0 4px 0 #E08600", fontSize: 16, fontWeight: 900 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="14" r="7" fill="#3C3C3C" /><path d="M15 8 l3 -3 M18 5 l2 1 M18 5 l-1 -2" stroke="#FF9600" strokeWidth="2.2" strokeLinecap="round" /></svg>
+            One answer is a secret banned word
+          </span>
+        )}
+        {!bans && <span style={{ fontSize: 13, fontWeight: 900, color: "#3C2400", background: "#FFE2B8", padding: "4px 10px", borderRadius: 10 }}>{v.tier >= 3 ? "Only a few answers left. Choose carefully!" : "The most obvious answer might be the trap!"}</span>}
       </section>
       {!reveal && <TimerBar deadline={g.deadline} total={15_000} />}
       {reveal ? (

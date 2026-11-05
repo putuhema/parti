@@ -158,7 +158,8 @@ export function Hearts({ left, total, size = 22 }: { left: number; total: number
   );
 }
 
-export function Avatar({ name, paint, size = 40, style }: { name: string; paint: Paint; size?: number; style?: CSSProperties }) {
+export function Avatar({ name, paint: given, size = 40, style }: { name: string; paint?: Paint; size?: number; style?: CSSProperties }) {
+  const paint = given ?? FRIENDS[0]; // a player who left has no color any more
   return (
     <span
       className="avatar"

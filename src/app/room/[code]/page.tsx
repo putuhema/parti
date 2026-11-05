@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Lobby } from "@/components/room/Lobby";
 import { RoomGame } from "@/components/room/RoomGame";
@@ -23,8 +23,13 @@ export default function RoomPage() {
 
   // Opening an invite link joins you automatically.
   const needsJoin = room && !room.isMember && room.status !== "playing";
+  // Auto-join only when you open the link, never right after you leave (you'd bounce back in).
+  const wasMember = useRef(false);
   useEffect(() => {
-    if (needsJoin) join({ token, code }).catch((e) => setJoinError(errorText(e, "Couldn't join")));
+    if (room?.isMember) wasMember.current = true;
+  }, [room?.isMember]);
+  useEffect(() => {
+    if (needsJoin && !wasMember.current) join({ token, code }).catch((e) => setJoinError(errorText(e, "Couldn't join")));
   }, [needsJoin, token, code, join]);
 
   // Heartbeat so friends can see who's still here.

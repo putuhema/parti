@@ -140,7 +140,7 @@ export function HangmanMode(p: ModeProps) {
         <Balloons lives={v.myLives} />
       </section>
       <section className="panel" style={{ background: "#FFF0DB", flexDirection: "row", alignItems: "center", gap: 10, padding: "10px 14px" }}>
-        <Avatar name={nameOf(opp)} paint={roomPaints(room.members).get(opp!)!} size={34} />
+        <Avatar name={nameOf(opp)} paint={roomPaints(room.members).get(opp!)} size={34} />
         <span style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".04em", color: "#9A5200" }}>{nameOf(opp).toUpperCase()} IS CRACKING YOURS</span>
           <Tiles text={v.mineSeen} size={24} tone="them" />
@@ -333,7 +333,7 @@ export function ScrambleMode({ room, v, send, say }: ModeProps) {
         </div>
       </section>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {v.rivals.map((r: any) => <span key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 800, color: "var(--muted)" }}><Avatar name={room.members.find((m) => m.id === r.id)?.name ?? "?"} paint={paints.get(r.id)!} size={22} />found {r.count}</span>)}
+        {v.rivals.map((r: any) => <span key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 800, color: "var(--muted)" }}><Avatar name={room.members.find((m) => m.id === r.id)?.name ?? "?"} paint={paints.get(r.id)} size={22} />found {r.count}</span>)}
       </div>
       <div className="grow" />
       {!playing && !g.done && <TimerBar deadline={g.deadline} total={6000} />}

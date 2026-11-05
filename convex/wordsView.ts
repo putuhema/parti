@@ -2,7 +2,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { findPlayer } from "./lib/helpers";
-import { RIDDLES } from "./lib/words/content";
+import { CATEGORIES, RIDDLES } from "./lib/words/content";
 import type { WordGame } from "./words";
 
 const mask = (word: string, shown: (ch: string, i: number) => boolean) => word.split("").map((ch, i) => (shown(ch, i) ? ch : "_")).join("");
@@ -125,16 +125,19 @@ export const view = query({
       }
       case "dontsay": {
         const reveal = g.phase !== "answer";
+        const c = CATEGORIES[m.order[g.round]];
         view = {
-          cat: m.order[g.round],
+          // The client gets the category name only. The banned word stays secret until the reveal.
+          catName: { en: c.en, id: c.id },
+          tier: c.tier,
+          ban: reveal || over ? [...new Set(c.ban)] : null,
           hearts: m.hearts,
           used: m.used[meId] ?? [],
           mine: m.answers[meId] ?? null,
           theirs: reveal ? m.answers[opp] ?? "" : null,
           locked: Object.fromEntries(g.players.map((p) => [p, !!m.answers[p]])),
           verdict: reveal ? m.verdict : {},
-          history: m.history.slice(reveal ? 1 : 0, 5),
-          tiers: m.order.slice(0, g.round + 2),
+          history: m.history.slice(reveal ? 1 : 0, 5).map((h: any) => ({ ...h, ban: [...new Set(CATEGORIES[h.cat].ban)], catName: { en: CATEGORIES[h.cat].en, id: CATEGORIES[h.cat].id } })),
         };
         break;
       }

@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../../../convex/_generated/api";
 import { ChessLobby } from "@/components/chess/Lobby";
 import { ChessPlay } from "@/components/chess/Play";
@@ -22,8 +22,13 @@ export default function ChessRoomPage() {
   const [joinError, setJoinError] = useState("");
 
   const needsJoin = room && !room.isMember;
+  // Auto-join only when you open the link, never right after you leave (you'd bounce back in).
+  const wasMember = useRef(false);
   useEffect(() => {
-    if (needsJoin) join({ token, code }).catch((e) => setJoinError(errorText(e, "Couldn't join")));
+    if (room?.isMember) wasMember.current = true;
+  }, [room?.isMember]);
+  useEffect(() => {
+    if (needsJoin && !wasMember.current) join({ token, code }).catch((e) => setJoinError(errorText(e, "Couldn't join")));
   }, [needsJoin, token, code, join]);
 
   const isMember = room?.isMember;
