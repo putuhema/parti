@@ -48,17 +48,30 @@ export const view = query({
 
     switch (g.mode) {
       case "chain": {
-        const words: string[] = m.chains[g.round];
-        view = {
-          lang: m.langs[g.round],
-          turn: m.turn,
-          event: m.event,
-          rows: words.map((w, i) => {
-            const by = m.solved[g.round]?.[i];
+        if (g.phase === "setup") {
+          const mine = m.picks[meId];
+          view = { setup: true, myPick: mine ?? null, oppReady: !!m.picks[opp] };
+          break;
+        }
+        const board = (b: any) => ({
+          maker: b.maker,
+          lang: b.lang,
+          done: b.done,
+          found: b.solved.filter((x: string) => x && x !== "given" && x !== "nobody").length,
+          rows: b.words.map((w: string, i: number) => {
+            const by = b.solved[i];
             if (i === 0 || by || over) return { text: w, by: i === 0 ? "given" : by ?? "nobody", current: false };
-            if (i === m.wi) return { text: mask(w, (_, j) => m.open[j]), by: null, current: true };
+            if (i === b.wi) return { text: mask(w, (_, j) => b.open[j]), by: null, current: true };
             return { text: mask(w, (_, j) => j === 0), by: null, current: false };
           }),
+        });
+        const theirs = m.boards[opp];
+        view = {
+          turn: m.turn,
+          event: m.event,
+          mine: board(m.boards[meId]),
+          theirs: board(theirs),
+          myChain: theirs.maker === meId ? theirs.words : null,
         };
         break;
       }

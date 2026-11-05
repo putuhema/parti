@@ -112,13 +112,11 @@ function setup(mode: WordMode, lang: RoomLang, players: PId[], now: number): Wor
   const g: WordGame = { seq: 0, mode, lang, players, scores: Object.fromEntries(players.map((p) => [p, 0])), phase: "play", round: 0, rounds: 1, m: {} };
   const start = now + COUNTDOWN_MS;
   switch (mode) {
-    case "chain": {
-      const l1 = pickLang(lang), l2 = pickLang(lang);
-      const chains = [shuffle(CHAINS[l1])[0], shuffle(CHAINS[l2]).find((c) => c !== CHAINS[l1][0]) ?? CHAINS[l2][1]];
-      g.rounds = 2;
-      g.m = { chains, langs: [l1, l2], wi: 1, open: openFor(chains[0][1]), solved: [["given"]], turn: players[0], event: null };
+    case "chain":
+      // Each player first writes their own five words or takes a ready-made chain.
+      g.phase = "setup";
+      g.m = { picks: {}, event: null };
       break;
-    }
     case "hangman":
     case "guess":
       g.phase = "setup";
@@ -368,43 +366,89 @@ function onDeadline(g: WordGame, now: number) {
 }
 
 // ---------- Word Chain ----------
+const CHAIN_MIN = 2, CHAIN_MAX = 10;
+function chainSetup(g: WordGame, me: PId, action: string, x: Input) {
+  const m = g.m;
+  if (m.picks[me]) fail("You're all set. Waiting for your friend");
+  if (action === "ready") m.picks[me] = "ready";
+  else if (action === "custom") {
+    const words = x.list.slice(0, 5).map((w) => norm(w).replace(/ /g, ""));
+    if (words.length !== 5 || words.some((w) => !w)) fail("Fill in all five words");
+    if (words.some((w) => w.length < CHAIN_MIN || w.length > CHAIN_MAX)) fail(`Each word needs ${CHAIN_MIN} to ${CHAIN_MAX} letters`);
+    if (new Set(words).size !== 5) fail("Use five different words");
+    m.picks[me] = words;
+  } else fail("Unknown move");
+  if (!g.players.every((p) => m.picks[p])) return;
+
+  // Each player gets a board: the chain their friend made for them (or a ready-made one).
+  const used = new Set<string>();
+  const boards: Record<string, any> = {};
+  for (const p of g.players) {
+    const friend = other(g, p);
+    const pick = m.picks[friend];
+    let words: string[], lang: Lang, maker: PId | null;
+    if (Array.isArray(pick)) {
+      words = pick; lang = g.lang === "id" ? "id" : "en"; maker = friend;
+    } else {
+      lang = pickLang(g.lang);
+      const pool = CHAINS[lang].filter((c) => !used.has(c.join()));
+      words = shuffle(pool.length ? pool : CHAINS[lang])[0];
+      maker = null;
+    }
+    used.add(words.join());
+    boards[p] = { words, lang, maker, wi: 1, open: openFor(words[1]), solved: ["given"], done: false };
+  }
+  g.m = { boards, turn: g.players[0], event: null };
+  g.phase = "play";
+}
+
+/**
+ * Both chains run at once. A right guess keeps your turn; a wrong guess or
+ * opening a letter hands the turn to your friend, who guesses on their chain.
+ */
 function chain(g: WordGame, me: PId, action: string, x: Input) {
+  if (g.phase === "setup") return chainSetup(g, me, action, x);
   const m = g.m;
   if (m.turn !== me) fail("It's your friend's turn");
-  const word: string = m.chains[g.round][m.wi];
-  const openLetter = () => { const j = m.open.indexOf(false); if (j >= 0) m.open[j] = true; };
+  const b = m.boards[me];
+  if (b.done) fail("Your chain is finished");
+  const word: string = b.words[b.wi];
+  const giveUp = () => {
+    const j = b.open.indexOf(false);
+    if (j >= 0) b.open[j] = true;
+    if (!b.open.includes(false)) { b.solved[b.wi] = "nobody"; m.event = { type: "nobody", by: me, word }; advanceBoard(b); }
+  };
   let result: { correct: boolean; points?: number } = { correct: false };
+  let keepTurn = false;
   if (action === "guess") {
     if (norm(x.text).replace(/ /g, "") === word) {
-      const pts = Math.max(1, m.open.filter((o: boolean) => !o).length);
+      const pts = Math.max(1, b.open.filter((o: boolean) => !o).length);
       g.scores[me] += pts;
-      m.solved[g.round][m.wi] = me;
+      if (b.maker) g.scores[b.maker] += 1; // a fair chain earns its writer a point
+      b.solved[b.wi] = me;
       m.event = { type: "solved", by: me, word, pts };
       result = { correct: true, points: pts };
-      advanceChain(g);
+      advanceBoard(b);
+      keepTurn = true;
     } else {
-      openLetter();
       m.event = { type: "miss", by: me, guess: norm(x.text).slice(0, 14) };
-      if (!m.open.includes(false)) { m.solved[g.round][m.wi] = "nobody"; m.event = { type: "nobody", word }; advanceChain(g); }
+      giveUp();
     }
   } else if (action === "pass") {
-    openLetter();
     m.event = { type: "pass", by: me };
-    if (!m.open.includes(false)) { m.solved[g.round][m.wi] = "nobody"; m.event = { type: "nobody", word }; advanceChain(g); }
+    giveUp();
   } else fail("Unknown move");
-  if (!g.done) m.turn = other(g, me);
+
+  const friend = other(g, me);
+  if (b.done && m.boards[friend].done) { finishByScore(g); return result; }
+  // Hand over on a miss, or when my chain is done; stay if my friend has nothing left.
+  if ((!keepTurn || b.done) && !m.boards[friend].done) m.turn = friend;
   return result;
 }
-function advanceChain(g: WordGame) {
-  const m = g.m;
-  m.wi += 1;
-  if (m.wi >= m.chains[g.round].length) {
-    if (g.round + 1 >= g.rounds) return finishByScore(g);
-    g.round += 1;
-    m.wi = 1;
-    m.solved[g.round] = ["given"];
-  }
-  m.open = openFor(m.chains[g.round][m.wi]);
+function advanceBoard(b: any) {
+  b.wi += 1;
+  if (b.wi >= b.words.length) { b.done = true; return; }
+  b.open = openFor(b.words[b.wi]);
 }
 
 // ---------- Hangman Duel & Guess My Word: secret words ----------

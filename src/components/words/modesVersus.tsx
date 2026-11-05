@@ -17,9 +17,50 @@ function useDraft(seq: number) {
 }
 
 // ---------- Word Chain ----------
-export function ChainMode({ room, v, send, say, nameOf }: ModeProps) {
+function ChainSetup({ room, v, send, nameOf }: ModeProps) {
+  const [words, setWords] = useState(["", "", "", "", ""]);
+  const opp = room.game!.players.find((p) => p !== room.meId);
+  if (v.myPick) {
+    return (
+      <section className="panel" style={{ background: "var(--sky-soft)", alignItems: "center", textAlign: "center" }}>
+        <span className="label" style={{ color: "var(--sky-edge)" }}>{v.myPick === "ready" ? "Ready-made chain" : "Your chain"}</span>
+        {Array.isArray(v.myPick) && <p style={{ margin: 0, fontSize: 17, fontWeight: 900, color: "var(--sky-edge)" }}>{v.myPick.map((w: string) => w.toUpperCase()).join(" → ")}</p>}
+        <p className="wait" style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "var(--sky-edge)" }}>{v.oppReady ? "Starting…" : `Waiting for ${nameOf(opp)}…`}</p>
+      </section>
+    );
+  }
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>Make a chain for {nameOf(opp)}</h1>
+      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--muted)" }}>Write five words where each one links to the one before. {nameOf(opp)} sees the first word and guesses the rest. You get +1 for every word they crack.</p>
+      <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        {words.map((w, i) => (
+          <li key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ width: 28, flexShrink: 0, textAlign: "center", fontSize: 15, fontWeight: 900, color: "var(--muted)" }}>{i + 1}</span>
+            <input className="input" style={{ flex: 1, minWidth: 0, minHeight: 46, fontSize: 17, padding: "0 12px", textTransform: "uppercase", background: "#fff" }} value={w} placeholder={i === 0 ? "First word (shown)" : `Word ${i + 1}`} aria-label={`Word ${i + 1}`} autoCapitalize="none" autoComplete="off" autoCorrect="off" spellCheck={false} onChange={(e) => setWords(words.map((x, k) => (k === i ? e.target.value.replace(/[^a-zA-Z]/g, "").slice(0, 10) : x)))} />
+          </li>
+        ))}
+      </ol>
+      <button className="btn btn-green" disabled={words.some((w) => w.length < 2)} onClick={async () => { const r = await send("custom", { list: words }); if (r) feedback.correct(); }}>Send my chain</button>
+      <button className="btn btn-white" onClick={() => { feedback.tap(); void send("ready"); }}>Use a ready-made chain</button>
+    </section>
+  );
+}
+
+export function ChainMode(p: ModeProps) {
+  if (p.v.setup) return <><WordsHeader room={p.room} /><ChainSetup {...p} /></>;
+  return <ChainPlay {...p} />;
+}
+
+function ChainPlay({ room, v: all, send, say, nameOf }: ModeProps) {
   const g = room.game!;
-  const myTurn = v.turn === room.meId && !g.done;
+  const opp = g.players.find((p) => p !== room.meId);
+  const myTurn = all.turn === room.meId && !g.done;
+  // Show the chain being guessed right now: yours on your turn, your friend's on theirs.
+  const showMine = g.done || all.turn === room.meId;
+  const v = { ...(showMine ? all.mine : all.theirs), turn: all.turn, event: all.event };
+  const mineChain = !showMine && v.maker === room.meId;
+  const title = showMine ? (v.maker ? `${nameOf(v.maker)}'s chain` : "Ready-made chain") : mineChain ? "Your chain" : `${nameOf(opp)}'s board`;
   const cur = v.rows.find((r: any) => r.current);
   const hidden = cur ? (cur.text.match(/_/g) ?? []).length : 0;
   const [typed, setTyped] = useDraft(g.seq);
@@ -39,7 +80,7 @@ export function ChainMode({ room, v, send, say, nameOf }: ModeProps) {
 
   return (
     <>
-      <WordsHeader room={room} right={<span style={{ fontSize: 15, fontWeight: 900, color: "var(--muted)" }}>Chain {g.round + 1} of {g.rounds}</span>} />
+      <WordsHeader room={room} right={<span style={{ fontSize: 15, fontWeight: 900, color: "var(--muted)" }}>{title}</span>} />
       <ScoreBar room={room} highlight={v.turn} label={(id) => (id === v.turn && !g.done ? (id === room.meId ? "YOUR TURN" : "THEIR TURN") : "")} />
       <ol style={{ listStyle: "none", margin: "4px 0 0", padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }} aria-label="Word chain">
         {v.rows.map((r: any, i: number) => (
@@ -53,8 +94,12 @@ export function ChainMode({ room, v, send, say, nameOf }: ModeProps) {
         ))}
       </ol>
       <p style={{ margin: 0, textAlign: "center", fontSize: 15, fontWeight: 900, padding: "8px 12px", borderRadius: 14, ...(evText ? evKind : { background: "var(--mist)" }) }} aria-live="polite">
-        {evText ? evText + " · " : ""}{g.done ? "" : myTurn ? `Your turn: what comes after ${prev.toUpperCase()}?` : `${nameOf(v.turn)} is thinking…`}
+        {evText ? evText + " · " : ""}{g.done ? "" : myTurn ? `Your turn: what comes after ${prev.toUpperCase()}?` : mineChain ? `${nameOf(v.turn)} is guessing your chain…` : `${nameOf(v.turn)} is guessing…`}
       </p>
+      <p style={{ margin: 0, textAlign: "center", fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>
+        You: {all.mine.done ? "done ✓" : `${all.mine.found} of 4 found`} · {nameOf(opp)}: {all.theirs.done ? "done ✓" : `${all.theirs.found} of 4 found`}
+      </p>
+      {mineChain && all.myChain && !g.done && <p style={{ margin: 0, textAlign: "center", fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>Your chain: {all.myChain.map((w: string) => w.toUpperCase()).join(" → ")}</p>}
       <div className="grow" />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 10 }}>
         <button className="btn btn-white" style={{ color: "var(--sun-ink)", fontSize: 15 }} disabled={!myTurn} onClick={() => { feedback.tap(); void send("pass"); }}><Icon.Bulb size={18} />Open a letter</button>
