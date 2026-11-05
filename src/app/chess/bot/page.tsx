@@ -8,12 +8,17 @@ import { Captured, PlayerBar, capturedFrom } from "@/components/chess/bits";
 import { Confetti, Icon, ME, Mascot, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
+import { loadSkill, rank, rate, saveSkill } from "@/lib/skill";
+import { useEngine } from "@/lib/useEngine";
 
 const LEVELS = [
   { n: 1, name: "Gentle", sub: "Makes mistakes" },
   { n: 2, name: "Casual", sub: "Plays okay" },
   { n: 3, name: "Tricky", sub: "Thinks ahead" },
+  { n: 4, name: "Smart", sub: "Matches your rating and grows with you" },
 ];
+
+const now = () => Date.now();
 
 type Snap = { state: State; last: [number, number] | null; moves: string[] };
 
@@ -26,7 +31,22 @@ export default function BotPage() {
   const [hint, setHint] = useState<Move | null>(null);
   const [toast, setToast] = useState<{ text: string; kind: string; id: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const ask = useEngine();
+  const gen = useRef(0);
+  const [skill, setSkill] = useState(() => loadSkill("chess"));
+  const [rated, setRated] = useState<number | null>(null); // rating change after a Smart game
+  useEffect(() => () => { gen.current++; if (timer.current) clearTimeout(timer.current); }, []);
+
+  /** Smart games count toward your rating (take-backs make it count less). */
+  function finishRated(st: State, tookBack: boolean) {
+    const o = outcome(st);
+    if (!o || level !== 4) return;
+    const score = o.winner === "w" ? 1 : o.winner === "draw" ? 0.5 : 0;
+    const next = rate(skill, skill.rating, score as 0 | 0.5 | 1, tookBack ? 0.4 : 1);
+    setRated(next.rating - skill.rating);
+    setSkill(next);
+    saveSkill("chess", next);
+  }
 
   const s = snap.state;
   const result = outcome(s);
@@ -36,7 +56,7 @@ export default function BotPage() {
   const cap = capturedFrom(s.cells);
 
   function say(text: string, kind: string) {
-    setToast({ text, kind, id: Date.now() });
+    setToast({ text, kind, id: now() });
   }
 
   function play(from: number, to: number, base: Snap) {
@@ -56,7 +76,19 @@ export default function BotPage() {
       setSel(null);
       const { next, res } = play(sel, i, snap);
       if (res.check) say("Check!", "good");
-      if (outcome(next.state)) return;
+      if (outcome(next.state)) { finishRated(next.state, undone.current); return; }
+      if (level === 4) {
+        const my = ++gen.current;
+        ask({ state: next.state, rating: skill.rating }).then((bm) => {
+          if (my !== gen.current || !bm) return;
+          timer.current = setTimeout(() => {
+            const r2 = play(bm.from, bm.to, next);
+            if (r2.res.check) say("Check!", "bad");
+            finishRated(r2.next.state, undone.current);
+          }, 250);
+        });
+        return;
+      }
       timer.current = setTimeout(() => {
         const bm = botMove(next.state, level ?? 1);
         if (!bm) return;
@@ -69,8 +101,11 @@ export default function BotPage() {
     setSel(null);
   }
 
+  const undone = useRef(false);
   function undo() {
     if (!history.length || s.turn !== "w") return;
+    undone.current = true;
+    gen.current++;
     feedback.tap();
     setSnap(history[history.length - 1]);
     setHistory(history.slice(0, -1));
@@ -80,6 +115,9 @@ export default function BotPage() {
 
   function restart(lv: number) {
     if (timer.current) clearTimeout(timer.current);
+    gen.current++;
+    undone.current = false;
+    setRated(null);
     setLevel(lv);
     setSnap({ state: startState("classic"), last: null, moves: [] });
     setHistory([]);
@@ -94,7 +132,7 @@ export default function BotPage() {
     <main className="screen tight" style={{ position: "relative" }}>
       <header className="topbar">
         <Link href="/chess" className="icon-btn" aria-label="Leave game"><Icon.Close /></Link>
-        <span className="chip chip-grape">PRACTICE · {LEVELS[(level ?? 1) - 1].name.toUpperCase()}</span>
+        <span className="chip chip-grape">PRACTICE · {LEVELS[(level ?? 1) - 1].name.toUpperCase()}{level === 4 ? ` · ${skill.rating}` : ""}</span>
         <span className="grow" />
         <button className="icon-btn" aria-label="New game" onClick={() => setLevel(null)}><Icon.Undo size={20} color="#AFAFAF" /></button>
       </header>
@@ -134,6 +172,7 @@ export default function BotPage() {
           <Mascot size={110} mood={won ? "joy" : "wow"} className={won ? "jump" : undefined} />
           <h2 style={{ margin: 0, fontSize: 36, fontWeight: 900, color: won ? "var(--lime-dark)" : "var(--tangerine-ink)" }}>{won ? "Checkmate!" : result.winner === "draw" ? "It's a draw" : "Bolt wins"}</h2>
           <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>{won ? "You beat Bolt!" : result.winner === "draw" ? `Draw by ${result.reason}.` : "Checkmate. Try again, or take back a move."}</p>
+          {rated !== null && <p style={{ margin: 0, fontSize: 17, fontWeight: 900, color: rated >= 0 ? "var(--lime-dark)" : "var(--cherry-edge)" }}>Rating {skill.rating} ({rated >= 0 ? "+" : ""}{rated}) · {rank(skill.rating)}</p>}
           <button className="btn btn-green" onClick={() => restart(level ?? 1)}>Play again</button>
           {!won && history.length > 0 && <button className="btn btn-white" onClick={undo}>Take back</button>}
           <Link href="/chess" className="btn btn-white">Back home</Link>

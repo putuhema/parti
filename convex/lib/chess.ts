@@ -285,6 +285,11 @@ function rawApply(s: State, m: Move): string {
   return a.join("");
 }
 
+/** Moves that may leave your own king in check (the search engine filters lazily). */
+export function pseudoMoves(s: State, rules: Rules = CLASSIC): Move[] {
+  return s.duckPending ? [] : pseudo(s, rules);
+}
+
 export function legalMoves(s: State, rules: Rules = CLASSIC): Move[] {
   if (s.duckPending) return [];
   const moves = pseudo(s, rules);

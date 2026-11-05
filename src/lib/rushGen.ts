@@ -2,8 +2,10 @@
 import { CLASSIC, applyMove, botMove, colorOf, fromFen, inCheck, legalMoves, startState, toFen, typeOf, type Move, type State } from "../../convex/lib/chess";
 import { MATES } from "../../convex/lib/chessPuzzles";
 
-export type PuzzleKind = "mate" | "win";
-export interface Puzzle { fen: string; kind: PuzzleKind; answers: Move[]; gain: number }
+export type PuzzleKind = "mate" | "mate2" | "win";
+/** One move for the player to find; `reply` is the opponent's answer before the next step. */
+export interface Step { answers: Move[]; reply?: Move }
+export interface Puzzle { fen: string; kind: PuzzleKind; steps: Step[]; rating: number }
 
 const PV: Record<string, number> = { p: 100, n: 310, b: 320, r: 500, q: 900, k: 0 };
 
@@ -59,14 +61,46 @@ function scored(s: State) {
   return legalMoves(s).map((m) => ({ m, v: -search(after(s, m), 1, -Infinity, Infinity) })).sort((a, b) => b.v - a.v);
 }
 
+const checks = (s: State) => legalMoves(s).filter((m) => inCheck(after(s, m)));
+
+/** Rough difficulty of a mate in one: more checks to choose from and quiet-looking mates are harder. */
+function mateRating(s: State, m: Move) {
+  const decoys = checks(s).length - 1;
+  let r = 850 + Math.min(6, decoys) * 70;
+  if (typeOf(s.cells[m.from]) === "n") r += 80;
+  if (s.cells[m.to] === ".") r += 60;
+  return Math.min(1600, r);
+}
+
+/** Mate in two that starts with a check (so the defence is forced and small). */
+function mateInTwo(s: State): Puzzle | null {
+  const firsts = checks(s).filter((m) => {
+    const a = after(s, m);
+    const replies = legalMoves(a);
+    return replies.length > 0 && replies.every((r) => mates(after(a, r)).length > 0);
+  });
+  if (firsts.length !== 1) return null;
+  const first = firsts[0];
+  const a = after(s, first);
+  // Pick the defence that leaves the fewest mates (the trickiest follow-up).
+  const replies = legalMoves(a).map((r) => ({ r, n: mates(after(a, r)).length })).sort((x, y) => x.n - y.n);
+  const reply = replies[0].r;
+  const finish = mates(after(a, reply));
+  return { fen: toFen(s), kind: "mate2", steps: [{ answers: [first], reply }, { answers: finish }], rating: Math.min(2000, 1300 + checks(s).length * 50 + (s.cells[first.to] !== "." ? 0 : 80)) };
+}
+
 /** Look at a position: is there exactly one clear idea? */
 export function puzzleFrom(s: State, allowWin = true): Puzzle | null {
   const legal = legalMoves(s);
   if (legal.length < 2) return null;
   const mm = mates(s);
-  if (mm.length === 1 || (mm.length === 2 && mm[0].to === mm[1].to)) return { fen: toFen(s), kind: "mate", answers: mm, gain: 0 };
-  if (mm.length || !allowWin) return null;
-  if (inCheck(s)) return null;
+  if (mm.length === 1 || (mm.length === 2 && mm[0].to === mm[1].to)) return { fen: toFen(s), kind: "mate", steps: [{ answers: mm }], rating: mateRating(s, mm[0]) };
+  if (mm.length) return null;
+  if (!inCheck(s)) {
+    const m2 = mateInTwo(s);
+    if (m2) return m2;
+  }
+  if (!allowWin || inCheck(s)) return null;
   const base = material(s);
   if (Math.abs(base) > 400) return null; // already lopsided: boring
   const sc = scored(s);
@@ -75,10 +109,27 @@ export function puzzleFrom(s: State, allowWin = true): Puzzle | null {
   const good = sc.filter((x) => x.v >= best.v - 60);
   const next = sc.find((x) => x.v < best.v - 60);
   if (good.length > 2 || (next && next.v > base + 120)) return null;
-  // The quiet "best" move is rarely obvious enough; keep tactics that start with a capture or check.
   const first = best.m;
-  if (s.cells[first.to] === "." && !inCheck(after(s, first)) && !first.promo) return null;
-  return { fen: toFen(s), kind: "win", answers: good.map((x) => x.m), gain };
+  const capture = s.cells[first.to] !== "." || !!first.promo;
+  const gives = inCheck(after(s, first));
+  // How the first move looks decides most of the difficulty.
+  let rating = capture ? 650 : gives ? 1050 : 1300;
+  const a1 = after(s, first);
+  const realized = -material(a1) - base; // material won right away
+  if (capture) {
+    const defended = legalMoves(a1).some((r) => r.to === first.to);
+    rating = defended ? 900 : 600 + Math.round(gain / 20);
+  }
+  if (realized >= gain - 100) return { fen: toFen(s), kind: "win", steps: [{ answers: good.map((x) => x.m) }], rating };
+  // The win comes later (fork, pin, skewer): ask for the follow-up too.
+  if (good.length !== 1) return null;
+  const reply = scored(a1)[0].m;
+  const s2 = after(a1, reply);
+  const sc2 = scored(s2);
+  if (!sc2.length || sc2[0].v - material(s2) < 200) return null;
+  const good2 = sc2.filter((x) => x.v >= sc2[0].v - 60);
+  if (good2.length > 2) return null;
+  return { fen: toFen(s), kind: "win", steps: [{ answers: [first], reply }, { answers: good2.map((x) => x.m) }], rating: rating + 150 };
 }
 
 /** Plays one quick bot game and returns the puzzles it found along the way. */
@@ -117,8 +168,9 @@ export function seedVariants(): Puzzle[] {
   for (const fen of MATES)
     for (const [m, sw] of [[false, false], [true, false], [false, true], [true, true]] as const) {
       const f = variant(fen, m, sw);
-      const mm = mates(fromFen(f));
-      if (mm.length === 1) out.push({ fen: f, kind: "mate", answers: mm, gain: 0 });
+      const st = fromFen(f);
+      const mm = mates(st);
+      if (mm.length === 1) out.push({ fen: f, kind: "mate", steps: [{ answers: mm }], rating: mateRating(st, mm[0]) });
     }
   return out;
 }

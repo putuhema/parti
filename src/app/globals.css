@@ -419,3 +419,12 @@ a { text-decoration: none; }
 .emo-key:active { transform: translateY(3px); box-shadow: none; }
 .emo-key.banned { position: relative; opacity: .35; filter: grayscale(1); box-shadow: none; cursor: not-allowed; }
 .emo-key.banned::after { content: ""; position: absolute; left: 8%; right: 8%; top: 50%; height: 3px; border-radius: 2px; background: var(--cherry-edge); transform: rotate(-35deg); }
+
+/* Chess Journey map */
+.mapnode { transition: transform 160ms var(--spring); }
+.mapnode.can > span { animation: mappulse 1.4s ease-in-out infinite; }
+.mapnode.can:active { transform: translate(-50%, -50%) scale(.92) !important; }
+.march { animation: march 900ms linear infinite; }
+@keyframes mappulse { 0%,100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(88,204,2,0)); } 50% { transform: scale(1.1); filter: drop-shadow(0 0 8px rgba(88,204,2,.55)); } }
+@keyframes march { to { stroke-dashoffset: -22; } }
+@media (prefers-reduced-motion: reduce) { .mapnode.can > span, .march { animation: none; } }
