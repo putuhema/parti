@@ -99,6 +99,11 @@ export const feedback = {
     tone(660, 0.09, 0.12, "square", 0.06);
     buzz([20, 40, 20]);
   },
+  /** Soft click when a dragged piece passes over a square it can move to. */
+  detent() {
+    tone(1500, 0, 0.025, "sine", 0.035);
+    buzz(4);
+  },
   ping() {
     tone(1200, 0, 0.06, "sine", 0.07);
   },

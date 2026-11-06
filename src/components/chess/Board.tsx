@@ -1,6 +1,7 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
+import { feedback } from "@/lib/feedback";
 
 const BASE = "M10 30.5 h20 a3 3 0 0 1 3 3 v1.5 a2 2 0 0 1 -2 2 h-22 a2 2 0 0 1 -2 -2 v-1.5 a3 3 0 0 1 3 -3z";
 const BODY: Record<string, { body: string; det: string }> = {
@@ -72,6 +73,37 @@ export interface BoardProps {
 
 const FILES = "abcdefgh";
 
+type Anim = { id: number; slide: Map<number, { dx: number; dy: number }>; gone: Map<number, string>; land: Set<number> };
+const NO_ANIM: Anim = { id: 0, slide: new Map(), gone: new Map(), land: new Set() };
+const isPiece = (ch: string | undefined) => !!ch && ch !== "." && ch !== "?";
+const isWhite = (ch: string) => ch !== ch.toLowerCase();
+
+/** Work out which pieces moved between two positions, so they can slide instead of teleport. */
+function diffMoves(prev: string, next: string) {
+  if (prev.length !== next.length) return null;
+  const from: number[] = [], to: number[] = [];
+  for (let i = 0; i < next.length; i++) {
+    if (prev[i] === next[i] || prev[i] === "?" || next[i] === "?") continue;
+    if (isPiece(prev[i])) from.push(i);
+    if (isPiece(next[i])) to.push(i);
+  }
+  if (!to.length || to.length > 3 || from.length > 4) return null; // new game, reset, etc.
+  const pairs: [number, number][] = [];
+  const left = new Set(from);
+  for (const t of to) {
+    let f = [...left].find((x) => prev[x] === next[t]);
+    // Promotion: pawn leaves, queen arrives.
+    if (f === undefined) f = [...left].find((x) => prev[x] !== "*" && next[t] !== "*" && isWhite(prev[x]) === isWhite(next[t]) && !isPiece(next[x]));
+    if (f === undefined) continue;
+    left.delete(f);
+    pairs.push([f, t]);
+  }
+  const gone = new Map<number, string>();
+  for (const [, t] of pairs) if (isPiece(prev[t])) gone.set(t, prev[t]); // captured on the landing square
+  for (const f of left) if (!isPiece(next[f])) gone.set(f, prev[f]); // en passant
+  return { pairs, gone };
+}
+
 export function Board(p: BoardProps) {
   const n = p.size ?? 8;
   const total = n * n;
@@ -80,6 +112,110 @@ export function Board(p: BoardProps) {
     const d = p.flipped ? total - 1 - sq : sq;
     return { x: (d % n) + 0.5, y: Math.floor(d / n) + 0.5 };
   };
+
+  // ---------- Move animations (slide, capture, snap back) ----------
+  // A move you just dragged into place: it lands instead of sliding again.
+  const [drop, setDrop] = useState<{ to: number; before: string } | null>(null);
+  const [snap, setSnap] = useState<{ cells: string; anim: Anim }>({ cells: p.cells, anim: NO_ANIM });
+  let anim = snap.anim;
+  if (snap.cells !== p.cells) {
+    const d = diffMoves(snap.cells, p.cells);
+    anim = { id: snap.anim.id + 1, slide: new Map(), gone: d?.gone ?? new Map(), land: new Set() };
+    for (const [f, t] of d?.pairs ?? []) {
+      if (drop && drop.to === t && drop.before === snap.cells) { anim.land.add(t); continue; }
+      const A = disp(f), B = disp(t);
+      anim.slide.set(t, { dx: A.x - B.x, dy: A.y - B.y });
+    }
+    if (drop) setDrop(null);
+    setSnap({ cells: p.cells, anim });
+  }
+  useEffect(() => {
+    if (!snap.anim.id) return;
+    const id = snap.anim.id;
+    const t = setTimeout(() => setSnap((s) => (s.anim.id === id ? { ...s, anim: { ...NO_ANIM, id } } : s)), 450);
+    return () => clearTimeout(t);
+  }, [snap.anim.id]);
+
+  // ---------- Drag and drop ----------
+  const gridRef = useRef<HTMLDivElement>(null);
+  const floatRef = useRef<HTMLDivElement>(null);
+  const press = useRef<{ id: number; sq: number; x: number; y: number; touch: boolean; dragging: boolean } | null>(null);
+  const skipClick = useRef(false);
+  const [drag, setDrag] = useState<number | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const live = !!p.onTap && !p.disabled;
+  const targets_ = p.targets ?? [];
+
+  function sqAt(x: number, y: number) {
+    const r = gridRef.current?.getBoundingClientRect();
+    if (!r) return null;
+    const c = Math.floor(((x - r.left) / r.width) * n), row = Math.floor(((y - r.top) / r.height) * n);
+    if (c < 0 || c >= n || row < 0 || row >= n) return null;
+    return order[row * n + c];
+  }
+  function placeFloat(x: number, y: number, touch: boolean) {
+    const r = gridRef.current?.getBoundingClientRect(), el = floatRef.current;
+    if (!r || !el) return;
+    const s = r.width / n;
+    // Lift above the finger on touch so you can see the piece.
+    el.style.transform = `translate(${x - r.left - s / 2}px, ${y - r.top - s / 2 - (touch ? s * 0.55 : 0)}px)`;
+  }
+  function onDown(e: RPointerEvent) {
+    skipClick.current = false;
+    if (!live || e.button !== 0) return;
+    const sq = sqAt(e.clientX, e.clientY);
+    if (sq == null || !isPiece(p.cells[sq]) || targets_.includes(sq)) return;
+    press.current = { id: e.pointerId, sq, x: e.clientX, y: e.clientY, touch: e.pointerType !== "mouse", dragging: false };
+    // Pick the piece up on press, not on release: it feels instant.
+    if (p.selected !== sq) {
+      skipClick.current = true;
+      p.onTap!(sq);
+    }
+  }
+  function onMove(e: RPointerEvent) {
+    const pr = press.current;
+    if (!pr || pr.id !== e.pointerId) return;
+    if (!pr.dragging) {
+      if (Math.hypot(e.clientX - pr.x, e.clientY - pr.y) < 6) return;
+      pr.dragging = true;
+      skipClick.current = true;
+      try { gridRef.current?.setPointerCapture(e.pointerId); } catch {}
+      setDrag(pr.sq);
+    }
+    placeFloat(e.clientX, e.clientY, pr.touch);
+    const sq = sqAt(e.clientX, e.clientY);
+    if (sq !== hover) {
+      setHover(sq);
+      if (sq != null && sq !== pr.sq && targets_.includes(sq)) feedback.detent();
+    }
+  }
+  function onUp(e: RPointerEvent) {
+    const pr = press.current;
+    if (!pr || pr.id !== e.pointerId) return;
+    press.current = null;
+    setDrag(null);
+    setHover(null);
+    if (!pr.dragging) return;
+    const sq = sqAt(e.clientX, e.clientY);
+    const holding = p.selected === pr.sq;
+    if (sq != null && sq !== pr.sq && (!holding || targets_.includes(sq))) {
+      if (holding) setDrop({ to: sq, before: p.cells });
+      p.onTap?.(sq);
+      return;
+    }
+    if (!holding) return;
+    // Dropped somewhere it can't go: snap back home.
+    const r = gridRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const s = r.width / n, home = disp(pr.sq);
+    const fx = (e.clientX - r.left) / s, fy = (e.clientY - r.top) / s - (pr.touch ? 0.55 : 0);
+    setSnap((st) => ({ ...st, anim: { id: st.anim.id + 1, slide: new Map([[pr.sq, { dx: fx - home.x, dy: fy - home.y }]]), gone: new Map(), land: new Set() } }));
+  }
+  function onCancel() {
+    press.current = null;
+    setDrag(null);
+    setHover(null);
+  }
   const set = (list?: number[]) => new Set(list ?? []);
   const targets = set(p.targets), stars = set(p.stars), frozen = set(p.frozen), shields = set(p.shields), glow = set(p.glow);
   const markAt = new Map<number, Mark["t"][]>();
@@ -87,7 +223,17 @@ export function Board(p: BoardProps) {
 
   return (
     <div className="cboard-wrap" style={{ ["--n" as string]: n }}>
-      <div className="cboard" role="grid" aria-label={p.label ?? "Chess board"}>
+      <div
+        ref={gridRef}
+        className={`cboard${live ? " live" : ""}${drag != null ? " dragging" : ""}`}
+        role="grid"
+        aria-label={p.label ?? "Chess board"}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onCancel}
+        onLostPointerCapture={(e) => { if (press.current?.dragging && press.current.id === e.pointerId) onCancel(); }}
+      >
         {order.map((sq, k) => {
           const r = Math.floor(sq / n), c = sq % n;
           const light = (r + c) % 2 === 0;
@@ -102,6 +248,14 @@ export function Board(p: BoardProps) {
           if (fog) cls.push("fog");
           if (glow.has(sq)) cls.push("glow");
           if (p.shake === sq) cls.push("shake");
+          if (hover === sq && drag != null && isT) cls.push("hov");
+          const sl = anim.slide.get(sq);
+          if (sl || anim.land.has(sq) || anim.gone.has(sq)) cls.push("mv");
+          const pcCls = ["pc"];
+          if (drag === sq && p.selected === sq) pcCls.push("ghost");
+          else if (sl) pcCls.push("slide", ...(p.selected === sq ? ["lift"] : []));
+          else if (p.selected === sq) pcCls.push("lift");
+          else if (anim.land.has(sq)) pcCls.push("land");
           const dr = k % n === 0, db = Math.floor(k / n) === n - 1;
           const label = `${n === 8 ? FILES[c] + (8 - r) : `row ${r + 1} column ${c + 1}`}${fog ? ", hidden" : has ? ", " + (ch === "*" ? "duck" : (ch === ch.toUpperCase() ? "white " : "black ") + PIECE_NAMES[ch.toLowerCase()]) : ""}${stars.has(sq) ? ", star" : ""}${isT ? (has ? ", capture" : ", move here") : ""}`;
           return (
@@ -109,7 +263,7 @@ export function Board(p: BoardProps) {
               key={sq}
               type="button"
               className={cls.join(" ")}
-              onClick={p.onTap && !p.disabled ? () => p.onTap!(sq) : undefined}
+              onClick={live ? () => { if (skipClick.current) { skipClick.current = false; return; } p.onTap!(sq); } : undefined}
               aria-label={label}
               disabled={!p.onTap || p.disabled}
             >
@@ -120,7 +274,15 @@ export function Board(p: BoardProps) {
               {stars.has(sq) && (
                 <svg className="star twinkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 l3 6.5 7 .8 -5.2 4.8 1.4 7 -6.2 -3.6 -6.2 3.6 1.4 -7 L2 9.3 l7 -.8z" fill="#FFC800" stroke="#E5A800" strokeWidth="1.6" strokeLinejoin="round" /></svg>
               )}
-              {has && <Piece code={ch} className={`pc${p.selected === sq ? " lift" : p.moved === sq ? " pop" : ""}`} />}
+              {anim.gone.has(sq) && <Piece key={`g${anim.id}`} code={anim.gone.get(sq)!} className="pc gone" />}
+              {has && (
+                <Piece
+                  key={`p${sl || anim.land.has(sq) ? anim.id : ""}`}
+                  code={ch}
+                  className={pcCls.join(" ")}
+                  style={sl ? ({ ["--dx" as string]: sl.dx, ["--dy" as string]: sl.dy } as CSSProperties) : undefined}
+                />
+              )}
               {frozen.has(sq) && (
                 <>
                   <span className="ice" />
@@ -134,6 +296,11 @@ export function Board(p: BoardProps) {
           );
         })}
       </div>
+      {drag != null && p.selected === drag && isPiece(p.cells[drag]) && (
+        <div ref={floatRef} className="cfloat" style={{ width: `${100 / n}%` }} aria-hidden="true">
+          <Piece code={p.cells[drag]} className="pc" />
+        </div>
+      )}
       {(p.arrows?.length || markAt.size || p.pending != null) && (
         <svg className="cboard-marks" viewBox={`0 0 ${n} ${n}`} aria-hidden="true">
           {[...markAt.entries()].map(([sq, types]) => {
