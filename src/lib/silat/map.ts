@@ -25,7 +25,7 @@ export const NODE_INFO: Record<NodeKind, { name: string; sub: string; color: str
   shop: { name: "Warung", sub: "Buy cards and Pusaka, heal, remove a card", color: "#2BB673", edge: "#1E7A4C" },
   event: { name: "Mystery", sub: "Something happens. You choose", color: "#CE82FF", edge: "#8A4FB5" },
   treasure: { name: "Treasure", sub: "Pick a Pusaka", color: "#FFC800", edge: "#B88A00" },
-  boss: { name: "Boss", sub: "Mandor Benteng", color: "#3C3C3C", edge: "#1A1A1A" },
+  boss: { name: "Boss", sub: "Raja Hitam, the enemy King", color: "#3C3C3C", edge: "#1A1A1A" },
 };
 
 function rng(seed: number) {

@@ -57,7 +57,7 @@ function rng(seed: number) {
 }
 const pickOne = <T,>(r: () => number, list: T[]) => list[Math.floor(r() * list.length)];
 
-export const floorName = (floor: number) => (floor >= FLOORS - 1 ? "Boss: Mandor Benteng" : `Floor ${floor + 1}`);
+export const floorName = (floor: number) => (floor >= FLOORS - 1 ? "Boss: Raja Hitam" : `Floor ${floor + 1}`);
 
 /** The first fight is handmade: kick the pawn in front of you into the pawn behind it. */
 function firstFight(hp: number, max: number, deck: string[], seed: number): Setup {
@@ -172,7 +172,12 @@ function randomFight(floor: number, hp: number, max: number, deck: string[], see
   const options = FLOOR_LAYOUTS[Math.min(floor, FLOOR_LAYOUTS.length - 1)];
   const layout = boss ? null : LAYOUTS[options[Math.floor(r() * options.length)]];
   const units: Setup["units"] = boss
-    ? [{ kind: "r", sq: pick([0]), target: true, boss: "Mandor Benteng", hp: 30, heavy: true, hit: 4 }, ...(["p", "p", "n", "n", "b", "p"] as Kind[]).map((kind) => ({ kind, sq: pick([1, 2, 3]) }))]
+    ? [
+        // The final boss: the enemy King himself. Below half HP he rises in fury (see rules.ts, fury).
+        { kind: "k", sq: pick([0], [2, 3]), target: true, boss: "Raja Hitam", hp: 30, hit: 4 },
+        { kind: "r", sq: pick([0], [0, 5]) },
+        ...(["b", "n", "n", "p", "p", "p"] as Kind[]).map((kind) => ({ kind, sq: pick([1, 2]) })),
+      ]
     : layout!.army(pick, floor);
   const things: Setup["things"] = [];
   const mud: number[] = [];
@@ -180,7 +185,7 @@ function randomFight(floor: number, hp: number, max: number, deck: string[], see
   return {
     hero, heroHp: hp, heroMax: max, units, things, mud, deck, seed: seed + floor * 101,
     limit: floor >= 4 ? 99 : floor >= 2 ? 4 : floor >= 1 ? 3 : 2,
-    name: boss ? "Mandor Benteng" : layout!.name,
+    name: boss ? "Raja Hitam" : layout!.name,
     survive: layout?.survive,
   };
 }

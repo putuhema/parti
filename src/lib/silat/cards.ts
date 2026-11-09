@@ -1,10 +1,12 @@
 // Raja Silat cards: what each one targets and what it does.
 import {
-  DIRS, FLY, KNIGHT, checkEnd, clone, drawCards, has, heroMoved, react, retarget, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
+  DIRS, FLY, KNIGHT, checkEnd, clone, doStep, shuffle, drawCards, freeSteps, has, heroMoved, lockUnit, react, retarget, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
   unitAt, unitName, type Fight,
 } from "./rules";
+import { announce, rangkaiFor } from "./rangkai";
 
-export type CardType = "Serang" | "Gerak" | "Tangkis" | "Jurus";
+/** Siasat = tactics: cards that bend the rules (your deck, your hand, the dice). */
+export type CardType = "Serang" | "Gerak" | "Tangkis" | "Jurus" | "Siasat";
 /** Playstyles. Cards without one are neutral. */
 export type Style = "harimau" | "bangau" | "ular";
 export const STYLES: Record<Style, { name: string; animal: string; text: string; color: string; edge: string }> = {
@@ -73,6 +75,30 @@ function slides(s: Fight, dirs: number[], max: number) {
   }
   return out;
 }
+
+/** Squares in a clear line from you (straight and diagonal): the first occupied one in each direction. */
+function firstInLines(s: Fight, dirs = [0, 1, 2, 3, 4, 5, 6, 7]) {
+  const out: { sq: number; dir: number }[] = [];
+  for (const d of dirs) {
+    for (let cur = offset(s, hero(s), DIRS[d][0], DIRS[d][1]); cur !== null; cur = offset(s, cur, DIRS[d][0], DIRS[d][1])) {
+      if (!isEmpty(s, cur)) { out.push({ sq: cur, dir: d }); break; }
+    }
+  }
+  return out;
+}
+/** The next occupied square after `sq` going in `dir`. */
+function behind(s: Fight, sq: number, dir: number): number | null {
+  for (let cur = offset(s, sq, DIRS[dir][0], DIRS[dir][1]); cur !== null; cur = offset(s, cur, DIRS[dir][0], DIRS[dir][1])) {
+    if (!isEmpty(s, cur)) return cur;
+  }
+  return null;
+}
+const lineUnits = (s: Fight) => firstInLines(s).filter((x) => !!unitAt(s, x.sq)).map((x) => x.sq);
+
+/** Naik Pangkat turns these cards into stronger ones for the rest of the fight. */
+export const PROMOTE: Record<string, string> = {
+  tendang: "badai", kuda: "ratu", pion: "ratu", tangkis: "kudakuda", tarik: "lilit", sabit: "tolak", dalam: "kerambit",
+};
 
 const P = {
   kick: { 7: "hit", 2: "push" } as const,
@@ -207,12 +233,12 @@ const list: CardDef[] = [
     pattern: P.guard, self: true, targets: self, play: (s) => { s.hero.block += 8; },
   },
   {
-    id: "tangkisan", style: "bangau", name: "Tangkisan", cost: 1, type: "Tangkis", text: "Block 3, kick back",
+    id: "tangkisan", style: "bangau", name: "Tangkisan", cost: 1, type: "Tangkis", text: "Block 3. Attackers next to you: d20 8+ kicks them back",
     pattern: { ...P.guard, 2: "push" }, self: true, targets: self,
     play: (s) => { s.hero.block += 3; s.counter = Math.max(s.counter, 1); },
   },
   {
-    id: "elakan", style: "ular", name: "Elakan", cost: 1, type: "Tangkis", text: "Dodge the first hit",
+    id: "elakan", style: "ular", name: "Elakan", cost: 1, type: "Tangkis", text: "Dodge the first hit (d20 8+)",
     pattern: { 11: "go", 13: "go" },
     targets: (s) => neighbors(s, hero(s)).filter((sq) => isEmpty(s, sq)),
     play: (s, sq) => { s.hop = sq; },
@@ -224,9 +250,7 @@ const list: CardDef[] = [
     play: (s, sq) => {
       const u = unitAt(s, sq);
       if (!u) return;
-      if (u.boss) return damageUnit(s, u, 4); // bosses shrug it off, but it hurts
-      u.locked = 1; // no action this turn, even after enemies re-aim
-      s.intents = s.intents.filter((i) => i.id !== u.id);
+      lockUnit(s, u);
     },
   },
   {
@@ -298,9 +322,8 @@ const list: CardDef[] = [
       const dest = offset(s, hero(s), DIRS[d][0], DIRS[d][1]);
       if (!u || dest === null) return;
       u.sq = dest;
-      u.locked = 1;
-      s.intents = s.intents.filter((i) => i.id !== u.id);
-      say(s, `The ${unitName(u)} is wrapped up and can't act this turn`, "good");
+      say(s, `You wrap up the ${unitName(u)}`, "you");
+      lockUnit(s, u);
     },
   },
   {
@@ -319,6 +342,208 @@ const list: CardDef[] = [
     pattern: { 6: "go", 8: "go", 16: "go", 18: "go" }, self: true, exhaust: true, targets: self,
     play: (s) => { s.powers.bayangan = (s.powers.bayangan ?? 0) + 1; },
   },
+  // ---------- Chess pieces you move like ----------
+  {
+    id: "pion", name: "Langkah Pion", cost: 0, type: "Gerak", text: "Step up 1, or hit diagonally up for 2. Top row: promote",
+    pattern: { 7: "go", 6: "hit", 8: "hit" },
+    targets: (s) => {
+      const up = offset(s, hero(s), 0, -1);
+      const diag = [offset(s, hero(s), -1, -1), offset(s, hero(s), 1, -1)].filter((x): x is number => x !== null && !!unitAt(s, x));
+      return [...(up !== null && isEmpty(s, up) ? [up] : []), ...diag];
+    },
+    play: (s, sq) => {
+      const u = unitAt(s, sq);
+      if (u) { damageUnit(s, u, 2 + s.powers.harimau); return; }
+      s.hero.sq = sq;
+      if (Math.floor(sq / s.n) === 0) {
+        // The card that was just played (now on top of the discard pile) becomes a queen's move.
+        const i = s.discard.lastIndexOf("pion");
+        if (i >= 0) s.discard[i] = "ratu";
+        s.fx.push({ t: "promote", sq });
+        say(s, "Your pawn reaches the top: Langkah Pion becomes Langkah Ratu for this fight!", "good");
+      }
+    },
+  },
+  {
+    id: "ratu", name: "Langkah Ratu", cost: 2, type: "Gerak", rare: true, text: "Move like a queen, any distance",
+    pattern: { 0: "go", 2: "go", 4: "go", 6: "go", 7: "go", 8: "go", 10: "go", 11: "go", 13: "go", 14: "go", 16: "go", 17: "go", 18: "go", 20: "go", 22: "go", 24: "go" },
+    targets: (s) => slides(s, [0, 1, 2, 3, 4, 5, 6, 7], 99),
+    play: (s, sq) => { s.hero.sq = sq; },
+  },
+  {
+    id: "rokade", name: "Rokade", cost: 1, type: "Gerak", text: "Swap places with a piece or object in a straight line",
+    pattern: { 2: "go", 10: "go", 14: "go", 22: "go" },
+    targets: (s) => firstInLines(s, [0, 2, 4, 6]).map((x) => x.sq),
+    play: (s, sq) => {
+      const o = occupant(s, sq);
+      if (!o || o.t === "hero") return;
+      const from = hero(s);
+      s.hero.sq = sq;
+      if (o.t === "unit") o.u.sq = from;
+      else o.th.sq = from;
+      s.fx.push({ t: "castle", sq });
+      say(s, `Rokade: you swap places with the ${o.t === "unit" ? unitName(o.u) : "object"}`, "you");
+    },
+  },
+  // ---------- Chess tactics ----------
+  {
+    id: "garpu", name: "Garpu Kuda", cost: 2, type: "Serang", text: "Jump like a knight, then hit 2 on every piece a knight's jump away",
+    pattern: { 1: "go", 3: "go", 5: "hit", 9: "hit", 15: "hit", 19: "hit", 21: "go", 23: "go" },
+    targets: (s) => CARDS.kuda.targets(s),
+    play: (s, sq) => {
+      s.hero.sq = sq;
+      const forked = KNIGHT.map(([dx, dy]) => offset(s, sq, dx, dy)).map((x) => (x === null ? undefined : unitAt(s, x))).filter((u): u is NonNullable<typeof u> => !!u);
+      if (forked.length >= 2) say(s, `Fork! ${forked.length} pieces at once`, "good");
+      for (const u of forked) damageUnit(s, u, 2 + s.powers.harimau);
+    },
+  },
+  {
+    id: "paku", name: "Paku", cost: 1, type: "Tangkis", text: "Pin the first piece in a line: it can't act. Hit 2 if a piece is behind it",
+    pattern: { 2: "guard", 7: "guard" },
+    targets: lineUnits,
+    play: (s, sq) => {
+      const u = unitAt(s, sq);
+      const d = dirTo(s, hero(s), sq);
+      if (!u || d < 0) return;
+      const back = behind(s, sq, d);
+      say(s, `You pin the ${unitName(u)}`, "you");
+      if (back !== null && unitAt(s, back)) { say(s, "It's pinned to the piece behind it!", "good"); damageUnit(s, u, 2); }
+      if (s.units.includes(u)) lockUnit(s, u);
+    },
+  },
+  {
+    id: "tusuk", name: "Tusuk Sate", cost: 2, type: "Serang", text: "Skewer: hit 3 on the first piece in a line and 3 on the one behind it",
+    pattern: { 7: "hit", 2: "hit" },
+    targets: lineUnits,
+    play: (s, sq) => {
+      const d = dirTo(s, hero(s), sq);
+      const first = unitAt(s, sq);
+      if (!first || d < 0) return;
+      const back = behind(s, sq, d);
+      const second = back !== null ? unitAt(s, back) : undefined;
+      damageUnit(s, first, 3 + s.powers.harimau);
+      if (second) damageUnit(s, second, 3 + s.powers.harimau);
+    },
+  },
+  {
+    id: "terbuka", name: "Serangan Terbuka", cost: 1, type: "Gerak", text: "Step 1. Every piece in a clear line from where you stood takes 2",
+    pattern: { 11: "go", 13: "go", 2: "hit", 22: "hit" },
+    targets: (s) => neighbors(s, hero(s)).filter((sq) => isEmpty(s, sq)),
+    play: (s, sq) => {
+      const from = hero(s);
+      s.hero.sq = sq;
+      // Discovered attack: the lines through your old square open up.
+      const hits: number[] = [];
+      for (let d = 0; d < 8; d++) {
+        const t = behind(s, from, d);
+        if (t !== null && unitAt(s, t)) hits.push(t);
+      }
+      if (hits.length) say(s, `Discovered attack on ${hits.length} ${hits.length === 1 ? "piece" : "pieces"}!`, "good");
+      for (const t of hits) { const u = unitAt(s, t); if (u) damageUnit(s, u, 2); }
+    },
+  },
+  {
+    id: "passant", name: "En Passant", cost: 0, type: "Serang", text: "Hit 3 on a neighbor that moved last enemy turn",
+    pattern: { 11: "hit", 13: "hit" },
+    targets: (s) => adjacentUnits(s).filter((sq) => (s.movedLast ?? []).includes(unitAt(s, sq)!.id)),
+    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, 3 + s.powers.harimau); },
+  },
+  {
+    id: "skak", name: "Skak!", cost: 2, type: "Serang", text: "The King in a clear line: hit 3 and it loses its action",
+    pattern: { 2: "hit", 7: "go" },
+    targets: (s) => firstInLines(s).filter((x) => unitAt(s, x.sq)?.target).map((x) => x.sq),
+    play: (s, sq) => {
+      const u = unitAt(s, sq);
+      if (!u) return;
+      s.fx.push({ t: "castle", sq });
+      say(s, "Skak!", "good");
+      damageUnit(s, u, 3);
+      if (s.units.includes(u)) lockUnit(s, u);
+    },
+  },
+  // ---------- Street fighting ----------
+  {
+    id: "kerambit", name: "Kerambit", cost: 0, type: "Serang", exhaust: true, text: "Hit a neighbor for 4. Once per fight",
+    pattern: { 7: "hit" }, targets: adjacentUnits,
+    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, 4 + s.powers.harimau); },
+  },
+  {
+    id: "cambuk", name: "Cambuk", cost: 1, type: "Serang", text: "Lash the first piece in a straight line: hit 2, pull it next to you",
+    pattern: { 2: "hit", 7: "go" },
+    targets: (s) => firstInLines(s, [0, 2, 4, 6]).filter((x) => !!unitAt(s, x.sq)).map((x) => x.sq),
+    play: (s, sq) => {
+      const u = unitAt(s, sq);
+      const d = dirTo(s, hero(s), sq);
+      if (!u || d < 0) return;
+      const dest = offset(s, hero(s), DIRS[d][0], DIRS[d][1]);
+      if (dest !== null && dest !== sq) u.sq = dest;
+      damageUnit(s, u, 2 + s.powers.harimau);
+    },
+  },
+  {
+    id: "sogok", name: "Sogok", cost: 1, type: "Siasat", exhaust: true, text: "Bribe any piece: it skips its next action. Once per fight",
+    pattern: { 7: "guard", 2: "guard" },
+    targets: (s) => s.units.map((u) => u.sq),
+    play: (s, sq) => { const u = unitAt(s, sq); if (u) { say(s, `You slip the ${unitName(u)} a few coins`, "you"); lockUnit(s, u); } },
+  },
+  {
+    id: "asap", name: "Bom Asap", cost: 1, type: "Siasat", text: "Smoke: enemies can't react to your moves this turn. Block 2",
+    pattern: { 6: "go", 8: "go", 16: "go", 18: "go", 12: "guard" }, self: true, targets: self,
+    play: (s) => { s.luck = { ...s.luck!, smoke: true }; s.hero.block += 2; },
+  },
+  // ---------- Deck and hand ----------
+  {
+    id: "intai", name: "Intai", cost: 1, type: "Siasat", text: "Scout: draw 2",
+    pattern: { 7: "go", 17: "go" }, self: true, targets: self,
+    play: (s) => drawCards(s, 2),
+  },
+  {
+    id: "putar", name: "Putar Balik", cost: 0, type: "Siasat", exhaust: true, text: "Shuffle your discard pile into your draw pile, draw 1",
+    pattern: { 11: "go", 13: "go" }, self: true, targets: self,
+    play: (s) => {
+      s.draw = shuffle(s, [...s.draw, ...s.discard]);
+      s.discard = [];
+      say(s, "You reshuffle your discard pile", "you");
+      drawCards(s, 1);
+    },
+  },
+  {
+    id: "simpan", name: "Simpan", cost: 0, type: "Siasat", text: "Keep your unplayed cards for next turn",
+    pattern: { 12: "guard" }, self: true, targets: self,
+    play: (s) => { s.keepHand = true; },
+  },
+  {
+    id: "pangkat", name: "Naik Pangkat", cost: 1, type: "Siasat", exhaust: true, text: "Promote every card in your hand for this fight",
+    pattern: { 2: "go", 7: "go" }, self: true,
+    targets: (s) => (s.hand.some((id) => PROMOTE[id]) ? self(s) : []),
+    play: (s) => {
+      const before = s.hand.filter((id) => PROMOTE[id]).length;
+      s.hand = s.hand.map((id) => PROMOTE[id] ?? id);
+      s.fx.push({ t: "promote", sq: hero(s) });
+      say(s, `Promotion! ${before} ${before === 1 ? "card is" : "cards are"} stronger for this fight`, "good");
+    },
+  },
+  {
+    id: "tambah", name: "Tambah", cost: 1, type: "Jurus", exhaust: true, text: "This fight: hold 1 more card each turn",
+    pattern: { 11: "go", 13: "go", 12: "guard" }, self: true, targets: self,
+    play: (s) => { s.handBonus = (s.handBonus ?? 0) + 1; drawCards(s, 1); },
+  },
+  // ---------- Dice ----------
+  {
+    id: "elang", name: "Mata Elang", cost: 0, type: "Siasat", text: "Until your next turn, roll your d20s twice, keep the best. Draw 1",
+    pattern: { 7: "go", 12: "guard" }, self: true, targets: self,
+    play: (s) => { s.luck = { ...s.luck!, adv: true }; drawCards(s, 1); },
+  },
+  {
+    id: "tenang", name: "Tenang", cost: 0, type: "Siasat", text: "Until your next turn, +4 on your d20s. Block 2",
+    pattern: P.guard, self: true, targets: self,
+    play: (s) => { s.luck = { ...s.luck!, bonus: (s.luck?.bonus ?? 0) + 4 }; s.hero.block += 2; },
+  },
+  {
+    id: "ejek", name: "Ejek", cost: 1, type: "Siasat", text: "Taunt: enemy jabs roll twice and keep the worst this turn. Block 3",
+    pattern: { 6: "hit", 8: "hit", 12: "guard" }, self: true, targets: self,
+    play: (s) => { s.luck = { ...s.luck!, taunt: true }; s.hero.block += 3; },
+  },
 ];
 
 export const CARDS: Record<string, CardDef> = Object.fromEntries(list.map((c) => [c.id, c]));
@@ -330,6 +555,7 @@ export const STARTER = ["tendang", "tendang", "tendang", "dalam", "tangkis", "ta
 export const POOL = list.map((c) => c.id).filter((id) => !["tendang", "tangkis", "kuda", "dalam"].includes(id));
 
 export const isAttack = (id: string) => CARDS[id]?.type === "Serang";
+export const typeOf = (id: string) => CARDS[id]?.type;
 
 /** What a card costs right now. */
 export const cardCost = (s: Fight, id: string) => CARDS[id]?.costFor?.(s) ?? CARDS[id]?.cost ?? 0;
@@ -339,28 +565,76 @@ export function canPlay(s: Fight, id: string) {
   return !!c && s.status === "play" && cardCost(s, id) <= s.tenaga && c.targets(s).length > 0;
 }
 
-/** Play the card at `idx` in your hand on square `sq`. Returns a new fight. */
-export function playCard(s: Fight, idx: number, sq: number): Fight {
-  const f = clone(s);
+/** One action in a combo: a card from your hand (by its index when the combo was started) or your free step. */
+export type ComboItem = { k: "card"; idx: number; sq: number } | { k: "step"; sq: number };
+
+/** Play one card (changes `f`). Returns false if it can't be played there. */
+function applyCard(f: Fight, idx: number, sq: number, chain: string[] = []): boolean {
   const id = f.hand[idx];
   const c = CARDS[id];
-  if (!c || !canPlay(f, id) || !c.targets(f).includes(sq)) return s;
-  f.fx = [];
-  f.combo = 0;
+  if (!c || !canPlay(f, id) || !c.targets(f).includes(sq)) return false;
+  const named = rangkaiFor(chain, id, typeOf);
   f.tenaga -= cardCost(f, id);
   f.hand.splice(idx, 1);
   (c.exhaust ? f.exhausted : f.discard).push(id);
   say(f, c.self ? `You play ${c.name}` : `You play ${c.name} on ${sqName(f, sq)}`, "you");
   const from = f.hero.sq;
+  if (named) { announce(f, named); named.before?.(f); }
   c.play(f, sq);
+  f.surge = 0; // a combo bonus only powers up this one card
+  if (named) named.after?.(f);
   if (f.hero.sq !== from && f.status === "play") {
     heroMoved(f);
     // Moved into an enemy's reach (Peci Hitam: Langkah Kuda slips past reactions).
     if (!(id === "kuda" && has(f, "peci"))) react(f);
   }
-  f.bestCombo = Math.max(f.bestCombo, f.combo);
-  if (f.combo >= 3) say(f, `Combo ×${f.combo}!`, "good");
   checkEnd(f);
   retarget(f); // enemies react to what you just did
-  return f;
+  return true;
+}
+
+export interface ComboResult {
+  fight: Fight;
+  /** For each card still in hand: its index in the hand the combo started with (-1 = drawn during the combo). */
+  origin: number[];
+  /** Items that couldn't be played when their turn came (a roll went differently, a piece moved). */
+  fizzled: number[];
+}
+
+/** Play a whole combo in order. The combo counter carries across every card in it.
+ *  `sim`: a preview. Dice assume the worst for you and nothing is final. */
+export function playCombo(s: Fight, items: ComboItem[], opts: { sim?: boolean } = {}): ComboResult {
+  const f = clone(s);
+  if (opts.sim) f.sim = true;
+  f.fx = [];
+  f.combo = 0;
+  f.rangkai = [];
+  const chain: string[] = []; // what's been played so far in this combo, for named combos
+  const origin = f.hand.map((_, i) => i);
+  const fizzled: number[] = [];
+  items.forEach((it, n) => {
+    if (f.status !== "play") { fizzled.push(n); return; }
+    if (it.k === "step") {
+      if (!freeSteps(f).includes(it.sq)) { fizzled.push(n); return; }
+      doStep(f, it.sq);
+      chain.push("step");
+      return;
+    }
+    const at = origin.indexOf(it.idx);
+    const id = f.hand[at];
+    if (at < 0 || !applyCard(f, at, it.sq, chain)) { fizzled.push(n); return; }
+    chain.push(id);
+    origin.splice(at, 1);
+    while (origin.length < f.hand.length) origin.push(-1); // cards drawn during the combo
+  });
+  for (const n of fizzled) if (!opts.sim) say(f, `Combo step ${n + 1} fizzles: it can't be played anymore`, "bad");
+  f.bestCombo = Math.max(f.bestCombo, f.combo);
+  if (f.combo >= 3) say(f, `Combo ×${f.combo}!`, "good");
+  return { fight: f, origin, fizzled };
+}
+
+/** Play the card at `idx` in your hand on square `sq`. Returns a new fight (the same one if it can't be played). */
+export function playCard(s: Fight, idx: number, sq: number): Fight {
+  const r = playCombo(s, [{ k: "card", idx, sq }]);
+  return r.fizzled.length ? s : r.fight;
 }

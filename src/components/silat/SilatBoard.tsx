@@ -13,6 +13,8 @@ export interface Highlights {
   steps?: number[];
   /** Squares where moving would get you struck, and for how much. */
   danger?: Map<number, number>;
+  /** The combo you're building: numbered markers on each step's square. */
+  combo?: { sq: number; n: number }[];
 }
 
 function Crate() {
@@ -48,6 +50,8 @@ const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   react: () => ["STRIKES!", "#FF4B4B"],
   slam: () => ["HANTAM!", "#FF4B4B"],
   gold: (f) => [`+${"n" in f ? f.n : ""} gold`, "#FFC800"],
+  roll: (f) => (f.t === "roll" ? [`d20: ${f.n}${f.ok ? " ✓" : " ✗"}`, f.ok === !!f.hero ? "#58CC02" : "#FF4B4B"] : ["", ""]),
+  fury: () => ["MURKA!", "#FF4B4B"],
 };
 
 export function SilatBoard({
@@ -232,6 +236,17 @@ export function SilatBoard({
         </div>
       ))}
 
+      {(() => {
+        // Several combo steps on one square stack their numbers.
+        const at2 = new Map<number, number[]>();
+        for (const c of hl.combo ?? []) at2.set(c.sq, [...(at2.get(c.sq) ?? []), c.n]);
+        return [...at2].map(([sq, ns]) => (
+          <div key={`q${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 7 }}>
+            <span className="sl-qmark">{ns.join("·")}</span>
+          </div>
+        ));
+      })()}
+
       {[...targets].map((sq) => (
         <div key={`h${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 4 }}>
           <span className={`sl-target${hl.pending === sq ? " on" : ""}`} />
@@ -264,7 +279,7 @@ export function SilatBoard({
           seen.set(f.sq, k + 1);
           return (
             <div key={`${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 6 }}>
-              <span className={`sl-float${f.t === "ko" || f.t === "ringout" ? " big" : ""}`} style={{ color: txt[1], top: `${-k * 34}%`, animationDelay: `${f.t === "gold" ? 280 : Math.min(i, 6) * 90}ms` }}>{txt[0]}</span>
+              <span className={`sl-float${f.t === "ko" || f.t === "ringout" || f.t === "fury" ? " big" : ""}${f.t === "roll" ? " roll" : ""}`} style={{ color: txt[1], top: `${-k * 34}%`, animationDelay: `${f.t === "gold" ? 280 : Math.min(i, 6) * 90}ms` }}>{txt[0]}</span>
             </div>
           );
         });

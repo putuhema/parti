@@ -19,8 +19,8 @@ Inspiration, not copies:
 1. **Push, don't take.** Damage comes from pieces hitting walls, objects, each other, the board
    edge, and their own allies. The board is your weapon.
 2. **You can always see it coming.** Every enemy shows its next action, and every card shows
-   exactly what it will do before you play it. No reflex timing, no dice in combat. The only
-   randomness is your card draw.
+   exactly what it will do before you play it. No reflex timing. The only randomness is your card
+   draw and the **d20 reaction rolls** (section 17): previews always show the worst roll.
 3. **Flashy beats safe.** The game rewards big chain reactions and fast wins more than slow, careful
    turtling.
 4. **Fun in the first minute.** A new player makes a chain reaction in their first fight.
@@ -72,9 +72,9 @@ Objects sit on squares, block movement, and can be pushed like pieces.
   stuck without movement.
 
 ### Turn order
-1. **Your turn starts**: draw 5 cards, Tenaga refills to 3, Block resets to 0.
-2. **Act**: play cards and take your free step, in any order. **Undo** is free until a card draws
-   or reveals something new.
+1. **Your turn starts**: draw **up to** 5 cards, Tenaga refills to 3, Block resets to 0.
+2. **Act**: build a **combo** of cards and your free step, see it previewed, press **Play**. Repeat as
+   often as Tenaga allows. **No undo**: once a combo is played it's locked in (section 17).
 3. **End turn**: discard your hand. The End Turn button shows the damage you're about to take.
 4. **Enemies act** in the order their intents show.
 5. **Pawns march** (section 3, "The clock"). Then enemies lock in new intents.
@@ -191,7 +191,8 @@ Planning should feel smart, not like trial and error.
   move ("hits its own pawn").
 - **End Turn shows incoming damage** ("Incoming: 3"). It turns red if you'd take damage you could
   still avoid with a card in your hand.
-- **Undo** any step or card this turn until something random happens (a card draw).
+- **Combo preview**: everything you queue is previewed together, with numbered markers on the board.
+  Remove a step (and everything after it) any time before Play. No undo after Play.
 - **Tap and hold** any piece, object or card to see its rules in one line.
 
 ---
@@ -296,7 +297,7 @@ fight: **pick 1 of 3 cards** (or skip) plus gold.
 
 | Act | Place | Board | Terrain and objects | Boss |
 |---|---|---|---|---|
-| I | **Sawah** (rice fields) | 6×6 | Mud, Batu, Pohon Kelapa, Petasan | **Mandor Benteng**: a rook with 20 HP that charges every turn and leaves mud behind |
+| I | **Sawah** (rice fields) | 6×6 | Mud, Batu, Pohon Kelapa, Petasan | **Raja Hitam**: the enemy King (30 HP), the final boss. See section 17 |
 | II | **Candi** (temple ruins) | 7×7 | Pillars, rope bridges, Kentongan, Gerobak | **Ratu Kembar**: twin queens (12 HP each); when one is hit, the other charges |
 | III | **Kawah** (volcano crater) | 8×8 | Lava holes, Petasan, Gerobak | **Raja Putih**: the white king (30 HP) who also knows silat. His kicks **push you**, into pieces (2 damage) or lava (5) |
 
@@ -592,3 +593,98 @@ Knights far from you no longer idle. Bot: ~52% runs won, losses spread over floo
 3. **HP**: is 20 right for a whole run? Decide after playtesting milestone 1.
 4. **Box-in Strikes**: they may make Act I too hard. If so, Act I Strikes aim only at your square.
 5. **More pressure later, if needed**: enemies that strike a whole line or area, or a turn limit.
+
+## 17. Game Plan pass (2026-11-09): combos, dice, piles, chess tactics, the King
+
+Folded in from the "Chess Prison Deckbuilder" game plan, kept in the Raja Silat world.
+
+### Combo queue, no undo
+- Tap cards (and squares) to queue a combo; your free step can be part of it. The board previews the
+  whole chain: numbered markers, ghosts, damage, KOs. The End Turn slot becomes **Play combo (n)**.
+- Tap a queued card or chip to drop it and everything after it. **Clear** empties the combo.
+- **The combo counter carries across the whole chain**, so chaining cards is how you hit Combo 3+.
+- A queued step that can't happen anymore when its turn comes (a roll went your way, a piece moved)
+  **fizzles** and is logged; its card stays in your hand.
+- Undo is gone.
+
+### d20 reactions
+Hidden d20 rolls, shown in the log and as a floating die on the board. A 20 always works, a 1 always fails.
+| Roll | Who | Needs |
+|---|---|---|
+| Jab as you arrive (reaction) | enemy | 10+ |
+| Elakan dodge | you | 8+ (one try; used up either way) |
+| Tangkisan kick-back | you | 8+ |
+
+Previews and the End Turn forecast assume the worst ("Up to N damage") and never use up the dice. Dice
+have their own random stream, so rolling never changes your card draws.
+
+### Deck and hand
+- Draw **up to** hand size each turn (5, Batu Akik +1, Tambah +1). The draw and discard piles show counts
+  under the hand; tap either to see both (the draw pile in A–Z order, not draw order).
+
+### New cards
+| Card | Cost | Type | Effect |
+|---|---|---|---|
+| Langkah Pion | 0 | Gerak | Step up 1, or hit diagonally up for 2. On the top row it becomes Langkah Ratu (this fight) |
+| Langkah Ratu | 2 | Gerak (rare) | Move like a queen |
+| Rokade | 1 | Gerak | Swap with the first piece or object in a straight line |
+| Garpu Kuda (fork) | 2 | Serang | Knight jump, then hit 2 on every piece a knight's jump away |
+| Paku (pin) | 1 | Tangkis | First piece in a line can't act; +2 damage if a piece is behind it |
+| Tusuk Sate (skewer) | 2 | Serang | Hit 3 on the first piece in a line and 3 on the one behind |
+| Serangan Terbuka (discovered attack) | 1 | Gerak | Step 1; every piece in a clear line from your old square takes 2 |
+| En Passant | 0 | Serang | Hit 3 on a neighbor that moved last enemy turn |
+| Skak! | 2 | Serang | The King in a clear line: hit 3 and it loses its action |
+| Kerambit | 0 | Serang | Hit a neighbor for 4. Exhaust |
+| Cambuk | 1 | Serang | First piece in a straight line: hit 2, pull it next to you |
+| Sogok (bribe) | 1 | Siasat | Any piece skips its next action. Exhaust |
+| Bom Asap (smoke) | 1 | Siasat | No reactions to your moves this turn. Block 2 |
+| Intai (scout) | 1 | Siasat | Draw 2 |
+| Putar Balik (recycle) | 0 | Siasat | Shuffle discard into draw, draw 1. Exhaust |
+| Simpan (stash) | 0 | Siasat | Keep your unplayed cards for next turn |
+| Naik Pangkat (promotion) | 1 | Siasat | Promote every card in hand for this fight (Tendang→Badai, Kuda→Ratu, Tangkis→Kuda-kuda, Tarik→Lilit, Sabit→Tolak Angin, Dalam→Kerambit). Exhaust |
+| Tambah (expand) | 1 | Jurus | +1 hand size this fight, draw 1. Exhaust |
+| Mata Elang (advantage) | 0 | Siasat | Your d20s roll twice, keep the best, until next turn. Draw 1 |
+| Tenang (steady hand) | 0 | Siasat | +4 on your d20s until next turn. Block 2 |
+| Ejek (taunt) | 1 | Siasat | Enemy jabs roll twice, keep the worst. Block 3 |
+
+**Siasat** (tactics, pink) is a new card type for cards that bend the rules. Lock effects (Paku, Sogok,
+Skak!, Kuncian, Lilit) can't hold a boss: it takes 4 damage instead.
+
+### Raja Hitam, the final boss
+The enemy King himself (30 HP, hits 4) with a rook, bishop, two knights and three pawns.
+- **Phase 1**: holds his throne like any king: strikes next to him, slams within 2.
+- **Phase 2 (half HP)**: "MURKA!" He castles away to the ally farthest from you, calls two pawns, hits
+  for 5, walks straight at you, kicks you back 2 squares when his strike lands (crash 2+, edge 5), and
+  calls a pawn every 2 turns instead of 3.
+
+### Not done from the plan
+- Prison setting and names (kept the Silat world on purpose).
+- Rive sprites and animations; dice are a CSS float for now.
+- Lockpick (no locks in this world; Rokade covers "Castle").
+
+### Fight layout (floating log and hand)
+- The board takes the full width and shrinks on short screens, so the hand never covers it.
+- The battle log is a toggle (top-right button): a translucent panel floats over the board. Hide closes it.
+- One line under the board shows the card tip, the combo chips, or the latest event.
+- The hand floats at the bottom; cards that start a named combo get a ▸ marker, cards that finish one
+  glow and get a ✦ marker, and the tray lists "next ✦ name".
+
+### Jurus Rangkai: named combos (`src/lib/silat/rangkai.ts`)
+Specific cards played in order inside **one** combo power up the last card ("surge" = its first hit deals
+more). Playing one shows a big banner over the board, a fanfare and a board pulse. All are listed in the
+Card Collection.
+
+| Name | Sequence | Bonus |
+|---|---|---|
+| Terkam Ganda | Terkam → Terkam | +3 hit, +3 Block |
+| Jebakan Passant | En Passant → any Serang | +3 hit, refund 1 Tenaga |
+| Tendangan Beruntun | Tendang ×3 | +4 hit on the third |
+| Serbuan Kuda | Langkah Kuda → any Serang | +2 hit |
+| Tarik Banting | Tarik → Bantingan | +3 hit |
+| Paku Sate | Paku → Tusuk Sate | +4 hit |
+| Skakmat Silat | Skak! → any Serang | +4 hit |
+| Rokade Kilat | Rokade → any Serang | +2 hit, draw 1 |
+| Bayang Bangau | Elakan → Tangkisan | your dodge and kick-back can't fail, +2 Block |
+| Benteng Tiga Lapis | Tangkis ×3 | +6 Block |
+| Serangan Bayangan | Bom Asap → Kerambit | +4 hit |
+| Langkah Harimau | Free step → Terkam | +2 hit |

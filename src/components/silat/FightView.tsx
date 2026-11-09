@@ -6,8 +6,9 @@ import { SilatBoard } from "@/components/silat/SilatBoard";
 import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { CARDS, canPlay, cardCost, isAttack, playCard } from "@/lib/silat/cards";
-import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, reactionDamage, step, TENAGA, unitName, type Fight } from "@/lib/silat/rules";
+import { CARDS, canPlay, cardCost, isAttack, playCombo, typeOf, type ComboItem } from "@/lib/silat/cards";
+import { rangkaiById, rangkaiFor, rangkaiStarts, type Rangkai } from "@/lib/silat/rangkai";
+import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, reactionDamage, sqName, TENAGA, unitName, type Fight } from "@/lib/silat/rules";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -24,10 +25,14 @@ function sound(f: Fight) {
 }
 
 export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floorLabel: string; onChange: (f: Fight) => void }) {
+  /** A card picked from the hand (its index in the real hand), waiting for a square. */
   const [sel, setSel] = useState<number | null>(null);
-  const [pending, setPending] = useState<number | null>(null);
-  const [history, setHistory] = useState<Fight[]>([]);
+  /** The combo being built. Nothing happens until you press Play. No undo once it's played. */
+  const [combo, setCombo] = useState<ComboItem[]>([]);
   const [logOpen, setLogOpen] = useState(false);
+  const [piles, setPiles] = useState(false);
+  /** The named combos just played, shown as a big banner over the board. */
+  const [banner, setBanner] = useState<{ key: number; list: Rangkai[] } | null>(null);
   const [fxKey, setFxKey] = useState(0);
   const loop = useRef(0);
   const shakeRef = useRef<HTMLDivElement>(null);
@@ -47,65 +52,104 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const f = fight;
   const busy = f.status === "enemy";
   const playing = f.status === "play" && !busy;
+  // The board as it will be after the combo so far (a preview: dice assume the worst for you).
+  const sim = combo.length ? playCombo(f, combo, { sim: true }) : null;
+  const q = sim?.fight ?? f;
+  const qIndex = (i: number) => (sim ? sim.origin.indexOf(i) : i); // a real-hand card's place in the preview hand
+  const queued = new Map<number, number>(); // real hand index -> combo number
+  combo.forEach((it, n) => { if (it.k === "card") queued.set(it.idx, n + 1); });
+  // Named combos: what's been queued so far, and which hand cards would finish one next.
+  const chain = combo.map((it) => (it.k === "step" ? "step" : f.hand[it.idx]));
+  const finishes = new Map<number, Rangkai>();
+  const starts = new Map<number, Rangkai>();
+  f.hand.forEach((id, i) => {
+    if (queued.has(i) || !playing || qIndex(i) < 0 || !canPlay(q, id)) return;
+    const r = rangkaiFor(chain, id, typeOf);
+    if (r) { finishes.set(i, r); return; }
+    const rest = f.hand.filter((_, j) => j !== i && !queued.has(j));
+    const st = rangkaiStarts(chain, id, rest, typeOf);
+    if (st) starts.set(i, st);
+  });
+  const triggered = (q.rangkai ?? []).map(rangkaiById).filter((r): r is Rangkai => !!r);
   const selId = sel !== null ? f.hand[sel] : null;
   const card = selId ? CARDS[selId] : null;
-  const targets = card && playing && selId && canPlay(f, selId) ? card.targets(f) : [];
-  const display = sel !== null && pending !== null && targets.includes(pending) ? playCard(f, sel, pending) : f;
-  const steps = playing && sel === null ? freeSteps(f) : [];
-  // Where moving gets you struck by an enemy that covers the square.
+  const selQ = sel !== null ? qIndex(sel) : -1;
+  const ready = !!card && playing && selQ >= 0 && canPlay(q, selId!);
+  const targets = ready ? card!.targets(q) : [];
+  const steps = playing && sel === null ? freeSteps(q) : [];
+  // Where moving gets you jabbed by an enemy that covers the square (if its d20 hits).
   const danger = new Map<number, number>();
   for (const sq of card?.type === "Gerak" ? targets : steps) {
-    const d = reactionDamage(f, sq);
+    const d = reactionDamage(q, sq);
     if (d > 0) danger.set(sq, d);
   }
-  const fc = f.status === "play" ? forecast(display) : null;
+  const fc = f.status === "play" ? forecast(q) : null;
   const incoming = fc?.damage ?? 0;
   const warn = incoming > 0;
-  const warnText = !fc ? "" : incoming > 0 ? `You'll take ${incoming} damage` : "Nobody gets hurt";
+  const warnText = !fc ? "" : incoming > 0 ? `Up to ${incoming} damage` : "Nobody gets hurt";
+  const display = q;
 
   function commit(next: Fight) {
-    // Drawing a card reveals your deck, so you can't undo past it.
-    setHistory((h) => (next.draw.length < f.draw.length || next.discard.length < f.discard.length - 1 ? [] : [...h, f]));
     setFxKey((k) => k + 1);
     sound(next);
     onChange(next);
   }
 
+  function add(it: ComboItem) {
+    feedback.tap();
+    setCombo((c) => [...c, it]);
+    setSel(null);
+  }
+
+  /** Drop combo step `n` and everything after it (it hasn't been played yet). */
+  function cut(n: number) {
+    feedback.tap();
+    setCombo((c) => c.slice(0, n));
+    setSel(null);
+  }
+
   function pickCard(i: number) {
     if (!playing) return;
     feedback.unlock();
+    if (queued.has(i)) return cut(queued.get(i)! - 1);
     const id = f.hand[i];
-    if (sel === i) { setSel(null); setPending(null); feedback.tap(); return; }
-    if (!canPlay(f, id)) { feedback.wrong(); setSel(i); setPending(null); return; }
+    if (sel === i) { setSel(null); feedback.tap(); return; }
+    const qi = qIndex(i);
+    if (qi < 0 || !canPlay(q, id)) { feedback.wrong(); setSel(i); return; }
+    if (CARDS[id].self) return add({ k: "card", idx: i, sq: q.hero.sq });
     feedback.tap();
     setSel(i);
-    setPending(CARDS[id].self ? f.hero.sq : null);
   }
 
   function tap(sq: number) {
     if (!playing) return;
     if (sel !== null) {
-      if (!targets.includes(sq)) { setSel(null); setPending(null); return; }
-      if (pending === sq) {
-        commit(playCard(f, sel, sq));
-        setSel(null);
-        setPending(null);
-        return;
-      }
-      feedback.tap();
-      setPending(sq);
+      if (targets.includes(sq)) add({ k: "card", idx: sel, sq });
+      else setSel(null);
       return;
     }
-    if (steps.includes(sq)) commit(step(f, sq));
+    if (steps.includes(sq)) add({ k: "step", sq });
   }
 
-  function undo() {
-    if (!history.length || !playing) return;
-    feedback.tap();
+  /** Play the whole combo. It's locked in: there's no undo. */
+  function playIt() {
+    if (!playing || !combo.length) return;
+    feedback.unlock();
+    const r = playCombo(f, combo);
+    setCombo([]);
     setSel(null);
-    setPending(null);
-    onChange(history[history.length - 1]);
-    setHistory((h) => h.slice(0, -1));
+    commit(r.fight);
+    const named = (r.fight.rangkai ?? []).map(rangkaiById).filter((x): x is Rangkai => !!x);
+    if (named.length) {
+      setBanner({ key: Date.now(), list: named });
+      setTimeout(() => feedback.win(), 120);
+      try {
+        shakeRef.current?.animate?.(
+          [{ transform: "scale(1)" }, { transform: "scale(1.035) rotate(-0.6deg)" }, { transform: "scale(.99) rotate(0.4deg)" }, { transform: "scale(1)" }],
+          { duration: 420, easing: "cubic-bezier(.34,1.56,.64,1)" },
+        );
+      } catch {}
+    }
   }
 
   /** Play out the enemy turn one intent at a time. Picks up where it left off after a reload. */
@@ -149,28 +193,29 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
     feedback.unlock();
     feedback.tap();
     setSel(null);
-    setPending(null);
-    setHistory([]);
+    setCombo([]);
     const s = clone(f);
     beginEnemy(s);
     onChange(s);
     void runEnemy(s);
   }
 
-  const pendingUnit = pending !== null ? f.units.find((u) => u.sq === pending) : undefined;
-  const guardedTarget = card?.type === "Serang" && pendingUnit && isGuarded(f, pendingUnit) ? unitName(pendingUnit) : null;
-  const tip = busy
+  const guardedNear = card?.type === "Serang" ? targets.map((sq) => q.units.find((u) => u.sq === sq)).find((u) => u && isGuarded(q, u)) : undefined;
+  const tip = busy || !card
     ? null
-    : card
-      ? !canPlay(f, selId!)
-        ? [card.name, cardCost(f, selId!) > f.tenaga ? "Not enough Tenaga." : "Nothing to use it on right now."]
-        : pending !== null
-          ? [card.name, card.self ? "Tap your king or Play to use it." : guardedTarget ? `${guardedTarget} is guarded (blue shield): it only budges 1 square.` : "Tap again to play. The board shows what will happen."]
-          : [card.name, "Tap a highlighted square."]
-      : null;
-  const hint = f.stepUsed ? "Pick a card, or end your turn." : "Pick a card, or step: red dots get you struck.";
-  // The small box: the last few events (turn headers are already in the top bar).
-  const recent = (f.log ?? []).filter((l) => l.k !== "turn").slice(-3);
+    : !ready
+      ? [card.name, selQ < 0 ? "Already used in this combo." : cardCost(q, selId!) > q.tenaga ? "Not enough Tenaga left in this combo." : "Nothing to use it on right now."]
+      : sel !== null && finishes.has(sel)
+        ? [`${card.name} · finishes ${finishes.get(sel)!.name}!`, finishes.get(sel)!.text]
+        : sel !== null && starts.has(sel)
+          ? [`${card.name} · starts ${starts.get(sel)!.name}`, starts.get(sel)!.text]
+        : [card.name, guardedNear ? `Tap a highlighted square. ${unitName(guardedNear)} is guarded (blue shield): it only budges 1 square.` : "Tap a highlighted square to add it to your combo."];
+  const hint = combo.length
+    ? "Add more, or press Play. Once played, it's locked in."
+    : f.stepUsed ? "Build a combo: pick cards, then Play." : "Build a combo: pick cards or step, then Play. Red dots: enemies may jab (d20).";
+  const itemName = (it: ComboItem) => (it.k === "step" ? `Step ${sqName(f, it.sq)}` : `${CARDS[f.hand[it.idx]]?.name ?? "?"}${CARDS[f.hand[it.idx]]?.self ? "" : ` ${sqName(f, it.sq)}`}`);
+  // The tray under the board shows the latest event when nothing else is going on.
+  const latest = (f.log ?? []).filter((l) => l.k !== "turn").slice(-1)[0];
   // The full log: grouped by turn, newest turn first, events in the order they happened.
   const turns: { title: string; lines: { t: string; k?: string }[] }[] = [];
   for (const l of f.log ?? []) {
@@ -180,13 +225,13 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   turns.reverse();
 
   return (
-    <main className="screen" style={{ gap: 10, paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}>
+    <main className="screen sl-fight">
       <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <Link href="/silat" className="icon-btn" aria-label="Leave fight (your run is saved)" style={{ background: "#fff", boxShadow: "0 3px 0 var(--cream-3)" }}><Icon.Close /></Link>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.15 }}>
           <span className="display" style={{ fontSize: 18 }}>{floorLabel}</span>
           <span style={{ fontSize: 12, fontWeight: 800, color: "var(--plum-soft)" }}>
-            {[f.name, `Turn ${f.turn}`, `deck ${f.draw.length}`].filter(Boolean).join(" · ")}
+            {[f.name, `Turn ${f.turn}`].filter(Boolean).join(" · ")}
           </span>
           {f.survive && f.status !== "won" && (
             <span style={{ marginTop: 2, padding: "1px 8px", borderRadius: 999, background: "#FFF4CC", color: "#8A6400", fontSize: 12, fontWeight: 900 }}>
@@ -194,7 +239,9 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
             </span>
           )}
         </div>
-        <span style={{ width: 44 }} />
+        <button type="button" className={`icon-btn sl-logtoggle${logOpen ? " on" : ""}`} aria-pressed={logOpen} aria-label={logOpen ? "Hide the battle log" : "Show the battle log"} onClick={() => { feedback.tap(); setLogOpen((o) => !o); }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg>
+        </button>
       </header>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -214,53 +261,76 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
         </span>
       </div>
 
-      <div ref={shakeRef}>
-        <SilatBoard fight={f} preview={display !== f ? display : undefined} hl={{ targets, pending, steps, danger }} onTap={tap} fxKey={fxKey} combo={f.status === "play" && display === f ? f.combo : 0} />
-      </div>
+      <div className="sl-stage">
+        <div className="sl-stage-in" ref={shakeRef}>
+          <SilatBoard
+            fight={f}
+            preview={display !== f ? display : undefined}
+            hl={{ targets, steps, danger, combo: combo.map((it, n) => ({ sq: it.sq, n: n + 1 })) }}
+            onTap={tap}
+            fxKey={fxKey}
+            combo={f.status === "play" && display === f ? f.combo : 0}
+          />
 
-      {tip ? (
-        <div className="sl-info">
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
-            <span style={{ fontSize: 14, fontWeight: 900, color: "var(--plum)" }}>{tip[0]}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--plum-soft)" }}>{tip[1]}</span>
-          </div>
-          {pending !== null && sel !== null && (
-            <button className="btn btn-sm btn-green" style={{ flexShrink: 0 }} onClick={() => tap(pending)}>Play</button>
+          {logOpen && (
+            <div className="sl-logfloat" role="dialog" aria-label="Battle log">
+              <div className="sl-logfloat-head">
+                <span>Battle log</span>
+                <button type="button" onClick={() => { feedback.tap(); setLogOpen(false); }} aria-label="Hide the battle log">Hide</button>
+              </div>
+              <div className="sl-logfloat-body">
+                {turns.map((turn, ti) => (
+                  <section key={turns.length - ti} className="sl-logturn">
+                    <h3>{turn.title}{ti === 0 && f.status === "play" ? " · now" : ""}</h3>
+                    {turn.lines.length ? turn.lines.map((l, i) => (
+                      <p key={i} className={`sl-logline full ${l.k ?? ""}`}>{l.t}</p>
+                    )) : <p className="sl-logline full hint">Nothing yet.</p>}
+                  </section>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {banner && (
+            <div key={banner.key} className="sl-rangkai" onAnimationEnd={() => setBanner(null)} aria-live="polite">
+              <small>Jurus Rangkai</small>
+              {banner.list.map((r) => <span key={r.id} style={{ color: r.color }}>{r.name}!</span>)}
+            </div>
           )}
         </div>
-      ) : (
-        <button type="button" className="sl-info sl-log" onClick={() => { feedback.tap(); setLogOpen(true); }} aria-label="Battle log. Tap to see everything that happened.">
-          <span style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }} aria-live="polite">
-            {recent.map((l, i) => (
-              <span key={`${f.log?.length ?? 0}-${i}`} className={`sl-logline ${l.k ?? ""}${i === recent.length - 1 ? " new" : ""}`}>{l.t}</span>
-            ))}
-            {!busy && <span className="sl-logline hint">{hint}</span>}
-          </span>
-          <span className="sl-logbtn">Log</span>
-        </button>
-      )}
+      </div>
 
-      <Sheet open={logOpen} onClose={() => setLogOpen(false)} label="Battle log">
-        <h2 className="display" style={{ margin: 0, fontSize: 24, textAlign: "center" }}>Battle log</h2>
-        <div className="sl-logsheet">
-          {turns.map((turn, ti) => (
-            <section key={turns.length - ti} className="sl-logturn">
-              <h3>{turn.title}{ti === 0 && f.status === "play" ? " · now" : ""}</h3>
-              {turn.lines.length ? turn.lines.map((l, i) => (
-                <p key={i} className={`sl-logline full ${l.k ?? ""}`}>{l.t}</p>
-              )) : <p className="sl-logline full hint">Nothing yet.</p>}
-            </section>
-          ))}
-        </div>
-      </Sheet>
+      <div className="sl-tray" aria-live="polite">
+        {tip ? (
+          <span className="sl-tray-tip"><b>{tip[0]}</b> {tip[1]}</span>
+        ) : combo.length ? (
+          <div className="sl-combo-strip" aria-label="Your combo">
+            {combo.map((it, n) => (
+              <button key={n} type="button" className={`sl-chip${sim?.fizzled.includes(n) ? " bad" : ""}`} onClick={() => cut(n)} aria-label={`Step ${n + 1}: ${itemName(it)}. Tap to remove it and everything after.`}>
+                <b>{n + 1}</b>{itemName(it)}
+              </button>
+            ))}
+            {triggered.map((r, i) => <span key={`r${i}`} className="sl-chip named" style={{ background: r.color }}>✦ {r.name}</span>)}
+            {q.combo >= 2 && <span className="sl-chip" style={{ background: "#3C3C3C", color: "#FFC800" }}>×{q.combo}</span>}
+            {[...new Map([...finishes.values()].map((r) => [r.id, r])).values()].map((r) => (
+              <span key={`n${r.id}`} className="sl-chip next" style={{ color: r.color, borderColor: r.color }}>next ✦ {r.name}</span>
+            ))}
+          </div>
+        ) : (
+          <button type="button" className="sl-tray-log" onClick={() => { feedback.tap(); setLogOpen(true); }}>
+            <span className={`sl-logline ${busy && latest ? latest.k ?? "" : "hint"}`}>{busy && latest ? latest.t : finishes.size || starts.size ? finishes.size ? "✦ A glowing card finishes a named combo (Jurus Rangkai)" : "▸ Cards with an arrow start a named combo. Tap one to see it" : hint}</span>
+          </button>
+        )}
+      </div>
 
       <div className="sl-hand">
         {f.hand.map((id, i) => {
           const mid = (f.hand.length - 1) / 2;
           const off = i - mid;
           const on = sel === i;
-          const x = off * 54;
-          const y = on ? -44 : off * off * 4;
+          const lifted = on || queued.has(i);
+          const x = off * Math.min(54, 270 / Math.max(1, f.hand.length - 1));
+          const y = on ? -30 : queued.has(i) ? -18 : off * off * 4;
           const rot = on ? 0 : off * 5;
           return (
             <button
@@ -271,26 +341,59 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
               aria-label={`${CARDS[id].name}, costs ${CARDS[id].cost}. ${CARDS[id].text}`}
               aria-pressed={on}
               onClick={() => pickCard(i)}
-              style={{ left: `calc(50% + ${x}px - 50px)`, transform: `translateY(${y}px) rotate(${rot}deg) scale(${on ? 1.12 : 1})`, zIndex: on ? 20 : i + 1 }}
+              style={{ left: `calc(50% + ${x}px - 50px)`, transform: `translateY(${y}px) rotate(${lifted ? 0 : rot}deg) scale(${on ? 1.12 : 1})`, zIndex: on ? 20 : i + 1 }}
             >
               <span className="deal" style={{ animationDelay: `${i * 70}ms` }}>
-                <span className="bob" style={{ animationDelay: `${-i * 0.6}s`, animationPlayState: on ? "paused" : undefined }}>
-                  <SilatCard id={id} on={on} off={!canPlay(f, id)} cost={cardCost(f, id)} />
+                {finishes.has(i) ? (
+                  <span className="sl-named" style={{ background: finishes.get(i)!.color }} aria-label={`Finishes ${finishes.get(i)!.name}`}>✦</span>
+                ) : starts.has(i) && !lifted ? (
+                  <span className="sl-named start" style={{ background: starts.get(i)!.color }} aria-label={`Starts ${starts.get(i)!.name}`}>▸</span>
+                ) : null}
+                <span className={`bob${finishes.has(i) ? " sl-glow" : ""}`} style={{ animationDelay: `${-i * 0.6}s`, animationPlayState: on || queued.has(i) ? "paused" : undefined }}>
+                  <SilatCard id={id} on={on || queued.has(i)} off={!queued.has(i) && (qIndex(i) < 0 || !canPlay(q, id))} cost={cardCost(q, id)} />
                 </span>
+                {queued.has(i) && <span className="qn">{queued.get(i)}</span>}
               </span>
             </button>
           );
         })}
+        <button type="button" className="sl-pile" style={{ left: 0 }} onClick={() => { feedback.tap(); setPiles(true); }} aria-label={`Draw pile: ${f.draw.length} cards`}>
+          {f.draw.length}<small>draw</small>
+        </button>
+        <button type="button" className="sl-pile" style={{ right: 0 }} onClick={() => { feedback.tap(); setPiles(true); }} aria-label={`Discard pile: ${f.discard.length} cards`}>
+          {f.discard.length}<small>discard</small>
+        </button>
         {!f.hand.length && busy && <p style={{ textAlign: "center", fontWeight: 800, color: "var(--plum-soft)", margin: "60px 0 0" }}>Enemies are moving…</p>}
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <button className="btn btn-white" style={{ width: 88, flexShrink: 0, color: "var(--plum)" }} disabled={!history.length || !playing} onClick={undo}>Undo</button>
-        <button className="btn btn-green" disabled={!playing} onClick={endTurn} style={{ flexDirection: "column", gap: 2, minHeight: 58, background: warn ? "#E5383B" : undefined, boxShadow: warn ? "0 4px 0 #A52126" : undefined }}>
-          <span>End turn</span>
-          <span style={{ fontSize: 12, letterSpacing: 0, textTransform: "none", opacity: 0.9 }}>{warnText}</span>
-        </button>
+        {combo.length ? (
+          <>
+            <button className="btn btn-white" style={{ width: 88, flexShrink: 0, color: "var(--plum)" }} disabled={!playing} onClick={() => cut(0)}>Clear</button>
+            <button className="btn btn-green" disabled={!playing} onClick={playIt} style={{ flexDirection: "column", gap: 2, minHeight: 58, background: "#1899D6", boxShadow: "0 4px 0 #1478A8" }}>
+              <span>Play combo ({combo.length})</span>
+              <span style={{ fontSize: 12, letterSpacing: 0, textTransform: "none", opacity: 0.9 }}>No undo once played</span>
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-green" disabled={!playing} onClick={endTurn} style={{ flexDirection: "column", gap: 2, minHeight: 58, background: warn ? "#E5383B" : undefined, boxShadow: warn ? "0 4px 0 #A52126" : undefined }}>
+            <span>End turn</span>
+            <span style={{ fontSize: 12, letterSpacing: 0, textTransform: "none", opacity: 0.9 }}>{warnText}</span>
+          </button>
+        )}
       </div>
+
+      <Sheet open={piles} onClose={() => setPiles(false)} label="Your piles">
+        {([["Draw pile", [...f.draw].sort(), "Shown in A–Z order, not the order you'll draw them. When it runs out, your discard pile is shuffled in."], ["Discard pile", f.discard, ""], ["Exhausted", f.exhausted, "Gone for the rest of this fight."]] as const).map(([title, list, note]) => (list.length || title !== "Exhausted") && (
+          <section key={title} style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+            <h3 className="display" style={{ margin: 0, fontSize: 18 }}>{title} · {list.length}</h3>
+            {note && <span style={{ fontSize: 12, fontWeight: 700, color: "var(--plum-soft)" }}>{note}</span>}
+            <div className="sl-pilelist">
+              {list.length ? list.map((id, i) => <span key={i} className="sl-chip" style={{ cursor: "default" }}>{CARDS[id]?.name ?? id}</span>) : <span style={{ fontSize: 13, fontWeight: 700, color: "var(--plum-soft)" }}>Empty</span>}
+            </div>
+          </section>
+        ))}
+      </Sheet>
     </main>
   );
 }

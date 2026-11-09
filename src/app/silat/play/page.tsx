@@ -79,7 +79,7 @@ export default function SilatPlay() {
       <SilatKing size={96} />
       <h1 className="display" style={{ margin: 0, fontSize: 42, color: won ? "#2F6E00" : "#B81F1F" }}>{won ? "Raja Silat!" : "Run over"}</h1>
       <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--plum-soft)" }}>
-        {won ? "You beat Mandor Benteng and cleared Sawah." : `You reached ${floorName(run.floor)}.`}
+        {won ? "You toppled Raja Hitam, the enemy King." : `You reached ${floorName(run.floor)}.`}
       </p>
       <div style={{ display: "flex", gap: 10, width: "100%" }}>
         {[["Floors", `${Math.min(run.floor + 1, FLOORS)}/${FLOORS}`], ["Ring outs", run.ringOuts], ["Best combo", run.bestCombo], ["Deck", run.deck.length]].map(([k, v]) => (

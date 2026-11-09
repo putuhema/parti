@@ -35,6 +35,8 @@ export interface Unit {
   hit?: number;
   /** The king's once-per-fight castling escape has been used. */
   escaped?: boolean;
+  /** Raja Hitam (the final boss) below half HP: phase 2. */
+  phase?: 2;
 }
 
 export interface Thing {
@@ -67,7 +69,25 @@ export type Fx =
   | { t: "react"; sq: number }
   | { t: "slam"; sq: number }
   | { t: "gold"; sq: number; n: number }
-  | { t: "lunge"; sq: number; dir: number };
+  | { t: "lunge"; sq: number; dir: number }
+  /** A d20 was rolled here: `n` is the die, `ok` whether it worked for whoever rolled. */
+  | { t: "roll"; sq: number; n: number; ok: boolean; hero?: boolean }
+  | { t: "fury"; sq: number };
+
+/** Dice modifiers that last until your next turn starts (so they cover the enemy turn too). */
+export interface Luck {
+  /** Mata Elang: your rolls are rolled twice, keep the best. */
+  adv: boolean;
+  /** Tenang: added to your rolls. */
+  bonus: number;
+  /** Ejek: enemy reactions roll twice, keep the worst. */
+  taunt: boolean;
+  /** Bom Asap: enemies can't react to your moves. */
+  smoke: boolean;
+  /** Bayang Bangau (a named combo): your rolls can't fail. */
+  sure?: boolean;
+}
+export const freshLuck = (): Luck => ({ adv: false, bonus: 0, taunt: false, smoke: false });
 
 export type LogKind = "turn" | "you" | "enemy" | "good" | "bad";
 export interface LogLine { t: string; k?: LogKind }
@@ -139,6 +159,24 @@ export interface Fight {
   name?: string;
   /** Win by surviving this many turns (knocking out the leader still wins too). */
   survive?: number;
+  /** Dice: their own random stream, so rolling never changes your card draws. */
+  dice?: number;
+  /** Dice modifiers until your next turn. */
+  luck?: Luck;
+  /** A preview copy: rolls assume the worst for you and never touch the dice. */
+  sim?: boolean;
+  /** Tests: every d20 lands on this. */
+  fixedRoll?: number;
+  /** Extra hand size for this fight (Tambah). */
+  handBonus?: number;
+  /** Simpan: keep your unplayed cards at the end of this turn. */
+  keepHand?: boolean;
+  /** Enemies that moved during the last enemy turn (En Passant). */
+  movedLast?: number[];
+  /** A named combo powered up the card being played: its first hit deals this much more. */
+  surge?: number;
+  /** Named combos (Jurus Rangkai) set off by the combo being played, in order. */
+  rangkai?: string[];
 }
 
 // ---------- Geometry ----------
@@ -230,10 +268,54 @@ export function say(s: Fight, t: string, k?: LogKind) {
   if (s.log.length > 80) s.log.splice(0, s.log.length - 80);
 }
 
+// ---------- Dice (d20 reactions) ----------
+
+/** What a d20 has to reach. Enemy reactions (jabs as you arrive), your dodge (Elakan), your kick-back (Tangkisan). */
+export const DC = { react: 10, dodge: 8, counter: 8 } as const;
+
+function d20(s: Fight): number {
+  if (s.fixedRoll) return s.fixedRoll;
+  let t = (s.dice = ((s.dice ?? s.rng ^ 0x5bd1e995) + 0x6d2b79f5) >>> 0);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return 1 + Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * 20);
+}
+
+/** You roll (dodging, kicking back). A 20 always works, a 1 always fails.
+ *  Previews assume you fail, so they never give a roll away. */
+export function heroRoll(s: Fight, what: string, dc: number): boolean {
+  const luck = s.luck ?? freshLuck();
+  if (luck.sure) { say(s, `${what}: no roll needed, it works!`, "good"); return true; }
+  if (s.sim) return false;
+  const a = d20(s);
+  const b = luck.adv ? d20(s) : 0;
+  const die = Math.max(a, b);
+  const total = die + luck.bonus;
+  const ok = die === 20 || (die !== 1 && total >= dc);
+  s.fx.push({ t: "roll", sq: s.hero.sq, n: die, ok, hero: true });
+  const extra = [b ? `best of ${a} and ${b}` : "", luck.bonus ? `+${luck.bonus}` : ""].filter(Boolean).join(", ");
+  say(s, `d20 ${what}: ${die}${extra ? ` (${extra})` : ""} vs ${dc}, ${ok ? "it works!" : "it fails"}`, ok ? "good" : "bad");
+  return ok;
+}
+
+/** An enemy rolls to hit you with a reaction. Previews assume it hits. */
+export function enemyRoll(s: Fight, u: Unit, dc: number): boolean {
+  if (s.sim) return true;
+  const luck = s.luck ?? freshLuck();
+  const a = d20(s);
+  const b = luck.taunt ? d20(s) : 0;
+  const die = b ? Math.min(a, b) : a;
+  const ok = die === 20 || (die !== 1 && die >= dc);
+  s.fx.push({ t: "roll", sq: u.sq, n: die, ok });
+  say(s, `d20 ${unitName(u)} jabs: ${die}${b ? ` (worst of ${a} and ${b}, taunted)` : ""} vs ${dc}, ${ok ? "hits" : "misses"}`, ok ? "bad" : "good");
+  return ok;
+}
+
 // ---------- Damage ----------
 
 export function damageUnit(s: Fight, u: Unit, n: number) {
   if (!s.units.includes(u) || n <= 0) return;
+  if (s.surge && yours(s)) { n += s.surge; s.surge = 0; }
   u.hp -= n;
   s.fx.push({ t: "dmg", sq: u.sq, n });
   s.combo++;
@@ -245,21 +327,47 @@ export function damageUnit(s: Fight, u: Unit, n: number) {
   } else {
     say(s, `${unitName(u)} takes ${n} (${u.hp} left)`);
     u.angry = true;
+    fury(s, u);
     castle(s, u);
   }
   checkEnd(s);
 }
 
+export const isRaja = (u: Unit) => u.kind === "k" && !!u.boss;
+
+/** Raja Hitam below half HP: phase 2. He hits harder, walks at you, kicks you back and calls two pawns. */
+function fury(s: Fight, k: Unit) {
+  if (!isRaja(k) || k.phase || k.hp > k.max / 2) return;
+  k.phase = 2;
+  k.hit = (k.hit ?? PIECE.k.hit) + 1;
+  s.fx.push({ t: "fury", sq: k.sq });
+  say(s, `${unitName(k)} rises in fury! He hits harder and comes for you`, "bad");
+  castle(s, k);
+  summon(s);
+  summon(s);
+}
+
 /** Once per fight, a hurt king swaps places with the ally farthest from you (castling). */
 function castle(s: Fight, k: Unit) {
-  if (k.kind !== "k" || !k.target || k.boss || k.escaped || k.hp > k.max / 2) return;
+  if (k.kind !== "k" || !k.target || k.escaped || k.hp > k.max / 2) return;
   const allies = s.units.filter((x) => x !== k).sort((a, b) => dist(s, b.sq, s.hero.sq) - dist(s, a.sq, s.hero.sq) || a.id - b.id);
   if (!allies.length) return;
   k.escaped = true;
   const ally = allies[0];
   [k.sq, ally.sq] = [ally.sq, k.sq];
   s.fx.push({ t: "castle", sq: k.sq });
-  say(s, `The King castles away to ${sqName(s, k.sq)}!`, "bad");
+  say(s, `${unitName(k)} castles away to ${sqName(s, k.sq)}!`, "bad");
+}
+
+/** A piece loses its next action (Kuncian, Paku, Sogok, Skak!). Bosses shrug it off but take 4 instead. */
+export function lockUnit(s: Fight, u: Unit) {
+  if (u.boss) {
+    say(s, `${unitName(u)} won't be held down, but it hurts`, "good");
+    return damageUnit(s, u, 4);
+  }
+  u.locked = 1; // no action this turn, even after enemies re-aim
+  s.intents = s.intents.filter((i) => i.id !== u.id);
+  say(s, `${unitName(u)} can't act this turn`, "good");
 }
 
 export function damageHero(s: Fight, n: number) {
@@ -534,6 +642,7 @@ function placeScore(s: Fight, u: Unit, sq: number) {
 }
 
 function chooseIntent(s: Fight, u: Unit, allowSlam = true): Intent | null {
+  if (isRaja(u)) return rajaIntent(s, u, allowSlam);
   const hero = s.hero.sq;
   let moves: number[];
   if (SLIDES[u.kind]) {
@@ -588,7 +697,16 @@ function kingIntent(s: Fight, k: Unit, allowSlam = true): Intent | null {
   return best !== undefined && score(best) > score(k.sq) ? { id: k.id, type: "move", to: best } : null;
 }
 
-/** Enemies lock in what they'll do next turn. */
+/** Raja Hitam, the final boss. Phase 1: holds his throne like any king. Phase 2: walks straight at you. */
+function rajaIntent(s: Fight, k: Unit, allowSlam: boolean): Intent | null {
+  if (!k.phase) return kingIntent(s, k, allowSlam);
+  const hero = s.hero.sq;
+  if (strikeSquares(s, k).includes(hero)) return { id: k.id, type: "strike", target: hero };
+  if (allowSlam && dist(s, k.sq, hero) <= SLAM_REACH) return { id: k.id, type: "slam", center: hero };
+  const best = neighbors(s, k.sq).filter((sq) => isEmpty(s, sq)).sort((a, b) => dist(s, a, hero) - dist(s, b, hero) || a - b)[0];
+  return best !== undefined && dist(s, best, hero) < dist(s, k.sq, hero) ? { id: k.id, type: "move", to: best } : null;
+}
+
 /** Work out what every enemy will do, given the board right now. No side effects.
  *  `keep`: intents that stay as they are (committed charges). */
 function buildIntents(s: Fight, keep: Intent[] = [], allowSlam = true): Intent[] {
@@ -639,11 +757,15 @@ export function retarget(s: Fight) {
 /** An attack reaches the hero: Elakan hops away, Tangkisan kicks back. Returns true if it landed. */
 function attackHero(s: Fight, u: Unit, n: number): boolean {
   if (s.hop !== null && isEmpty(s, s.hop)) {
-    s.fx.push({ t: "dodge", sq: s.hero.sq });
-    say(s, `You dodge to ${sqName(s, s.hop)}!`, "good");
-    s.hero.sq = s.hop;
+    // Elakan: one dodge attempt. Roll for it; win or lose, it's used up.
+    const hop = s.hop;
     s.hop = null;
-    return false;
+    if (heroRoll(s, "dodge", DC.dodge)) {
+      s.fx.push({ t: "dodge", sq: s.hero.sq });
+      say(s, `You dodge to ${sqName(s, hop)}!`, "good");
+      s.hero.sq = hop;
+      return false;
+    }
   }
   const soaked = Math.min(s.hero.block, n);
   damageHero(s, n);
@@ -655,8 +777,8 @@ function attackHero(s: Fight, u: Unit, n: number): boolean {
   }
   if (s.counter > 0 && s.units.includes(u)) {
     const d = dirTo(s, s.hero.sq, u.sq);
-    // Only attackers right next to you can be kicked back.
-    if (d >= 0 && dist(s, s.hero.sq, u.sq) === 1) push(s, u.sq, d, s.counter);
+    // Only attackers right next to you can be kicked back, and only if your roll lands.
+    if (d >= 0 && dist(s, s.hero.sq, u.sq) === 1 && heroRoll(s, "kick-back", DC.counter)) push(s, u.sq, d, s.counter);
   }
   return true;
 }
@@ -686,11 +808,13 @@ export function heroMoved(s: Fight) {
 /** You just moved: every enemy covering your new square strikes you, once per turn each. */
 export function react(s: Fight) {
   if (s.powers.bayangan) return; // Bayangan: you move like a shadow
+  if (s.luck?.smoke) return; // Bom Asap: they can't see you
   for (const u of reactors(s, s.hero.sq)) {
     if (s.status === "won" || s.status === "lost") return;
     (s.reacted ??= []).push(u.id);
+    say(s, `${unitName(u)} covers ${sqName(s, s.hero.sq)} and jabs as you arrive`, "bad");
+    if (!enemyRoll(s, u, DC.react)) { s.fx.push({ t: "miss", sq: s.hero.sq }); continue; }
     s.fx.push({ t: "react", sq: u.sq });
-    say(s, `${unitName(u)} covers ${sqName(s, s.hero.sq)} and strikes you as you arrive`, "bad");
     attackHero(s, u, reactionHit(u));
     if (has(s, "songket") && s.units.includes(u)) {
       say(s, `Songket Merah: the ${unitName(u)} takes 1`, "good");
@@ -719,6 +843,7 @@ function slam(s: Fight, u: Unit, center: number) {
 
 function charge(s: Fight, u: Unit, dir: number) {
   const [dx, dy] = DIRS[dir];
+  (s.movedLast ??= []).push(u.id);
   for (let guard = 0; guard < s.n * 2; guard++) {
     const next = offset(s, u.sq, dx, dy);
     if (next === null) { s.fx.push({ t: "miss", sq: u.sq }); say(s, `${unitName(u)} hits nothing and stops at ${sqName(s, u.sq)}`); return; }
@@ -773,7 +898,7 @@ export function resolveIntent(s: Fight, it: Intent) {
   if (!u) return;
   if (!intentValid(s, it)) { s.fx.push({ t: "miss", sq: u.sq }); say(s, `${unitName(u)} was knocked out of position and can't act`); return; }
   if (it.type === "move") {
-    if (isEmpty(s, it.to)) { u.sq = it.to; say(s, `${unitName(u)} moves to ${sqName(s, it.to)}`, "enemy"); promote(s, u); }
+    if (isEmpty(s, it.to)) { u.sq = it.to; (s.movedLast ??= []).push(u.id); say(s, `${unitName(u)} moves to ${sqName(s, it.to)}`, "enemy"); promote(s, u); }
     else say(s, `${unitName(u)} is blocked and stays put`, "enemy");
     return;
   }
@@ -786,7 +911,15 @@ export function resolveIntent(s: Fight, it: Intent) {
     return;
   }
   say(s, `${unitName(u)} strikes ${o.t === "hero" ? "you" : occName(o)} on ${sqName(s, it.target)}`, "enemy");
-  if (o.t === "hero") { attackHero(s, u, unitHit(u)); return; }
+  if (o.t === "hero") {
+    const landed = attackHero(s, u, unitHit(u));
+    // Raja Hitam in fury kicks you back 2 squares: into pieces (crash) or off the edge (5).
+    if (landed && isRaja(u) && u.phase && s.status === "enemy") {
+      const d = dirTo(s, u.sq, s.hero.sq);
+      if (d >= 0) { say(s, `${unitName(u)} kicks you back!`, "bad"); push(s, s.hero.sq, d, 2); }
+    }
+    return;
+  }
   hitOcc(s, o, unitHit(u));
 }
 
@@ -796,7 +929,7 @@ export function march(s: Fight) {
   for (const u of [...s.units].sort((a, b) => b.sq - a.sq)) {
     if (u.kind !== "p" || acted.has(u.id) || u.locked > 0) continue;
     const f = offset(s, u.sq, 0, 1);
-    if (f !== null && isEmpty(s, f)) { u.sq = f; say(s, `Pawn marches to ${sqName(s, f)}`, "enemy"); promote(s, u); }
+    if (f !== null && isEmpty(s, f)) { u.sq = f; (s.movedLast ??= []).push(u.id); say(s, `Pawn marches to ${sqName(s, f)}`, "enemy"); promote(s, u); }
   }
 }
 
@@ -810,7 +943,7 @@ export function rand(s: Fight) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-function shuffle(s: Fight, list: string[]) {
+export function shuffle(s: Fight, list: string[]) {
   for (let i = list.length - 1; i > 0; i--) {
     const j = Math.floor(rand(s) * (i + 1));
     [list[i], list[j]] = [list[j], list[i]];
@@ -831,6 +964,8 @@ export function drawCards(s: Fight, n: number) {
 
 export const HAND = 5;
 export const TENAGA = 3;
+/** How many cards you draw up to each turn. */
+export const handSize = (s: Fight) => HAND + (has(s, "akik") ? 1 : 0) + (s.handBonus ?? 0);
 
 export function startTurn(s: Fight, guarantee?: (id: string) => boolean) {
   s.turn++;
@@ -844,8 +979,10 @@ export function startTurn(s: Fight, guarantee?: (id: string) => boolean) {
   s.counter = 0;
   s.reacted = [];
   s.combo = 0;
+  s.luck = freshLuck();
   s.status = "play";
-  drawCards(s, HAND + (has(s, "akik") ? 1 : 0));
+  // Draw up to your hand size (Simpan can leave cards in your hand from last turn).
+  drawCards(s, Math.max(0, handSize(s) - s.hand.length));
   // The first hand always has something to hit with.
   if (s.turn === 1 && guarantee && !s.hand.some(guarantee)) {
     const i = s.draw.findIndex(guarantee);
@@ -857,8 +994,13 @@ export const clone = (s: Fight): Fight => structuredClone(s);
 
 /** End your turn: discard the hand. Then resolve intents one by one, then `finishEnemy`. */
 export function beginEnemy(s: Fight) {
-  s.discard.push(...s.hand);
-  s.hand = [];
+  if (s.keepHand) say(s, `Simpan: you keep ${s.hand.length} ${s.hand.length === 1 ? "card" : "cards"}`, "good");
+  else {
+    s.discard.push(...s.hand);
+    s.hand = [];
+  }
+  s.keepHand = false;
+  s.movedLast = [];
   s.fx = [];
   s.status = "enemy";
   s.enemyStep = 0;
@@ -896,7 +1038,8 @@ export function finishEnemy(s: Fight, guarantee?: (id: string) => boolean) {
     return;
   }
   march(s);
-  if (s.turn % SUMMON_EVERY === 0) summon(s);
+  const raging = s.units.some((u) => isRaja(u) && u.phase);
+  if (s.turn % (raging ? 2 : SUMMON_EVERY) === 0) summon(s);
   plan(s);
   startTurn(s, guarantee);
 }
@@ -913,6 +1056,7 @@ export function forecast(s: Fight) {
   const f = clone(s);
   const hp = f.hero.hp;
   f.fx = [];
+  f.sim = true;
   f.status = "enemy";
   for (const it of [...f.intents]) resolveIntent(f, it);
   return {
@@ -943,6 +1087,12 @@ export function freeSteps(s: Fight) {
 export function step(s: Fight, sq: number) {
   const f = clone(s);
   f.fx = [];
+  doStep(f, sq);
+  return f;
+}
+
+/** Take your free step (changes `f`). */
+export function doStep(f: Fight, sq: number) {
   f.hero.sq = sq;
   if (f.extraSteps > 0) f.extraSteps--;
   else f.stepUsed = true;
@@ -950,7 +1100,6 @@ export function step(s: Fight, sq: number) {
   heroMoved(f);
   react(f);
   retarget(f);
-  return f;
 }
 
 // ---------- Setting up ----------
@@ -1019,6 +1168,9 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     reacted: [],
     name: o.name,
     survive: o.survive,
+    dice: (o.seed * 2654435761) >>> 0,
+    luck: freshLuck(),
+    movedLast: [],
   };
   s.draw = shuffle(s, [...o.deck]);
   say(s, "Blue shield = guarded by an ally: kicks only budge it 1 square. Break the guard first.");

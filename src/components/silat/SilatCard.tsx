@@ -7,6 +7,7 @@ export const TYPE_COLORS: Record<CardType, { face: string; edge: string; soft: s
   Gerak: { face: "#1CB0F6", edge: "#1478A8", soft: "#DDF4FF", ink: "#1478A8" },
   Tangkis: { face: "#58CC02", edge: "#46A302", soft: "#D7FFB8", ink: "#2F6E00" },
   Jurus: { face: "#CE82FF", edge: "#A568CC", soft: "#F3E2FF", ink: "#8A4FB5" },
+  Siasat: { face: "#D9489F", edge: "#B2347F", soft: "#FCE1F0", ink: "#9C2A6C" },
 };
 
 /** One card face. Placeholder art: the little 5×5 move pattern. */

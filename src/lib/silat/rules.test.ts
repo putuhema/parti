@@ -1,7 +1,7 @@
 // Run with: bun test src/lib/silat
 import { describe, expect, test } from "bun:test";
-import { CARDS, canPlay, cardCost, playCard } from "./cards";
-import { clone, enemyTurn, forecast, isGuarded, makeFight, plan, reactionDamage, step, unitAt, type Fight, type Setup } from "./rules";
+import { CARDS, canPlay, cardCost, playCard, playCombo } from "./cards";
+import { beginEnemy, clone, enemyStep, enemyTurn, forecast, isGuarded, makeFight, plan, reactionDamage, startTurn, step, unitAt, type Fight, type Setup } from "./rules";
 import { makeMap, nextNodes, nodeById, MAP_ROWS } from "./map";
 import { ALL_RELICS } from "./relics";
 import { BASE_DECK, buyCard, chooseEvent, chooseStyle, enter, fightFor, newRun, settle, takeReward, type Run } from "./run";
@@ -18,7 +18,15 @@ function fight(o: Partial<Setup> & Pick<Setup, "hero" | "units">, hand: string[]
   const s = makeFight({ heroHp: 20, heroMax: 20, deck: [], seed: 1, ...o });
   s.hand = [...hand];
   s.draw = [];
+  s.fixedRoll = 20; // dice always come up 20 (enemy jabs hit, your dodges work) unless a test says otherwise
   return s;
+}
+/** Resolve the enemy's intents for real (dice and all), without starting the next turn. */
+function resolveEnemy(s: Fight) {
+  const f = clone(s);
+  beginEnemy(f);
+  while (enemyStep(f));
+  return f;
 }
 const play = (s: Fight, id: string, target: number) => {
   const i = s.hand.indexOf(id);
@@ -174,7 +182,7 @@ describe("enemies", () => {
     const rook = s.units[0];
     s.intents = [{ id: rook.id, type: "charge", dir: 2 }];
     s = play(s, "elakan", sq(2, 3));
-    const after = forecast(s).after;
+    const after = resolveEnemy(s);
     expect(after.hero.sq).toBe(sq(2, 3));
     expect(after.hero.hp).toBe(20);
     expect(after.units.find((u) => u.kind === "p")).toBeUndefined();
@@ -184,7 +192,7 @@ describe("enemies", () => {
     let s = fight({ hero: sq(2, 3), units: [{ kind: "p", sq: sq(1, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["tangkisan"]);
     s.intents = [{ id: s.units[0].id, type: "strike", target: sq(2, 3) }];
     s = play(s, "tangkisan", sq(2, 3));
-    const after = forecast(s).after;
+    const after = resolveEnemy(s);
     expect(after.hero.hp).toBe(20); // 1 damage, 2 block
     expect(after.units.find((u) => u.kind === "p")!.sq).toBe(sq(0, 1));
   });
@@ -241,7 +249,7 @@ describe("enemies", () => {
     // Covered step: the knight jabs you for 2.
     const s = step(base, sq(3, 4));
     expect(s.hero.hp).toBe(18);
-    expect(s.log.some((l) => l.t.includes("strikes you as you arrive"))).toBe(true);
+    expect(s.log.some((l) => l.t.includes("jabs as you arrive"))).toBe(true);
 
     // It already reacted this turn: another square it covers (b2) is now safe until next turn.
     expect(reactionDamage(s, sq(1, 4))).toBe(0);
@@ -559,5 +567,181 @@ describe("random play never breaks the board", () => {
       if (s.status === "won" || s.status === "lost") finished++;
     }
     expect(finished).toBeGreaterThan(200);
+  });
+});
+
+describe("d20 reactions", () => {
+  test("an enemy jab that rolls low misses; a high roll hits", () => {
+    const base = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "p", sq: sq(1, 2) }] });
+    base.fixedRoll = 3;
+    const missed = step(base, sq(2, 3)); // the pawn on b4 covers c3
+    expect(missed.hero.hp).toBe(20);
+    expect(missed.log.some((l) => l.t.includes("misses"))).toBe(true);
+    base.fixedRoll = 15;
+    expect(step(base, sq(2, 3)).hero.hp).toBeLessThan(20);
+  });
+  test("previews assume the worst and never use up the dice", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "p", sq: sq(1, 2) }] });
+    s.fixedRoll = undefined;
+    const dice = s.dice;
+    const r = playCombo(s, [{ k: "step", sq: sq(2, 3) }], { sim: true });
+    expect(r.fight.hero.hp).toBeLessThan(20);
+    expect(s.dice).toBe(dice);
+    forecast(s);
+    expect(s.dice).toBe(dice);
+  });
+  test("Elakan's dodge can fail on a bad roll, and is used up either way", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "n", sq: sq(1, 2) }] }, ["elakan"]);
+    s.fixedRoll = 2;
+    const f = play(s, "elakan", sq(3, 4));
+    plan(f);
+    enemyTurn(f);
+    expect(f.hero.sq).toBe(sq(2, 4));
+    expect(f.hero.hp).toBeLessThan(20);
+  });
+  test("Ejek makes enemy jabs roll twice and keep the worst; Bom Asap stops them", () => {
+    const base = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "p", sq: sq(1, 2) }] }, ["asap"]);
+    const smoked = play(base, "asap", sq(2, 4));
+    expect(step(smoked, sq(2, 3)).hero.hp).toBe(20);
+    expect(reactionDamage(base, sq(2, 3))).toBeGreaterThan(0);
+  });
+});
+
+describe("combos", () => {
+  test("a combo plays in order and the combo counter carries across cards", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "p", sq: sq(2, 3) }, { kind: "p", sq: sq(2, 1) }] }, ["tendang", "tangkis"]);
+    const r = playCombo(s, [{ k: "card", idx: 0, sq: sq(2, 3) }, { k: "card", idx: 1, sq: sq(2, 4) }]);
+    expect(r.fizzled).toEqual([]);
+    expect(r.fight.hand).toEqual([]);
+    expect(r.fight.hero.block).toBe(4);
+    expect(r.fight.tenaga).toBe(1);
+    expect(r.fight.combo).toBeGreaterThanOrEqual(2);
+  });
+  test("your free step can be part of a combo; a step that's no longer legal fizzles", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }] }, ["tangkis"]);
+    const r = playCombo(s, [{ k: "step", sq: sq(2, 3) }, { k: "step", sq: sq(2, 2) }, { k: "card", idx: 0, sq: sq(2, 3) }]);
+    expect(r.fight.hero.sq).toBe(sq(2, 3));
+    expect(r.fizzled).toEqual([1]);
+    expect(r.fight.hero.block).toBe(4);
+  });
+});
+
+describe("deck and hand", () => {
+  test("you draw up to your hand size; Simpan keeps your unplayed cards", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }] }, ["simpan", "tangkis", "kuda"]);
+    s.draw = ["tendang", "tendang", "tendang", "tendang", "tendang"];
+    const f = play(s, "simpan", sq(2, 4));
+    beginEnemy(f);
+    expect(f.hand).toEqual(["tangkis", "kuda"]);
+    startTurn(f);
+    expect(f.hand.length).toBe(5);
+    expect(f.hand.slice(0, 2)).toEqual(["tangkis", "kuda"]);
+  });
+  test("Tambah adds 1 to your hand size; Intai draws 2; Putar Balik reshuffles the discard pile", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }] }, ["tambah", "intai", "putar"]);
+    s.draw = ["tendang", "tendang", "tendang", "tendang"];
+    s.discard = ["kuda", "kuda"];
+    let f = play(s, "tambah", sq(2, 4));
+    expect(f.handBonus).toBe(1);
+    f = play(f, "intai", sq(2, 4));
+    expect(f.hand.filter((x) => x === "tendang").length).toBe(3);
+    f = play(f, "putar", sq(2, 4));
+    expect(f.discard).toEqual([]);
+    expect(f.draw.length + f.hand.length).toBeGreaterThan(4);
+  });
+  test("Naik Pangkat promotes the cards in your hand; Langkah Pion promotes on the top row", () => {
+    const s = fight({ hero: sq(2, 1), units: [{ kind: "k", sq: sq(5, 0) }] }, ["pangkat", "tendang", "kuda", "pion"]);
+    let f = play(s, "pangkat", sq(2, 1));
+    expect(f.hand).toEqual(["badai", "ratu", "ratu"]);
+    const p = fight({ hero: sq(2, 1), units: [{ kind: "k", sq: sq(5, 0) }] }, ["pion"]);
+    f = play(p, "pion", sq(2, 0));
+    expect(f.discard).toContain("ratu");
+  });
+});
+
+describe("chess tactic cards", () => {
+  test("Tusuk Sate skewers the first piece in a line and the one behind it", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "n", sq: sq(2, 3) }, { kind: "n", sq: sq(2, 1) }] }, ["tusuk"]);
+    const f = play(s, "tusuk", sq(2, 3));
+    expect(unitAt(f, sq(2, 3))!.hp).toBe(2);
+    expect(unitAt(f, sq(2, 1))!.hp).toBe(2);
+  });
+  test("Paku pins a piece so it can't act; bosses take 4 instead", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "r", sq: sq(2, 1) }] }, ["paku"]);
+    const f = play(s, "paku", sq(2, 1));
+    expect(f.intents.some((i) => i.id === unitAt(f, sq(2, 1))!.id)).toBe(false);
+    const b = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(2, 1), boss: "Raja Hitam", hp: 30 }] }, ["paku"]);
+    expect(unitAt(play(b, "paku", sq(2, 1)), sq(2, 1))!.hp).toBe(26);
+  });
+  test("Garpu Kuda forks: jump, then hit every piece a knight's jump away", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "p", sq: sq(1, 2) }, { kind: "p", sq: sq(5, 2) }] }, ["garpu"]);
+    const f = play(s, "garpu", sq(3, 3)); // from d3, b4 and f4 are both a knight's jump away
+    expect(unitAt(f, sq(1, 2))!.hp).toBe(1);
+    expect(unitAt(f, sq(5, 2))!.hp).toBe(1);
+  });
+  test("En Passant only hits a neighbor that moved last enemy turn", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "n", sq: sq(3, 4) }] }, ["passant"]);
+    expect(canPlay(s, "passant")).toBe(false);
+    s.movedLast = [unitAt(s, sq(3, 4))!.id];
+    expect(unitAt(play(s, "passant", sq(3, 4)), sq(3, 4))!.hp).toBe(2);
+  });
+});
+
+describe("Raja Hitam, the final boss", () => {
+  test("below half HP he rises in fury: castles away, calls pawns and hits harder", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(2, 3), boss: "Raja Hitam", hp: 30, hit: 4 }, { kind: "p", sq: sq(5, 0) }] }, ["dalam"]);
+    unitAt(s, sq(2, 3))!.hp = 17;
+    const f = play(s, "dalam", sq(2, 3));
+    const k = f.units.find((u) => u.boss)!;
+    expect(k.phase).toBe(2);
+    expect(k.hit).toBe(5);
+    expect(k.sq).toBe(sq(5, 0)); // swapped with the ally farthest from you
+    expect(f.units.length).toBeGreaterThanOrEqual(3);
+  });
+  test("in fury he walks at you, and his strike kicks you back", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(2, 1), boss: "Raja Hitam", hp: 30, hit: 5 }] });
+    s.units[0].phase = 2;
+    s.units[0].hp = 10;
+    plan(s);
+    expect(s.intents[0]).toMatchObject({ type: "move" });
+    const t = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(2, 3), boss: "Raja Hitam", hp: 30, hit: 5 }] });
+    t.units[0].phase = 2;
+    t.units[0].hp = 10;
+    plan(t);
+    enemyTurn(t);
+    expect(t.hero.sq).not.toBe(sq(2, 4));
+  });
+});
+
+describe("named combos (Jurus Rangkai)", () => {
+  test("Langkah Kuda then an attack: Serbuan Kuda, the attack hits +2 (only that card)", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "r", sq: sq(3, 2) }] }, ["kuda", "dalam"]);
+    const r = playCombo(s, [{ k: "card", idx: 0, sq: sq(3, 3) }, { k: "card", idx: 1, sq: sq(3, 2) }]);
+    expect(r.fizzled).toEqual([]);
+    expect(r.fight.rangkai).toEqual(["kuda"]);
+    expect(unitAt(r.fight, sq(3, 2))!.hp).toBe(1); // 7 - (4 + 2)
+    expect(r.fight.surge).toBe(0);
+  });
+  test("the same cards in the wrong order, or in separate combos, are not a named combo", () => {
+    const s = fight({ hero: sq(3, 3), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "r", sq: sq(3, 2) }] }, ["dalam", "tangkis"]);
+    const r = playCombo(s, [{ k: "card", idx: 0, sq: sq(3, 2) }]);
+    expect(r.fight.rangkai).toEqual([]);
+    expect(unitAt(r.fight, sq(3, 2))!.hp).toBe(3);
+  });
+  test("Elakan then Tangkisan: Bayang Bangau, your rolls can't fail", () => {
+    const s = fight({ hero: sq(2, 3), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "p", sq: sq(1, 2) }] }, ["elakan", "tangkisan"]);
+    s.fixedRoll = 1;
+    const r = playCombo(s, [{ k: "card", idx: 0, sq: sq(3, 3) }, { k: "card", idx: 1, sq: sq(2, 3) }]);
+    expect(r.fight.rangkai).toEqual(["bangau"]);
+    expect(r.fight.hero.block).toBe(5);
+    r.fight.intents = [{ id: r.fight.units[1].id, type: "strike", target: sq(2, 3) }];
+    const after = resolveEnemy(r.fight);
+    expect(after.hero.sq).toBe(sq(3, 3)); // dodged even on a roll of 1
+  });
+  test("Tangkis three times: Benteng Tiga Lapis gives +6 more Block", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(5, 0) }] }, ["tangkis", "tangkis", "tangkis"]);
+    s.tenaga = 3;
+    const r = playCombo(s, [0, 1, 2].map((idx) => ({ k: "card" as const, idx, sq: sq(2, 5) })));
+    expect(r.fight.hero.block).toBe(18);
   });
 });

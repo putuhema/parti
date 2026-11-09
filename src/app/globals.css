@@ -577,3 +577,52 @@ a { text-decoration: none; }
 .sl-intent { animation: slreaim 360ms cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes slreaim { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .sl-intent { animation: none; } }
+
+/* Raja Silat: combo queue, dice, piles */
+.sl-qmark { position: absolute; left: 4%; top: 4%; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #1899d6; color: #fff; font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 0 #1478a8; animation: dotin 200ms var(--spring) both; }
+.sl-float.roll { font-size: 14px; animation: slroll 1300ms cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes slroll { 0% { opacity: 0; transform: translateY(10%) rotate(-200deg) scale(.4); } 25% { opacity: 1; transform: translateY(-30%) rotate(0) scale(1.15); } 80% { opacity: 1; transform: translateY(-60%) scale(1); } 100% { opacity: 0; transform: translateY(-80%); } }
+.sl-combo-strip { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.sl-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: #ddf4ff; color: #1478a8; font-size: 12px; font-weight: 900; border: 0; cursor: pointer; }
+.sl-chip.bad { background: #ffdfe0; color: #b81f1f; }
+.sl-chip b { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; background: #1899d6; color: #fff; font-size: 10px; align-items: center; justify-content: center; }
+.sl-cw .qn { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); z-index: 2; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #1899d6; color: #fff; font-size: 13px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 0 #1478a8; }
+.sl-pile { position: absolute; bottom: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 8px; border: 0; border-radius: 12px; background: #fff; box-shadow: 0 3px 0 var(--cream-3); color: var(--plum); font-size: 15px; font-weight: 900; line-height: 1; cursor: pointer; }
+.sl-pile small { font-size: 10px; font-weight: 800; color: var(--plum-soft); }
+.sl-pilelist { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .sl-float.roll, .sl-qmark { animation: none; } }
+
+/* Raja Silat fight layout: the board takes all the room it can, the log floats over it, the hand floats below. */
+.screen.sl-fight { height: 100dvh; min-height: 0; gap: 8px; overflow: hidden; padding-bottom: calc(env(safe-area-inset-bottom) + 10px); }
+/* The board is as big as the width allows, but shrinks on short screens so the hand never covers it. */
+.sl-stage { flex-shrink: 0; display: flex; justify-content: center; }
+.sl-stage-in { position: relative; width: min(100%, max(200px, calc(100dvh - 430px - env(safe-area-inset-top) - env(safe-area-inset-bottom)))); }
+.sl-logtoggle { background: #fff; box-shadow: 0 3px 0 var(--cream-3); color: var(--plum); border: 0; cursor: pointer; }
+.sl-logtoggle.on { background: var(--plum); color: #fff; box-shadow: 0 3px 0 #2b2333; }
+.sl-logfloat { position: absolute; left: 8px; right: 8px; top: 8px; max-height: 64%; z-index: 20; display: flex; flex-direction: column; border-radius: 14px; background: rgba(36, 26, 44, .86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 8px 24px rgba(0, 0, 0, .25); color: #fff; animation: sllog 200ms ease-out both; overflow: hidden; }
+@keyframes sllog { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
+.sl-logfloat-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 4px; font-size: 13px; font-weight: 900; letter-spacing: .04em; }
+.sl-logfloat-head button { border: 0; border-radius: 999px; padding: 3px 10px; background: rgba(255, 255, 255, .16); color: #fff; font-size: 12px; font-weight: 900; cursor: pointer; }
+.sl-logfloat-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 10px; }
+.sl-logfloat .sl-logturn h3 { background: transparent; color: #ffc800; position: static; padding: 2px 0; }
+.sl-logfloat .sl-logline.full { color: rgba(255, 255, 255, .85); border-bottom-color: rgba(255, 255, 255, .1); font-size: 13px; padding: 3px 0; }
+.sl-logfloat .sl-logline.good { color: #9be15d; } .sl-logfloat .sl-logline.bad { color: #ff8a8a; } .sl-logfloat .sl-logline.enemy { color: #d9b8ff; } .sl-logfloat .sl-logline.you { color: #84d8ff; }
+.sl-tray { flex-shrink: 0; height: 32px; display: flex; align-items: center; min-width: 0; }
+.sl-tray .sl-combo-strip { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; width: 100%; }
+.sl-tray .sl-chip { flex-shrink: 0; white-space: nowrap; }
+.sl-chip.next { background: #fff; border: 2px dashed; padding: 1px 8px; }
+.sl-chip.named { color: #fff; animation: dotin 260ms var(--spring) both; }
+.sl-tray-tip { font-size: 12px; font-weight: 700; color: var(--plum-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl-tray-tip b { color: var(--plum); font-weight: 900; }
+.sl-tray-log { border: 0; background: none; padding: 0; width: 100%; text-align: left; cursor: pointer; min-width: 0; }
+.sl-fight .sl-hand { flex-shrink: 0; height: 172px; margin-top: auto; }
+.sl-named { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 3; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 5px; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 900; white-space: nowrap; box-shadow: 0 2px 0 rgba(0, 0, 0, .18); pointer-events: none; }
+.sl-named.start { width: 18px; height: 18px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+.sl-glow { animation: slbob 3.2s ease-in-out infinite, slglow 1.2s ease-in-out infinite !important; }
+@keyframes slglow { 50% { filter: drop-shadow(0 0 10px rgba(255, 200, 0, .95)); } }
+.sl-rangkai { position: absolute; left: 50%; top: 40%; z-index: 25; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 22px 12px; border-radius: 18px; background: #fffdf7; box-shadow: 0 6px 0 #3c3c3c, 0 18px 40px rgba(0, 0, 0, .3); border: 3px solid #3c3c3c; white-space: nowrap; animation: slrangkai 1700ms cubic-bezier(.34, 1.56, .64, 1) both; }
+.sl-rangkai small { font-size: 11px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; color: var(--plum-soft); }
+.sl-rangkai span { font-family: var(--font-display), "Fredoka", sans-serif; font-size: 30px; font-weight: 700; line-height: 1; text-shadow: 0 2px 0 rgba(0, 0, 0, .12); }
+@keyframes slrangkai { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3) rotate(-14deg); } 18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(3deg); } 30% { transform: translate(-50%, -50%) scale(1) rotate(-2deg); } 80% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-2deg); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(.9) rotate(-2deg); } }
+@media (prefers-reduced-motion: reduce) { .sl-logfloat, .sl-chip.named { animation: none; } .sl-glow { animation: none !important; outline: 3px solid #ffc800; border-radius: 14px; } .sl-rangkai { animation: slfade 1700ms linear both; transform: translate(-50%, -50%); } }
+@keyframes slfade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
