@@ -58,7 +58,7 @@ function Onboarding({ token }: { token: string }) {
       <div className="grow" />
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         <Mascot size={120} className="bob" />
-        <h1 style={{ margin: 0, fontSize: 34, fontWeight: 900, color: "var(--lime-dark)" }}>Parti</h1>
+        <h1 className="display" style={{ margin: 0, fontSize: 40 }}>pums party</h1>
         <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
           Hi, I&apos;m Kubo! What should your friends call you?
         </p>

@@ -101,7 +101,7 @@ export function RoomResults({ room }: { room: RoomView }) {
         ) : (
           <button className="btn" disabled>Waiting for host to rematch…</button>
         )}
-        <Link href="/" className="btn btn-white">Back home</Link>
+        <Link href="/sudoku" className="btn btn-white">Back to Sudoku</Link>
       </div>
     </main>
   );

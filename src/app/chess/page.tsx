@@ -7,10 +7,11 @@ import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { ChessMode } from "../../../convex/lib/chess";
 import { BotFace, MODES, ModeIcon } from "@/components/chess/bits";
-import { GameSwitch, Icon, Mascot, Sheet } from "@/components/ui";
+import { Icon, Mascot, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
+import { ShellPage } from "@/components/shell";
 import { LESSONS } from "@/lib/lessons";
 
 export default function ChessHome() {
@@ -56,16 +57,16 @@ export default function ChessHome() {
   }
 
   return (
-    <main className="screen" style={{ gap: 14 }}>
-      <header className="topbar" style={{ justifyContent: "space-between" }}>
-        <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.01em", color: "var(--lime-dark)" }}>Parti</span>
+    <ShellPage
+      tab="games" gap={14}
+      right={
         <div style={{ display: "flex", gap: 8 }}>
           <span className="stat-pill" style={{ color: "var(--tangerine-ink)" }} aria-label={`${me.streak} day streak`}><Icon.Flame size={20} />{me.streak}</span>
           <span className="stat-pill" style={{ color: "var(--sun-ink)" }} aria-label={`${me.wins} wins`}><Icon.Trophy />{me.wins}</span>
         </div>
-      </header>
-
-      <GameSwitch current="chess" />
+      }
+    >
+      <h1 className="display" style={{ margin: "2px 4px 0", fontSize: 30 }}>Chess</h1>
 
       <Link href="/chess/learn" onClick={() => feedback.tap()} style={{ borderRadius: 22, background: "#D7FFB8", border: "2px solid #A5ED6E", boxShadow: "0 5px 0 #A5ED6E", padding: "14px 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -127,6 +128,6 @@ export default function ChessHome() {
           <button className="btn btn-green" disabled={code.length !== 4}>Join</button>
         </form>
       </Sheet>
-    </main>
+    </ShellPage>
   );
 }

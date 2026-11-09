@@ -66,7 +66,7 @@ function Message({ title, text }: { title: string; text: string }) {
       <Mascot size={100} mood="wow" />
       <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900 }}>{title}</h1>
       <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--muted)" }}>{text}</p>
-      <Link href="/" className="btn btn-green" style={{ marginTop: 12 }}>Back home</Link>
+      <Link href="/sudoku" className="btn btn-green" style={{ marginTop: 12 }}>Back home</Link>
     </main>
   );
 }

@@ -172,7 +172,7 @@ export function RoomGame({ room }: { room: RoomView }) {
             setQuitOpen(false);
             if (coop) {
               await leave({ token, code: room.code });
-              router.push("/");
+              router.push("/sudoku");
             } else await giveUp({ token, code: room.code });
           }}
         >

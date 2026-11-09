@@ -46,7 +46,7 @@ function Intro({ daily }: { daily: Daily }) {
   return (
     <main className="screen">
       <TopBar
-        back="/"
+        back="/sudoku"
         title="Daily Duel"
         right={<span className="stat-pill" style={{ color: "var(--tangerine-ink)" }} aria-label={`${daily.streak} day streak`}><Icon.Flame size={20} className="flick" />{daily.streak}</span>}
       />
@@ -167,7 +167,7 @@ function Play({ daily }: { daily: Daily }) {
   return (
     <main className="screen tight">
       <TopBar
-        back="/"
+        back="/sudoku"
         title={<span className="chip chip-sun">DAILY #{daily.number} · {daily.difficulty.toUpperCase()}</span>}
         right={
           <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
@@ -201,7 +201,7 @@ function Result({ daily }: { daily: Daily }) {
   return (
     <main className="screen">
       {fresh && <Confetti />}
-      <TopBar back="/" title="" />
+      <TopBar back="/sudoku" title="" />
       <section style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
           <Icon.Flame size={92} className="grow-up" />

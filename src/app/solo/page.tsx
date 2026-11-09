@@ -16,7 +16,7 @@ export default function Solo() {
   if (!level) {
     return (
       <main className="screen">
-        <TopBar back="/" title="Practice solo" />
+        <TopBar back="/sudoku" title="Practice solo" />
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "16px 0" }}>
           <Mascot size={100} className="bob" />
           <p style={{ margin: 0, fontSize: 18, fontWeight: 800, textAlign: "center" }}>Warm up before you take on your friends.</p>
@@ -79,7 +79,7 @@ function SoloGame({ level, onAgain, onChange }: { level: Difficulty; onAgain: ()
           <div style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "stretch", maxWidth: 420, margin: "0 auto", width: "100%" }}>
             <button className="btn btn-green" onClick={onAgain}>Play again</button>
             <button className="btn btn-white" onClick={onChange}>Change level</button>
-            <Link href="/" className="btn btn-ghost">Home</Link>
+            <Link href="/sudoku" className="btn btn-ghost">Back to Sudoku</Link>
           </div>
         </div>
       )}

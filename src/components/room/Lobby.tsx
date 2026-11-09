@@ -61,7 +61,7 @@ export function Lobby({ room }: { room: RoomView }) {
   return (
     <main className="screen">
       <TopBar
-        back={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/"); }}
+        back={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/sudoku"); }}
         title={host ? "New room" : "Room"}
       />
 

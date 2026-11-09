@@ -32,27 +32,6 @@ export function roomPaints<T extends { id: string; isMe: boolean; seat: number }
 }
 
 // ---------- Sudoku | Chess switch ----------
-export function GameSwitch({ current }: { current: "sudoku" | "chess" | "words" }) {
-  return (
-    <nav className="game-switch" aria-label="Choose a game">
-      <Link href="/" aria-current={current === "sudoku" ? "page" : undefined}>
-        <Icon.Grid size={18} color={current === "sudoku" ? "#1899D6" : "#6F6F6F"} />
-        Sudoku
-      </Link>
-      <Link href="/chess" aria-current={current === "chess" ? "page" : undefined}>
-        <svg width="16" height="18" viewBox="10 2 20 36" aria-hidden="true">
-          <path d="M13 31 C13 26 15.5 23.5 18.5 21.5 C14.5 21.5 10.5 20.5 10.5 17 C10.5 14 14 10.5 17 8.5 L17.5 4 L21 7.2 C26.5 8.2 30 13.5 29 21.5 L28 31z M10 30.5 h20 a3 3 0 0 1 3 3 v1.5 a2 2 0 0 1 -2 2 h-22 a2 2 0 0 1 -2 -2 v-1.5 a3 3 0 0 1 3 -3z" fill={current === "chess" ? "#58A700" : "#6F6F6F"} />
-        </svg>
-        Chess
-      </Link>
-      <Link href="/words" aria-current={current === "words" ? "page" : undefined}>
-        <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: 5, background: current === "words" ? "#CE82FF" : "#AFAFAF", color: "#fff", fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>A</span>
-        Words
-      </Link>
-    </nav>
-  );
-}
-
 // ---------- Mascot ----------
 export function Mascot({ size = 72, mood = "happy", className }: { size?: number; mood?: "happy" | "joy" | "wow"; className?: string }) {
   return (

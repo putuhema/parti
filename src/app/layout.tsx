@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
+import { Fredoka, Nunito } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -9,15 +9,21 @@ const nunito = Nunito({
   weight: ["600", "700", "800", "900"],
 });
 
+const fredoka = Fredoka({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["600", "700"],
+});
+
 export const metadata: Metadata = {
-  title: "Parti",
-  description: "Sudoku and chess with friends. Race, team up, learn and play.",
-  appleWebApp: { capable: true, title: "Parti", statusBarStyle: "default" },
+  title: "pums party",
+  description: "A party of games to play with friends: Sudoku, chess, word games and Raja Silat.",
+  appleWebApp: { capable: true, title: "pums party", statusBarStyle: "default" },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#f7f0ea",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -25,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={nunito.variable}>
+    <html lang="en" className={`${nunito.variable} ${fredoka.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

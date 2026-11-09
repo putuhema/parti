@@ -2,14 +2,14 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Parti",
-    short_name: "Parti",
-    description: "Sudoku and chess with friends: race, team up, learn and play.",
+    name: "pums party",
+    short_name: "pums party",
+    description: "A party of games to play with friends.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#ffffff",
-    theme_color: "#ffffff",
+    background_color: "#f7f0ea",
+    theme_color: "#f7f0ea",
     icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
   };
 }

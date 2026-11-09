@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { ModeChip, WORD_MODES, type WMode } from "@/components/words/common";
-import { GameSwitch, Icon, Sheet } from "@/components/ui";
+import { Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
+import { ShellPage } from "@/components/shell";
 
 type Lang = "en" | "id" | "mix";
 const LANG_KEY = "parti:words-lang";
@@ -66,16 +67,16 @@ export default function WordsHome() {
   }
 
   return (
-    <main className="screen" style={{ gap: 14 }}>
-      <header className="topbar" style={{ justifyContent: "space-between" }}>
-        <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.01em", color: "var(--lime-dark)" }}>Parti</span>
+    <ShellPage
+      tab="games" gap={14}
+      right={
         <div style={{ display: "flex", gap: 8 }}>
           <span className="stat-pill" style={{ color: "var(--tangerine-ink)" }} aria-label={`${me.streak} day streak`}><Icon.Flame size={20} />{me.streak}</span>
           <span className="stat-pill" style={{ color: "var(--sun-ink)" }} aria-label={`${me.wins} wins`}><Icon.Trophy />{me.wins}</span>
         </div>
-      </header>
-
-      <GameSwitch current="words" />
+      }
+    >
+      <h1 className="display" style={{ margin: "2px 4px 0", fontSize: 30 }}>Words</h1>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span className="label" style={{ flexShrink: 0 }}>{id ? "Bahasa" : "Language"}</span>
@@ -114,6 +115,6 @@ export default function WordsHome() {
           <button className="btn btn-green" disabled={code.length !== 4}>Join</button>
         </form>
       </Sheet>
-    </main>
+    </ShellPage>
   );
 }
