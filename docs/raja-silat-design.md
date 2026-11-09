@@ -539,6 +539,18 @@ Enemies only target you. Losing villagers was most of the unavoidable damage, so
 won 100% at 24 HP. Now: **20 HP, heal 2** after each fight. Bot: ~60% runs won, ~4 HP lost per fight
 (a fifth of your health), runs end at ~9 HP, losses on floors 4–6.
 
+**Map and Pusaka (for replayability).**
+- **Map:** 7 rows. Warm-up fight at the bottom, boss at the top, a row of campfires before the boss.
+  In between you choose a path through fights (gold + a card), elites (tougher, +2 HP on every
+  piece, gold + a card + pick 1 of 2 Pusaka), campfires (rest +5 HP, or remove a card), the Warung
+  shop (cards, a Pusaka, healing, card removal), mystery events (The Dukun, Warung Kopi, The Old
+  Master, Mossy Shrine) and treasure (pick 1 of 2 Pusaka).
+- **12 Pusaka** that bend the rules (src/lib/silat/relics.ts): Keris Berapi, Selendang Angin, Peci
+  Hitam, Gelang Besi, Kopi Tubruk, Tasbih, Sandal Jepit, Batu Akik, Jamu Kunyit, Kendang, Songket
+  Merah, Keris Pusaka. Every run starts with a random common one.
+- **Balance:** 16 HP, heal 1 after fights (campfires and events give more). Boss: 30 HP with an
+  extra knight. Bot taking random paths: ~70% runs won, most losses on floors 2–4 and at the boss.
+
 ## 16. Open questions
 
 1. **Tab name**: "Silat" (short, fits the tab bar) or "Raja Silat"?

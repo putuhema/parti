@@ -72,6 +72,12 @@ export interface Fight {
   hero: { sq: number; hp: number; max: number; block: number };
   tenaga: number;
   stepUsed: boolean;
+  /** Extra free steps left this turn (Sandal Jepit). */
+  extraSteps: number;
+  /** Pusaka (relics) you carry: ids from relics.ts. */
+  relics: string[];
+  /** Things that happen once per turn (relic triggers). */
+  tf: { crashed: boolean; ko: boolean };
   /** Elakan: the square you hop to when the first hit comes. */
   hop: number | null;
   /** Tangkisan: attackers that hit you get pushed back this far. */
@@ -160,6 +166,21 @@ function moveOcc(s: Fight, o: Occ, sq: number) {
   else o.th.sq = sq;
 }
 
+// ---------- Relics ----------
+
+export const has = (s: Fight, relic: string) => (s.relics ?? []).includes(relic);
+
+/** Your turn, not the enemy's: relics only trigger on what you do. */
+const yours = (s: Fight) => s.status === "play";
+
+/** A piece was knocked out on your turn (Kopi Tubruk: first one each turn gives +1 Tenaga). */
+function onKnockout(s: Fight) {
+  if (!yours(s) || !has(s, "kopi") || s.tf?.ko) return;
+  s.tf = { ...(s.tf ?? { crashed: false, ko: false }), ko: true };
+  s.tenaga++;
+  say(s, "Kopi Tubruk: +1 Tenaga", "good");
+}
+
 // ---------- Battle log ----------
 
 const DIR_NAMES = ["up", "up-right", "right", "down-right", "down", "down-left", "left", "up-left"];
@@ -186,6 +207,7 @@ export function damageUnit(s: Fight, u: Unit, n: number) {
     s.units = s.units.filter((x) => x !== u);
     s.fx.push({ t: "ko", sq: u.sq, id: u.id });
     say(s, `${unitName(u)} takes ${n} and is knocked out`, "good");
+    onKnockout(s);
   } else {
     say(s, `${unitName(u)} takes ${n} (${u.hp} left)`);
     u.angry = true;
@@ -262,14 +284,19 @@ export function push(s: Fight, sq: number, dir: number, n: number, crash = 0) {
     const other = occupant(s, next);
     if (other) {
       moved();
-      const dmg = Math.min(CRASH_MAX, BUMP + flew + crash + s.powers.momentum);
+      let dmg = Math.min(CRASH_MAX, BUMP + flew + crash + s.powers.momentum);
+      if (yours(s) && has(s, "keris_api") && !s.tf?.crashed) {
+        s.tf = { ...(s.tf ?? { crashed: false, ko: false }), crashed: true };
+        dmg *= 2;
+        say(s, "Keris Berapi: double crash!", "good");
+      }
       say(s, `${occName(mover)} crashes into ${occName(other) === "You" ? "you" : occName(other)}${flew > 1 ? ` at speed (${dmg})` : ""}`);
       return collide(s, mover, other, dir, dmg);
     }
     moveOcc(s, mover, next);
     cur = next;
     flew++;
-    if (s.mud.includes(next)) { moved(); say(s, `${occName(mover)} sticks in the mud`); return; }
+    if (s.mud.includes(next) && !(yours(s) && has(s, "selendang"))) { moved(); say(s, `${occName(mover)} sticks in the mud`); return; }
   }
   moved();
 }
@@ -306,6 +333,11 @@ export function ringOut(s: Fight, o: Occ, dir?: number) {
   s.fx.push({ t: "ringout", sq: o.u.sq, dir, id: o.u.id });
   say(s, `${unitName(o.u)} flies off the board!`, "good");
   s.units = s.units.filter((x) => x !== o.u);
+  onKnockout(s);
+  if (yours(s) && has(s, "tasbih") && s.hero.hp < s.hero.max) {
+    s.hero.hp++;
+    say(s, "Tasbih: +1 HP", "good");
+  }
   s.ringOuts++;
   s.combo++;
   checkEnd(s);
@@ -577,6 +609,10 @@ export function react(s: Fight) {
     s.fx.push({ t: "react", sq: u.sq });
     say(s, `${unitName(u)} covers ${sqName(s, s.hero.sq)} and strikes you as you arrive`, "bad");
     attackHero(s, u, reactionHit(u));
+    if (has(s, "songket") && s.units.includes(u)) {
+      say(s, `Songket Merah: the ${unitName(u)} takes 1`, "good");
+      damageUnit(s, u, 1);
+    }
   }
 }
 
@@ -696,15 +732,17 @@ export const TENAGA = 3;
 export function startTurn(s: Fight, guarantee?: (id: string) => boolean) {
   s.turn++;
   say(s, `Turn ${s.turn}`, "turn");
-  s.hero.block = 0;
-  s.tenaga = TENAGA;
+  s.hero.block = has(s, "gelang") ? Math.min(s.hero.block, 5) : 0;
+  s.tenaga = TENAGA + (s.turn === 1 && has(s, "kendang") ? 1 : 0);
   s.stepUsed = false;
+  s.extraSteps = has(s, "sandal") ? 1 : 0;
+  s.tf = { crashed: false, ko: false };
   s.hop = null;
   s.counter = 0;
   s.reacted = [];
   s.combo = 0;
   s.status = "play";
-  drawCards(s, HAND);
+  drawCards(s, HAND + (has(s, "akik") ? 1 : 0));
   // The first hand always has something to hit with.
   if (s.turn === 1 && guarantee && !s.hand.some(guarantee)) {
     const i = s.draw.findIndex(guarantee);
@@ -803,7 +841,8 @@ export function step(s: Fight, sq: number) {
   const f = clone(s);
   f.fx = [];
   f.hero.sq = sq;
-  f.stepUsed = true;
+  if (f.extraSteps > 0) f.extraSteps--;
+  else f.stepUsed = true;
   say(f, `You step to ${sqName(f, sq)}`, "you");
   react(f);
   return f;
@@ -824,6 +863,7 @@ export interface Setup {
   seed: number;
   name?: string;
   survive?: number;
+  relics?: string[];
 }
 
 export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight {
@@ -835,9 +875,12 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     hero: { sq: o.hero, hp: o.heroHp, max: o.heroMax, block: 0 },
     tenaga: TENAGA,
     stepUsed: false,
+    extraSteps: 0,
+    relics: o.relics ?? [],
+    tf: { crashed: false, ko: false },
     hop: null,
     counter: 0,
-    powers: { harimau: 0, momentum: 0 },
+    powers: { harimau: (o.relics ?? []).includes("keris") ? 1 : 0, momentum: 0 },
     units: o.units.map((u) => ({
       id: id++,
       kind: u.kind,

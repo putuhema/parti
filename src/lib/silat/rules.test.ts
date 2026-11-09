@@ -2,7 +2,15 @@
 import { describe, expect, test } from "bun:test";
 import { CARDS, canPlay, playCard } from "./cards";
 import { clone, enemyTurn, forecast, isGuarded, makeFight, plan, reactionDamage, step, unitAt, type Fight, type Setup } from "./rules";
-import { FLOORS, fightFor, newRun, settle, takeReward } from "./run";
+import { makeMap, nextNodes, nodeById, MAP_ROWS } from "./map";
+import { ALL_RELICS } from "./relics";
+import { buyCard, chooseEvent, enter, fightFor, newRun, settle, takeReward, type Run } from "./run";
+
+/** A fresh run already standing in the Warm-up fight, with no relics (so results are predictable). */
+function startRun(seed: number): Run {
+  const run = { ...newRun(seed), relics: [] as string[] };
+  return enter(run, nextNodes(run.map, null)[0]);
+}
 
 const sq = (c: number, r: number) => r * 6 + c;
 
@@ -92,7 +100,7 @@ describe("pushes", () => {
   });
 
   test("the first fight's showcase: kick the front pawn into the one behind it", () => {
-    const run = newRun(5);
+    const run = startRun(5);
     let s = run.fight!;
     expect(s.things).toHaveLength(0); // no boulders, crates or villagers
     s.hand = ["tendang"];
@@ -271,17 +279,52 @@ describe("cards", () => {
 });
 
 describe("runs", () => {
-  test("win a fight, pick a reward, move to the next floor", () => {
+  test("a run starts on the map with a random Pusaka, then: fight, reward, back to the map", () => {
     let run = newRun(3);
+    expect(run.status).toBe("map");
+    expect(run.relics).toHaveLength(1);
+    run = enter(run, nextNodes(run.map, null)[0]);
+    expect(run.status).toBe("fight");
     run.fight!.status = "won";
     run = settle(run);
     expect(run.status).toBe("reward");
-    expect(run.reward).toHaveLength(3);
-    expect(["badai", "tolak", "benteng"]).toContain(run.reward![0]);
-    run = takeReward(run, run.reward![0]);
-    expect(run.floor).toBe(1);
+    expect(run.reward!.cards).toHaveLength(3);
+    expect(["badai", "tolak", "benteng"]).toContain(run.reward!.cards[0]);
+    expect(run.reward!.gold).toBeGreaterThan(0);
+    const gold = run.gold;
+    run = takeReward(run, run.reward!.cards[0], null);
+    expect(run.status).toBe("map");
     expect(run.deck).toHaveLength(11);
-    expect(run.fight?.status).toBe("play");
+    expect(run.gold).toBeGreaterThan(gold);
+    expect(nextNodes(run.map, run.at).length).toBeGreaterThan(0);
+  });
+
+  test("every map: one start, a campfire row, then the boss; every path reaches the boss", () => {
+    for (let seed = 1; seed < 60; seed++) {
+      const map = makeMap(seed);
+      expect(map.nodes.filter((n) => n.row === 0)).toHaveLength(1);
+      expect(map.nodes.filter((n) => n.row === MAP_ROWS - 2).every((n) => n.kind === "camp")).toBe(true);
+      expect(map.nodes.filter((n) => n.kind === "boss")).toHaveLength(1);
+      const walk = (id: string): boolean => nodeById(map, id).kind === "boss" || (nextNodes(map, id).length > 0 && nextNodes(map, id).every(walk));
+      expect(walk(nextNodes(map, null)[0])).toBe(true);
+    }
+  });
+
+  test("shop: buying costs gold, and you can't buy what you can't afford", () => {
+    let run = newRun(4);
+    run = { ...run, status: "shop", gold: 60, shop: { cards: [{ id: "badai", price: 80, sold: false }, { id: "dalam", price: 45, sold: false }], relic: null, removePrice: 50, removed: false, healPrice: 25, healed: false } };
+    expect(buyCard(run, 0)).toBe(run); // too expensive
+    const after = buyCard(run, 1);
+    expect(after.gold).toBe(15);
+    expect(after.deck).toContain("dalam");
+  });
+
+  test("events: the old master can remove a card", () => {
+    let run = { ...newRun(6), status: "event" as const, event: "guru" };
+    const before = run.deck.length;
+    run = chooseEvent(run, "forget", 0);
+    expect(run.deck).toHaveLength(before - 1);
+    expect(run.status).toBe("map");
   });
 
   test("Hold Out fights are won by surviving", () => {
@@ -292,10 +335,11 @@ describe("runs", () => {
     expect(s.status).toBe("won");
   });
 
-  test("every floor can be set up, including the boss", () => {
-    for (let floor = 0; floor < FLOORS; floor++) {
-      for (let seed = 1; seed < 30; seed++) {
-        const f = fightFor({ floor, hp: 20, max: 20, deck: newRun(seed).deck, seed });
+  test("every fight on every map can be set up, including elites and the boss", () => {
+    for (let seed = 1; seed < 30; seed++) {
+      const run = newRun(seed);
+      for (const node of run.map.nodes.filter((n) => n.kind === "fight" || n.kind === "elite" || n.kind === "boss")) {
+        const f = fightFor({ ...run, floor: node.row }, node);
         expect(f.units.some((u) => u.target)).toBe(true);
         expect(f.hand.length).toBe(5);
         expect(f.things).toHaveLength(0);
@@ -306,13 +350,74 @@ describe("runs", () => {
   });
 });
 
+describe("Pusaka (relics)", () => {
+  const withRelic = (relic: string, o: Parameters<typeof fight>[0], hand: string[] = []) => {
+    const s = fight({ ...o, relics: [relic] }, hand);
+    return s;
+  };
+
+  test("Keris Berapi: the first crash each turn deals double", () => {
+    let s = withRelic("keris_api", { hero: sq(2, 4), units: [{ kind: "p", sq: sq(2, 3), hp: 9 }, { kind: "n", sq: sq(2, 2), hp: 9 }, { kind: "k", sq: sq(5, 0) }] }, ["tendang"]);
+    s = play(s, "tendang", sq(2, 3));
+    expect(s.units.find((u) => u.kind === "n")!.hp).toBe(9 - 4); // crash 2, doubled
+  });
+
+  test("Selendang Angin: kicked pieces fly through mud", () => {
+    let s = withRelic("selendang", { hero: sq(2, 5), units: [{ kind: "n", sq: sq(2, 4) }, { kind: "k", sq: sq(5, 0) }], mud: [sq(2, 3)] }, ["tendang"]);
+    s = play(s, "tendang", sq(2, 4));
+    expect(s.units.find((u) => u.kind === "n")).toBeUndefined(); // flew off the top
+  });
+
+  test("Peci Hitam: Langkah Kuda doesn't set off reactions", () => {
+    let s = withRelic("peci", { hero: sq(1, 5), units: [{ kind: "p", sq: sq(1, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["kuda"]);
+    s = play(s, "kuda", sq(2, 3)); // the pawn on b4 covers c3
+    expect(s.hero.hp).toBe(20);
+  });
+
+  test("Sandal Jepit: two free steps", () => {
+    let s = withRelic("sandal", { hero: sq(0, 5), units: [{ kind: "k", sq: sq(5, 0) }] });
+    s = step(s, sq(1, 5));
+    expect(s.stepUsed).toBe(false);
+    s = step(s, sq(2, 5));
+    expect(s.stepUsed).toBe(true);
+  });
+
+  test("Kopi Tubruk: first knockout each turn gives +1 Tenaga", () => {
+    let s = withRelic("kopi", { hero: sq(1, 1), units: [{ kind: "b", sq: sq(1, 0) }, { kind: "p", sq: sq(0, 1) }, { kind: "k", sq: sq(5, 5) }] }, ["tendang", "tendang"]);
+    s = play(s, "tendang", sq(1, 0)); // off the top: knocked out
+    expect(s.tenaga).toBe(3); // 3 - 1 + 1
+    s = play(s, "tendang", sq(0, 1)); // off the left: second knockout gives nothing
+    expect(s.tenaga).toBe(2);
+  });
+
+  test("Batu Akik draws 6, Kendang gives 4 Tenaga on turn 1, Gelang Besi keeps Block", () => {
+    const deck = Array(12).fill("tangkis");
+    expect(makeFight({ hero: sq(0, 5), heroHp: 20, heroMax: 20, units: [{ kind: "k", sq: sq(5, 0) }], deck, seed: 1, relics: ["akik"] }).hand).toHaveLength(6);
+    expect(makeFight({ hero: sq(0, 5), heroHp: 20, heroMax: 20, units: [{ kind: "k", sq: sq(5, 0) }], deck, seed: 1, relics: ["kendang"] }).tenaga).toBe(4);
+    const s = makeFight({ hero: sq(0, 5), heroHp: 20, heroMax: 20, units: [{ kind: "k", sq: sq(5, 0) }], deck, seed: 1, relics: ["gelang"], limit: 0 });
+    s.hero.block = 8;
+    enemyTurn(s);
+    expect(s.hero.block).toBe(5);
+  });
+
+  test("Songket Merah: an enemy that strikes you as you arrive takes 1", () => {
+    const s = withRelic("songket", { hero: sq(2, 4), units: [{ kind: "n", sq: sq(2, 2) }, { kind: "k", sq: sq(5, 0) }] });
+    const after = step(s, sq(3, 4)); // the knight covers d2
+    expect(after.units.find((u) => u.kind === "n")!.hp).toBe(4);
+  });
+});
+
 describe("random play never breaks the board", () => {
   test("300 fights of random moves", () => {
     let r = 7;
     const rnd = () => ((r = (r * 1103515245 + 12345) % 2147483648) / 2147483648);
     let finished = 0;
     for (let g = 0; g < 300; g++) {
-      let s = fightFor({ floor: g % FLOORS, hp: 20, max: 20, deck: ["tendang", "tendang", "lurus", "sabit", "tarik", "tolak", "badai", "bantingan", "kuda", "gajah", "benteng", "elakan", "tangkisan", "kuncian", "harimau", "momentum"], seed: g + 1 });
+      const base = newRun(g + 1);
+      const fights = base.map.nodes.filter((n) => n.kind === "fight" || n.kind === "elite" || n.kind === "boss");
+      const node = fights[g % fights.length];
+      const run = { ...base, floor: node.row, relics: ALL_RELICS.filter((_, i) => (g >> i) & 1).map((x) => x.id), deck: ["tendang", "tendang", "lurus", "sabit", "tarik", "tolak", "badai", "bantingan", "kuda", "gajah", "benteng", "elakan", "tangkisan", "kuncian", "harimau", "momentum"] };
+      let s = fightFor(run, node);
       for (let turn = 0; turn < 60 && s.status === "play"; turn++) {
         for (let tries = 0; tries < 6; tries++) {
           const i = Math.floor(rnd() * Math.max(1, s.hand.length));
@@ -328,7 +433,7 @@ describe("random play never breaks the board", () => {
         const spots = [s.hero.sq, ...s.units.map((u) => u.sq), ...s.things.map((t) => t.sq)];
         expect(new Set(spots).size).toBe(spots.length);
         for (const x of spots) expect(x >= 0 && x < 36).toBe(true);
-        expect(clone(s).hand.length).toBeLessThanOrEqual(5);
+        expect(clone(s).hand.length).toBeLessThanOrEqual(6); // 6 with Batu Akik
       }
       if (s.status === "won" || s.status === "lost") finished++;
     }

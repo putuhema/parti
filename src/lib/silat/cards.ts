@@ -1,6 +1,6 @@
 // Raja Silat cards: what each one targets and what it does.
 import {
-  DIRS, FLY, KNIGHT, checkEnd, clone, react, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
+  DIRS, FLY, KNIGHT, checkEnd, clone, has, react, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
   unitAt, unitName, type Fight,
 } from "./rules";
 
@@ -255,7 +255,8 @@ export function playCard(s: Fight, idx: number, sq: number): Fight {
   say(f, c.self ? `You play ${c.name}` : `You play ${c.name} on ${sqName(f, sq)}`, "you");
   const from = f.hero.sq;
   c.play(f, sq);
-  if (f.hero.sq !== from && f.status === "play") react(f); // moved into an enemy's reach
+  // Moved into an enemy's reach (Peci Hitam: Langkah Kuda slips past reactions).
+  if (f.hero.sq !== from && f.status === "play" && !(id === "kuda" && has(f, "peci"))) react(f);
   f.bestCombo = Math.max(f.bestCombo, f.combo);
   if (f.combo >= 3) say(f, `Combo ×${f.combo}!`, "good");
   checkEnd(f);

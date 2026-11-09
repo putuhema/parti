@@ -551,3 +551,6 @@ a { text-decoration: none; }
 .sl-combo { position: absolute; left: 50%; top: 42%; z-index: 7; pointer-events: none; padding: 6px 16px; border-radius: 14px; background: #3c3c3c; color: #ffc800; font-family: var(--font-display), "Fredoka", sans-serif; font-size: 26px; font-weight: 700; white-space: nowrap; box-shadow: 0 4px 0 #1a1a1a; animation: slcombo 1300ms var(--spring) both; }
 @keyframes slcombo { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.5) rotate(-6deg); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.15) rotate(-4deg); } 30% { transform: translate(-50%, 0) scale(1) rotate(-4deg); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -16px) rotate(-4deg); } }
 @media (prefers-reduced-motion: reduce) { .sl-combo { animation: none; opacity: 0; } .sl-tok, .sl-cw { transition: none; } .sl-cw .deal, .sl-cw .bob, .sl-float { animation: none; } }
+.sl-node-can { animation: slnode 1.4s ease-in-out infinite; }
+@keyframes slnode { 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .sl-node-can { animation: none; } }

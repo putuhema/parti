@@ -1,0 +1,364 @@
+"use client";
+
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import { SilatCard } from "@/components/silat/SilatCard";
+import { Icon, Sheet } from "@/components/ui";
+import { feedback } from "@/lib/feedback";
+import { NODE_INFO as JOURNEY_ICONS } from "@/lib/journey";
+import { CARDS } from "@/lib/silat/cards";
+import { MAP_LANES, MAP_ROWS, NODE_INFO, nextNodes, type MapNode, type NodeKind } from "@/lib/silat/map";
+import { RELICS } from "@/lib/silat/relics";
+import {
+  EVENTS, REST_HEAL, SHOP_HEAL, buyCard, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, takeReward, takeTreasure, train, type Run,
+} from "@/lib/silat/run";
+
+const ICON_PATH: Record<NodeKind, string> = {
+  fight: JOURNEY_ICONS.battle.icon,
+  elite: JOURNEY_ICONS.elite.icon,
+  camp: JOURNEY_ICONS.rest.icon,
+  shop: JOURNEY_ICONS.shop.icon,
+  event: JOURNEY_ICONS.mystery.icon,
+  treasure: JOURNEY_ICONS.treasure.icon,
+  boss: JOURNEY_ICONS.boss.icon,
+};
+
+// ---------- Small pieces ----------
+
+export function RelicIcon({ id, size = 30 }: { id: string; size?: number }) {
+  const r = RELICS[id];
+  if (!r) return null;
+  return (
+    <span
+      title={`${r.name}: ${r.text}`}
+      style={{ width: size, height: size, borderRadius: size / 3, background: r.color, color: "#fff", fontWeight: 900, fontSize: size * 0.42, display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: `0 3px 0 rgba(0,0,0,.25)${r.rare ? ", 0 0 0 2px #FFC800" : ""}`, flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      {r.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+    </span>
+  );
+}
+
+function RelicRow({ id }: { id: string }) {
+  const r = RELICS[id];
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <RelicIcon id={id} size={38} />
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
+        <span style={{ fontSize: 15, fontWeight: 900, color: "var(--plum)" }}>{r.name}{r.rare ? " ★" : ""}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--plum-soft)" }}>{r.text}</span>
+      </div>
+    </div>
+  );
+}
+
+function Gold({ n }: { n: number }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 14, fontWeight: 900, color: "#8A6400" }}>
+      <span style={{ width: 16, height: 16, borderRadius: "50%", background: "#FFC800", boxShadow: "inset 0 -2px 0 #E5A800" }} aria-hidden="true" />
+      {n}
+    </span>
+  );
+}
+
+/** HP, gold, Pusaka and deck. Tap the Pusaka or deck to see them. */
+export function RunHeader({ run, title }: { run: Run; title: string }) {
+  const [open, setOpen] = useState<"relics" | "deck" | null>(null);
+  return (
+    <>
+      <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Link href="/silat" className="icon-btn" aria-label="Leave (your run is saved)" style={{ background: "#fff", boxShadow: "0 3px 0 var(--cream-3)" }}><Icon.Close /></Link>
+        <span className="display" style={{ flex: 1, fontSize: 20 }}>{title}</span>
+        <button type="button" className="btn btn-sm btn-white" style={{ color: "var(--plum)" }} onClick={() => { feedback.tap(); setOpen("deck"); }}>Deck {run.deck.length}</button>
+      </header>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 14, fontWeight: 900, color: "#B81F1F" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 C5 15 2.5 11.5 2.5 8 a4.8 4.8 0 0 1 9.5 -1 a4.8 4.8 0 0 1 9.5 1 C21.5 11.5 19 15 12 21z" fill="#FF4B4B" /></svg>
+          {run.hp}/{run.max}
+        </span>
+        <Gold n={run.gold} />
+        <button type="button" onClick={() => { feedback.tap(); setOpen("relics"); }} aria-label={`Your Pusaka: ${run.relics.map((id) => RELICS[id]?.name).join(", ")}`} style={{ border: 0, background: "none", padding: 0, cursor: "pointer", display: "flex", gap: 4, marginLeft: "auto" }}>
+          {run.relics.map((id) => <RelicIcon key={id} id={id} size={26} />)}
+        </button>
+      </div>
+      <Sheet open={open === "relics"} onClose={() => setOpen(null)} label="Your Pusaka">
+        <h2 className="display" style={{ margin: 0, fontSize: 24, textAlign: "center" }}>Your Pusaka</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: "60dvh", overflowY: "auto" }}>
+          {run.relics.map((id) => <RelicRow key={id} id={id} />)}
+        </div>
+      </Sheet>
+      <Sheet open={open === "deck"} onClose={() => setOpen(null)} label="Your deck">
+        <h2 className="display" style={{ margin: 0, fontSize: 24, textAlign: "center" }}>Your deck · {run.deck.length}</h2>
+        <DeckGrid deck={run.deck} />
+      </Sheet>
+    </>
+  );
+}
+
+function DeckGrid({ deck, onPick }: { deck: string[]; onPick?: (i: number) => void }) {
+  const order = deck.map((id, i) => ({ id, i })).sort((a, b) => CARDS[a.id].type.localeCompare(CARDS[b.id].type) || a.id.localeCompare(b.id));
+  return (
+    <div style={{ maxHeight: "60dvh", overflowY: "auto", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px 8px", justifyItems: "center", padding: "10px 0" }}>
+      {order.map(({ id, i }) => onPick ? (
+        <button key={i} type="button" onClick={() => onPick(i)} aria-label={`Choose ${CARDS[id].name}`} style={{ width: 100, height: 144, border: 0, padding: 0, background: "none", cursor: "pointer" }}><SilatCard id={id} /></button>
+      ) : (
+        <span key={i} style={{ width: 100, height: 144, display: "block" }}><SilatCard id={id} /></span>
+      ))}
+    </div>
+  );
+}
+
+function Screen({ children, dark }: { children: ReactNode; dark?: boolean }) {
+  return <main className="screen" style={{ gap: 14, ...(dark ? { background: "#2B1A12", color: "#FFF8EC", maxWidth: "none" } : {}) }}>{children}</main>;
+}
+
+// ---------- Map ----------
+
+const ROW_H = 84;
+const PAD = 46;
+
+function spot(n: MapNode) {
+  const wobble = ((n.seed % 100) / 100 - 0.5) * 8;
+  const x = n.kind === "boss" || n.row === 0 ? 50 : ((n.lane + 0.5) / MAP_LANES) * 100 + wobble;
+  const y = PAD + (MAP_ROWS - 1 - n.row) * ROW_H;
+  return { x, y };
+}
+
+export function MapScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
+  const reach = new Set(nextNodes(run.map, run.at));
+  const visited = new Set(run.path);
+  const height = PAD * 2 + (MAP_ROWS - 1) * ROW_H;
+  const pos = new Map(run.map.nodes.map((n) => [n.id, spot(n)]));
+  const [peek, setPeek] = useState<MapNode | null>(null);
+  return (
+    <Screen>
+      <RunHeader run={run} title="Sawah" />
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>Choose your path. The boss waits at the top.</p>
+      <div style={{ position: "relative", height, borderRadius: 24, background: "#EAF3DE", border: "2px solid #D2E6BC" }} aria-label="Run map">
+        <svg width="100%" height={height} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
+          {run.map.edges.map(([f, t]) => {
+            const a = pos.get(f)!, b = pos.get(t)!;
+            const walked = visited.has(f) && visited.has(t) && run.path.indexOf(t) === run.path.indexOf(f) + 1;
+            const next = f === run.at && reach.has(t);
+            return (
+              <line key={`${f}>${t}`} x1={`${a.x}%`} y1={a.y} x2={`${b.x}%`} y2={b.y}
+                stroke={walked ? "#46A302" : next ? "#3C3C3C" : "#B9CDA3"} strokeWidth={walked || next ? 4 : 3} strokeDasharray={walked ? undefined : "2 9"} strokeLinecap="round" />
+            );
+          })}
+        </svg>
+        {run.map.nodes.map((n) => {
+          const p = pos.get(n.id)!;
+          const info = NODE_INFO[n.kind];
+          const can = reach.has(n.id);
+          const here = n.id === run.at;
+          const past = visited.has(n.id) && !here;
+          const size = n.kind === "boss" ? 58 : 44;
+          return (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => { feedback.tap(); setPeek(n); }}
+              aria-label={`${info.name}${can ? ", you can go here" : ""}${here ? ", you are here" : ""}`}
+              className={can ? "sl-node-can" : undefined}
+              style={{
+                position: "absolute", left: `calc(${p.x}% - ${size / 2}px)`, top: p.y - size / 2, width: size, height: size, borderRadius: n.kind === "boss" ? 18 : "50%",
+                border: here ? "3px solid #3C3C3C" : 0, padding: 0, cursor: "pointer",
+                background: past ? "#C7D6B5" : can || here ? info.color : "#FFFFFF",
+                boxShadow: `0 4px 0 ${past ? "#A8BC92" : can || here ? info.edge : "#D2E6BC"}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" aria-hidden="true">
+                <path d={ICON_PATH[n.kind]} stroke={can || here || past ? "#fff" : info.color} strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          );
+        })}
+      </div>
+      <Sheet open={!!peek} onClose={() => setPeek(null)} label="Map stop">
+        {peek && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
+            <h2 className="display" style={{ margin: 0, fontSize: 26 }}>{NODE_INFO[peek.kind].name}</h2>
+            <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--plum-soft)" }}>{NODE_INFO[peek.kind].sub}</p>
+            {reach.has(peek.id) ? (
+              <button className="pill-btn primary" onClick={() => { feedback.unlock(); feedback.tap(); setPeek(null); onChange(enter(run, peek.id)); }}>Go here</button>
+            ) : (
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--plum-soft)" }}>{visited.has(peek.id) ? "You've been here." : "You can't reach this yet."}</p>
+            )}
+          </div>
+        )}
+      </Sheet>
+    </Screen>
+  );
+}
+
+// ---------- Reward after a fight ----------
+
+export function RewardScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
+  const [card, setCard] = useState<string | null>(null);
+  const [relic, setRelic] = useState<string | null>(null);
+  const rw = run.reward!;
+  const needRelic = rw.relics.length > 0 && !relic;
+  return (
+    <Screen dark>
+      <span className="stamp" style={{ alignSelf: "center", marginTop: 12, padding: "8px 20px", borderRadius: 14, background: "#FFC800", color: "#4A3200", fontSize: 26, fontWeight: 900, boxShadow: "0 5px 0 #E5A800" }}>MENANG!</span>
+      <span style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: "#E8D6C0" }}>+{rw.gold} gold · HP {run.hp}/{run.max}</span>
+
+      {rw.relics.length > 0 && (
+        <>
+          <span className="label" style={{ textAlign: "center", color: "#C9B49C", marginTop: 6 }}>Elite reward: pick a Pusaka</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {rw.relics.map((id) => (
+              <button key={id} type="button" onClick={() => { feedback.tap(); setRelic(id); }} aria-pressed={relic === id}
+                style={{ textAlign: "left", padding: 12, borderRadius: 16, border: relic === id ? "3px solid #FFC800" : "3px solid transparent", background: "#FFF8EC", cursor: "pointer" }}>
+                <RelicRow id={id} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <span className="label" style={{ textAlign: "center", color: "#C9B49C", marginTop: 6 }}>Add a card to your deck</span>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        {rw.cards.map((id, i) => (
+          <button key={id} type="button" className="sl-cw" aria-pressed={card === id} aria-label={`${CARDS[id].name}: ${CARDS[id].text}`}
+            onClick={() => { feedback.tap(); setCard(card === id ? null : id); }}
+            style={{ position: "relative", bottom: 0, transform: card === id ? "translateY(-12px) scale(1.08)" : card ? "scale(.92)" : undefined, opacity: card && card !== id ? 0.5 : 1 }}>
+            <span className="deal" style={{ animationDelay: `${120 + i * 100}ms` }}><span className="bob" style={{ animationDelay: `${-i * 0.9}s` }}><SilatCard id={id} on={card === id} /></span></span>
+          </button>
+        ))}
+      </div>
+      <div className="grow" />
+      <button className="pill-btn primary" disabled={needRelic} style={{ opacity: needRelic ? 0.5 : 1 }}
+        onClick={() => { feedback.correct(); onChange(takeReward(run, card, relic)); }}>
+        {needRelic ? "Pick a Pusaka first" : card ? `Take ${CARDS[card].name}` : "Skip the card"}
+      </button>
+    </Screen>
+  );
+}
+
+// ---------- Campfire ----------
+
+export function CampScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
+  const [picking, setPicking] = useState(false);
+  return (
+    <Screen>
+      <RunHeader run={run} title="Campfire" />
+      <div className="grow" />
+      <div style={{ fontSize: 72, textAlign: "center" }} aria-hidden="true">
+        <svg width="96" height="96" viewBox="0 0 24 24"><path d={ICON_PATH.camp} stroke="#FF9600" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </div>
+      <p style={{ margin: 0, textAlign: "center", fontSize: 16, fontWeight: 700, color: "var(--plum-soft)" }}>A quiet night by the fire. Do one thing.</p>
+      <button className="pill-btn primary" onClick={() => { feedback.correct(); onChange(rest(run)); }}>Rest · heal {REST_HEAL} HP</button>
+      <button className="pill-btn" onClick={() => { feedback.tap(); setPicking(true); }} disabled={run.deck.length <= 5}>Train · remove a card</button>
+      <div className="grow" />
+      <Sheet open={picking} onClose={() => setPicking(false)} label="Remove a card">
+        <h2 className="display" style={{ margin: 0, fontSize: 22, textAlign: "center" }}>Tap a card to remove it</h2>
+        <DeckGrid deck={run.deck} onPick={(i) => { feedback.correct(); setPicking(false); onChange(train(run, i)); }} />
+      </Sheet>
+    </Screen>
+  );
+}
+
+// ---------- Shop ----------
+
+export function ShopScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
+  const [picking, setPicking] = useState(false);
+  const shop = run.shop!;
+  const buy = (next: Run) => { if (next !== run) { feedback.correct(); onChange(next); } else feedback.wrong(); };
+  const price = (p: number, sold: boolean) => (sold ? "Sold" : <Gold n={p} />);
+  return (
+    <Screen>
+      <RunHeader run={run} title="Warung" />
+      <span className="label" style={{ color: "var(--plum-soft)" }}>Cards</span>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        {shop.cards.map((c, i) => (
+          <button key={c.id} type="button" disabled={c.sold} onClick={() => buy(buyCard(run, i))} aria-label={`Buy ${CARDS[c.id].name} for ${c.price} gold`}
+            style={{ border: 0, background: "none", padding: 0, cursor: c.sold ? "default" : "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, opacity: c.sold ? 0.4 : 1 }}>
+            <span style={{ width: 100, height: 144, display: "block" }}><SilatCard id={c.id} off={!c.sold && run.gold < c.price} /></span>
+            {price(c.price, c.sold)}
+          </button>
+        ))}
+      </div>
+      {shop.relic && (
+        <>
+          <span className="label" style={{ color: "var(--plum-soft)" }}>Pusaka</span>
+          <button type="button" disabled={shop.relic.sold} onClick={() => buy(buyRelic(run))}
+            style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", padding: 12, borderRadius: 16, border: 0, background: "#fff", boxShadow: "0 3px 0 var(--cream-3)", cursor: "pointer", opacity: shop.relic.sold ? 0.4 : 1 }}>
+            <span style={{ flex: 1 }}><RelicRow id={shop.relic.id} /></span>
+            {price(shop.relic.price, shop.relic.sold)}
+          </button>
+        </>
+      )}
+      <span className="label" style={{ color: "var(--plum-soft)" }}>Services</span>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button className="pill-btn" style={{ fontSize: 16, minHeight: 52, flexDirection: "column", gap: 0 }} disabled={shop.removed || run.gold < shop.removePrice || run.deck.length <= 5} onClick={() => setPicking(true)}>
+          <span>Remove a card</span>{price(shop.removePrice, shop.removed)}
+        </button>
+        <button className="pill-btn" style={{ fontSize: 16, minHeight: 52, flexDirection: "column", gap: 0 }} disabled={shop.healed || run.gold < shop.healPrice || run.hp >= run.max} onClick={() => buy(buyHeal(run))}>
+          <span>Heal {SHOP_HEAL} HP</span>{price(shop.healPrice, shop.healed)}
+        </button>
+      </div>
+      <div className="grow" />
+      <button className="pill-btn primary" onClick={() => { feedback.tap(); onChange(leave(run)); }}>Leave the warung</button>
+      <Sheet open={picking} onClose={() => setPicking(false)} label="Remove a card">
+        <h2 className="display" style={{ margin: 0, fontSize: 22, textAlign: "center" }}>Tap a card to remove it</h2>
+        <DeckGrid deck={run.deck} onPick={(i) => { setPicking(false); buy(buyRemove(run, i)); }} />
+      </Sheet>
+    </Screen>
+  );
+}
+
+// ---------- Mystery event ----------
+
+export function EventScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
+  const ev = EVENTS[run.event!];
+  const [picking, setPicking] = useState<string | null>(null);
+  return (
+    <Screen>
+      <RunHeader run={run} title="Mystery" />
+      <div className="grow" />
+      <h1 className="display" style={{ margin: 0, fontSize: 32, textAlign: "center" }}>{ev.title}</h1>
+      <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center", lineHeight: 1.45 }}>{ev.text}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+        {ev.choices.map((c) => {
+          const broke = c.cost !== undefined && run.gold < c.cost;
+          return (
+            <button key={c.id} type="button" className="pill-btn" disabled={broke} style={{ flexDirection: "column", gap: 2, minHeight: 64, fontSize: 18, opacity: broke ? 0.5 : 1 }}
+              onClick={() => { feedback.tap(); if (c.needsCard) setPicking(c.id); else onChange(chooseEvent(run, c.id)); }}>
+              <span>{c.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--plum-soft)" }}>{c.detail}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="grow" />
+      <Sheet open={!!picking} onClose={() => setPicking(null)} label="Choose a card">
+        <h2 className="display" style={{ margin: 0, fontSize: 22, textAlign: "center" }}>Tap a card to remove it</h2>
+        <DeckGrid deck={run.deck} onPick={(i) => { const c = picking!; setPicking(null); feedback.correct(); onChange(chooseEvent(run, c, i)); }} />
+      </Sheet>
+    </Screen>
+  );
+}
+
+// ---------- Treasure ----------
+
+export function TreasureScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
+  return (
+    <Screen>
+      <RunHeader run={run} title="Treasure" />
+      <div className="grow" />
+      <h1 className="display" style={{ margin: 0, fontSize: 30, textAlign: "center" }}>Pick a Pusaka</h1>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {(run.treasure ?? []).map((id) => (
+          <button key={id} type="button" onClick={() => { feedback.correct(); onChange(takeTreasure(run, id)); }}
+            style={{ textAlign: "left", padding: 14, borderRadius: 18, border: 0, background: "#fff", boxShadow: "0 4px 0 var(--cream-3)", cursor: "pointer" }}>
+            <RelicRow id={id} />
+          </button>
+        ))}
+      </div>
+      <div className="grow" />
+      <button className="pill-btn" onClick={() => onChange(takeTreasure(run, null))}>Leave it</button>
+    </Screen>
+  );
+}
