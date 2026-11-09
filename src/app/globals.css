@@ -504,7 +504,11 @@ a { text-decoration: none; }
 .sl-logline.turn { color: #8c7a62; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; font-size: 11px; }
 .sl-logline.good { color: #2f8a00; } .sl-logline.bad { color: #c62828; } .sl-logline.enemy { color: #6b4e7a; } .sl-logline.you { color: #1478a8; }
 .sl-logline.hint { font-style: italic; font-weight: 700; color: var(--plum-soft); opacity: .8; }
-.sl-logline.full { white-space: normal; font-size: 14px; padding: 4px 2px; border-bottom: 1px solid var(--cream-2); }
+.sl-logline { flex-shrink: 0; margin: 0; }
+.sl-logline.full { white-space: normal; overflow: visible; font-size: 14px; line-height: 1.4; padding: 5px 2px; border-bottom: 1px solid var(--cream-2); }
+.sl-logsheet { max-height: 60dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; overscroll-behavior: contain; }
+.sl-logturn { display: flex; flex-direction: column; flex-shrink: 0; }
+.sl-logturn h3 { margin: 0 0 4px; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #8c7a62; position: sticky; top: 0; background: #fff; padding: 4px 0; }
 .sl-logbtn { flex-shrink: 0; align-self: center; padding: 4px 10px; border-radius: 999px; background: var(--cream-2); color: var(--plum); font-size: 12px; font-weight: 900; }
 @keyframes lognew { from { opacity: 0; transform: translateY(6px); } }
 .sl-guard { position: absolute; left: 1px; bottom: 1px; width: 17px; height: 19px; pointer-events: none; }

@@ -172,7 +172,15 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
           : [card.name, "Tap a highlighted square."]
       : null;
   const hint = f.stepUsed ? "Pick a card, or end your turn." : "Pick a card, or step: red dots get you struck.";
-  const recent = (f.log ?? []).slice(-3);
+  // The small box: the last few events (turn headers are already in the top bar).
+  const recent = (f.log ?? []).filter((l) => l.k !== "turn").slice(-3);
+  // The full log: grouped by turn, newest turn first, events in the order they happened.
+  const turns: { title: string; lines: { t: string; k?: string }[] }[] = [];
+  for (const l of f.log ?? []) {
+    if (l.k === "turn" || !turns.length) turns.push({ title: l.k === "turn" ? l.t : "Setup", lines: [] });
+    if (l.k !== "turn") turns[turns.length - 1].lines.push(l);
+  }
+  turns.reverse();
 
   return (
     <main className="screen" style={{ gap: 10, paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}>
@@ -220,7 +228,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
         <button type="button" className="sl-info sl-log" onClick={() => { feedback.tap(); setLogOpen(true); }} aria-label="Battle log. Tap to see everything that happened.">
           <span style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }} aria-live="polite">
             {recent.map((l, i) => (
-              <span key={(f.log?.length ?? 0) - recent.length + i} className={`sl-logline ${l.k ?? ""}${i === recent.length - 1 ? " new" : ""}`}>{l.t}</span>
+              <span key={`${f.log?.length ?? 0}-${i}`} className={`sl-logline ${l.k ?? ""}${i === recent.length - 1 ? " new" : ""}`}>{l.t}</span>
             ))}
             {!busy && <span className="sl-logline hint">{hint}</span>}
           </span>
@@ -230,9 +238,14 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
 
       <Sheet open={logOpen} onClose={() => setLogOpen(false)} label="Battle log">
         <h2 className="display" style={{ margin: 0, fontSize: 24, textAlign: "center" }}>Battle log</h2>
-        <div style={{ maxHeight: "55dvh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-          {[...(f.log ?? [])].reverse().map((l, i) => (
-            <span key={i} className={`sl-logline full ${l.k ?? ""}`}>{l.t}</span>
+        <div className="sl-logsheet">
+          {turns.map((turn, ti) => (
+            <section key={turns.length - ti} className="sl-logturn">
+              <h3>{turn.title}{ti === 0 && f.status === "play" ? " · now" : ""}</h3>
+              {turn.lines.length ? turn.lines.map((l, i) => (
+                <p key={i} className={`sl-logline full ${l.k ?? ""}`}>{l.t}</p>
+              )) : <p className="sl-logline full hint">Nothing yet.</p>}
+            </section>
           ))}
         </div>
       </Sheet>

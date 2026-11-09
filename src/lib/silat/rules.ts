@@ -652,9 +652,13 @@ export function resolveIntent(s: Fight, it: Intent) {
     return;
   }
   if (it.type === "charge") { say(s, `${unitName(u)} charges ${DIR_NAMES[it.dir]}`, "enemy"); return charge(s, u, it.dir); }
-  say(s, `${unitName(u)} strikes ${sqName(s, it.target)}`, "enemy");
   const o = occupant(s, it.target);
-  if (!o || (o.t === "thing" && o.th.kind === "batu")) { s.fx.push({ t: "miss", sq: it.target }); say(s, "…and misses"); return; }
+  if (!o || (o.t === "thing" && o.th.kind === "batu")) {
+    s.fx.push({ t: "miss", sq: it.target });
+    say(s, `${unitName(u)} strikes ${sqName(s, it.target)} and misses`, "enemy");
+    return;
+  }
+  say(s, `${unitName(u)} strikes ${o.t === "hero" ? "you" : occName(o)} on ${sqName(s, it.target)}`, "enemy");
   if (o.t === "hero") { attackHero(s, u, unitHit(u)); return; }
   hitOcc(s, o, unitHit(u));
 }
