@@ -488,19 +488,30 @@ function chooseIntent(s: Fight, u: Unit, covered: Set<number>): Intent | null {
     }
     moves = slideSquares(s, u);
   } else {
-    // Strikers: your square, then a villager, then the squares you'd step to (boxing you in).
+    // Strikers: hit you, else hit a villager, else move to set up a hit for next turn, else advance.
+    // (No more striking empty squares "in case you step there": any square a piece can strike, it
+    // already covers, so stepping there gets you struck by its reaction anyway. That strike was wasted.)
     const reach = new Set(strikeSquares(s, u));
-    if (reach.has(hero) && !covered.has(hero)) return { id: u.id, type: "strike", target: hero };
-    const victim = warga.find((sq) => reach.has(sq) && !covered.has(sq));
-    if (victim !== undefined) return { id: u.id, type: "strike", target: victim };
-    const escapes = neighbors(s, hero).filter((sq) => isEmpty(s, sq) && !covered.has(sq) && reach.has(sq));
-    if (escapes.length) return { id: u.id, type: "strike", target: escapes[0] };
     if (reach.has(hero)) return { id: u.id, type: "strike", target: hero };
+    const victim = warga.find((sq) => reach.has(sq) && !covered.has(sq)) ?? warga.find((sq) => reach.has(sq));
+    if (victim !== undefined) return { id: u.id, type: "strike", target: victim };
     if (u.kind === "p") {
       const f = offset(s, u.sq, 0, 1);
-      return f !== null && isEmpty(s, f) ? { id: u.id, type: "move", to: f } : null;
+      moves = f !== null && isEmpty(s, f) ? [f] : [];
+    } else {
+      moves = u.kind === "n" ? KNIGHT.map(([dx, dy]) => offset(s, u.sq, dx, dy)).filter((x): x is number => x !== null && isEmpty(s, x)) : [];
     }
-    moves = u.kind === "n" ? KNIGHT.map(([dx, dy]) => offset(s, u.sq, dx, dy)).filter((x): x is number => x !== null && isEmpty(s, x)) : [];
+    // A square from which it can hit you or a villager next turn beats everything else.
+    const setsUp = moves.filter((sq) => {
+      const next = strikeSquares(s, { ...u, sq });
+      return next.includes(hero) || warga.some((w) => next.includes(w));
+    });
+    if (setsUp.length) {
+      const best = [...setsUp].sort((a, b) => placeScore(s, u, b) - placeScore(s, u, a) || a - b)[0];
+      return { id: u.id, type: "move", to: best };
+    }
+    // Pawns always push forward toward your side (and promotion).
+    if (u.kind === "p") return moves.length ? { id: u.id, type: "move", to: moves[0] } : null;
   }
   if (!moves.length) return null;
   // Move somewhere that threatens you or a villager, without standing where you can kick it off the board.

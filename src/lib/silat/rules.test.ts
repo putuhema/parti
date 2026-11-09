@@ -108,12 +108,25 @@ describe("pushes", () => {
 });
 
 describe("enemies", () => {
-  test("strikers box you in: your square first, then where you would step", () => {
+  test("strikers hit you when they can, and never waste a strike on an empty square", () => {
     const s = fight({ hero: sq(2, 3), units: [{ kind: "p", sq: sq(1, 2) }, { kind: "p", sq: sq(3, 1) }, { kind: "k", sq: sq(5, 0) }] });
     plan(s);
-    const strikes = s.intents.filter((i) => i.type === "strike").map((i) => (i as { target: number }).target);
-    expect(strikes).toContain(sq(2, 3));
-    expect(strikes).toContain(sq(2, 2)); // the other pawn covers the square above you
+    const [near, far] = s.units;
+    expect(s.intents.find((i) => i.id === near.id)).toEqual({ id: near.id, type: "strike", target: sq(2, 3) });
+    // The far pawn can't reach you: it steps forward to threaten you next turn instead of striking c4.
+    expect(s.intents.find((i) => i.id === far.id)).toEqual({ id: far.id, type: "move", to: sq(3, 2) });
+  });
+
+  test("player's position: the pawn on c3 advances to c2 instead of striking the empty d2", () => {
+    const s = fight({
+      hero: sq(2, 5),
+      units: [{ kind: "p", sq: sq(2, 3), hp: 1 }, { kind: "p", sq: sq(3, 2), hp: 1 }, { kind: "k", sq: sq(3, 3), hp: 5 }],
+      mud: [sq(0, 5), sq(1, 5), sq(3, 4)],
+    });
+    plan(s);
+    const pawn = s.units[0];
+    expect(s.intents.find((i) => i.id === pawn.id)).toEqual({ id: pawn.id, type: "move", to: sq(2, 4) });
+    expect(s.intents.some((i) => i.type === "strike" && i.target === sq(3, 4))).toBe(false);
   });
 
   test("stuck pieces don't use up the action slots", () => {
