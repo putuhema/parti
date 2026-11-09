@@ -8,7 +8,7 @@ import { CampScreen, EventScreen, MapScreen, RewardScreen, ShopScreen, StyleScre
 import { Confetti, Mascot } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { nodeById } from "@/lib/silat/map";
-import { FLOORS, floorName, loadRun, newRun, recordEnd, saveRun, settle, type Run } from "@/lib/silat/run";
+import { depthOf, floorName, loadRun, newRun, prisonName, recordEnd, saveRun, settle, type Run } from "@/lib/silat/run";
 import type { Fight } from "@/lib/silat/rules";
 
 export default function SilatPlay() {
@@ -44,7 +44,7 @@ export default function SilatPlay() {
         <FightView
           key={run.at ?? "start"}
           fight={f}
-          floorLabel={run.at && nodeById(run.map, run.at).kind === "elite" ? `Elite · ${floorName(run.floor)}` : floorName(run.floor)}
+          floorLabel={run.at && nodeById(run.map, run.at).kind === "elite" ? `Elite · ${floorName(run.floor, run)}` : floorName(run.floor, run)}
           onChange={(next: Fight) => update({ ...run, fight: next })}
         />
         {over && (
@@ -55,7 +55,7 @@ export default function SilatPlay() {
                 {f.status === "won" ? `The enemy kneels. Knockouts: ${f.kos ?? 0} (+${(f.kos ?? 0) * 2} gold) · best combo: ${f.bestCombo}` : "You were knocked down. The run ends here."}
               </span>
               <button className="pill-btn primary" style={{ marginTop: 6 }} onClick={() => { feedback.tap(); update(settle(run)); }}>
-                {f.status === "won" ? (run.floor >= FLOORS - 1 ? "Finish the run" : "Collect your reward") : "See results"}
+                {f.status === "won" ? (run.at && nodeById(run.map, run.at).kind === "boss" ? "Escape!" : "Collect your reward") : "See results"}
               </button>
             </div>
           </div>
@@ -79,10 +79,10 @@ export default function SilatPlay() {
       <SilatKing size={96} />
       <h1 className="display" style={{ margin: 0, fontSize: 42, color: won ? "#2F6E00" : "#B81F1F" }}>{won ? "Raja Silat!" : "Run over"}</h1>
       <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--plum-soft)" }}>
-        {won ? "You toppled Raja Hitam and broke out of his prison." : `You reached ${floorName(run.floor)}.`}
+        {won ? "You toppled Raja Hitam and broke out of his prison." : `You reached ${prisonName(run)}, ${floorName(run.floor, run)}.`}
       </p>
       <div style={{ display: "flex", gap: 10, width: "100%" }}>
-        {[["Floors", `${Math.min(run.floor + 1, FLOORS)}/${FLOORS}`], ["Ring outs", run.ringOuts], ["Best combo", run.bestCombo], ["Deck", run.deck.length]].map(([k, v]) => (
+        {[["Prison", depthOf(run)], ["Floor", run.floor + 1], ["Ring outs", run.ringOuts], ["Best combo", run.bestCombo], ["Deck", run.deck.length]].map(([k, v]) => (
           <div key={k} style={{ flex: 1, padding: "10px 4px", borderRadius: 16, background: "#fff", boxShadow: "0 3px 0 var(--cream-3)" }}>
             <div style={{ fontSize: 20, fontWeight: 900, color: "var(--plum)" }}>{v}</div>
             <div style={{ fontSize: 11, fontWeight: 800, color: "var(--plum-soft)" }}>{k}</div>

@@ -5,9 +5,19 @@ import { Piece } from "@/components/chess/Board";
 import { SilatKing } from "@/components/shell";
 import { RIVE_ON, RiveDice, RiveHero } from "@/components/silat/RiveSprites";
 import { Sprite, spriteFor } from "@/components/silat/Sprite";
-import { DIRS, PIECE, type Scene, chargeEnd, col, intentValid, isGuarded, occupant, row, slamArea, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
+import type { MoveKind } from "@/lib/silat/config";
+import { DIRS, TRAITS, type Scene, chargeEnd, col, intentValid, isGuarded, moveDef, moveText, occupant, row, slamArea, unitHit, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
 
 const FILES = "abcdefgh";
+
+/** Intent badge colour and icon for each kind of signature move. */
+const SPECIAL_COLOR: Record<MoveKind, string> = { kick: "#FF4B4B", block: "#1899D6", heal: "#46A302", summon: "#8A4FB5", command: "#CE82FF" };
+const SPECIAL_ICON: Record<Exclude<MoveKind, "kick">, string> = {
+  block: "M5 1 L8.5 2.5 V5 C8.5 7.3 6.8 8.6 5 9.2 C3.2 8.6 1.5 7.3 1.5 5 V2.5z",
+  heal: "M5 1.5 V8.5 M1.5 5 H8.5",
+  summon: "M5 1.5 a1.6 1.6 0 1 1 0 3.2 a1.6 1.6 0 1 1 0 -3.2 M3 8.5 L5 4.7 L7 8.5z",
+  command: "M2.5 9 V1.5 L8 3.5 L2.5 5.5",
+};
 
 /** Each part of the prison is a real place with a subtle grid on top, not a plain checkerboard.
  *  A faint alternating tint keeps the chess colours readable. */
@@ -49,23 +59,14 @@ export interface Highlights {
   combo?: { sq: number; n: number }[];
 }
 
+/** Firecracker crate and boulder: pixel sprites from the Pixel Atlas (public/silat/pixel). */
 function Crate() {
-  return (
-    <svg viewBox="0 0 40 40" aria-hidden="true">
-      <path d="M27 9 q3 -5 7 -4" stroke="#6F6F6F" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-      <circle cx="34.5" cy="5" r="2.2" fill="#FFC800" />
-      <rect x="7" y="11" width="26" height="24" rx="4" fill="#FF4B4B" stroke="#B81F1F" strokeWidth="2" />
-      <rect x="7" y="19" width="26" height="6" fill="#FFC800" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite
+  return <img src="/silat/pixel/obj-petasan.png" alt="" className="sl-obj px" />;
 }
 function Boulder() {
-  return (
-    <svg viewBox="0 0 40 40" aria-hidden="true">
-      <path d="M8 32 C5 26 8 17 14 13 C19 9 27 10 31 15 C35 20 36 28 32 32z" fill="#9AA0A6" stroke="#5F6368" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M14 18 q4 -3 8 -1" stroke="#C7CBD0" strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite
+  return <img src="/silat/pixel/obj-batu.png" alt="" className="sl-obj px" />;
 }
 
 const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
@@ -84,6 +85,9 @@ const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   gold: (f) => [`+${"n" in f ? f.n : ""} gold`, "#FFC800"],
   roll: (f) => (f.t === "roll" ? [`d20: ${f.n}${f.ok ? " ✓" : " ✗"}`, f.ok === !!f.hero ? "#58CC02" : "#FF4B4B"] : ["", ""]),
   fury: () => ["MURKA!", "#FF4B4B"],
+  guard: (f) => [`+${"n" in f ? f.n : ""} shield`, "#1CB0F6"],
+  command: () => ["ORDERS!", "#CE82FF"],
+  heal: (f) => [`+${"n" in f ? f.n : ""}`, "#58CC02"],
   capture: () => ["CAPTURE!", "#1CB0F6"],
   parry: () => ["SIAP!", "#58CC02"],
   crit: () => ["SEMPURNA!", "#FFC800"],
@@ -120,8 +124,13 @@ export function SilatBoard({
   const danger = new Map<number, number>();
   live.forEach((it) => {
     const u = p.units.find((x) => x.id === it.id)!;
-    const hit = u.hit ?? PIECE[u.kind].hit;
+    const m = it.type === "special" ? moveDef(it.move) : undefined;
+    const hit = m ? (m.kind === "kick" ? (m.damage ?? 0) + (u.empower ?? 0) : 0) : unitHit(u);
     badges.set(it.id, { ord: p.intents.indexOf(it) + 1, it, hit });
+    if (it.type === "special") {
+      if (m?.kind === "kick" && it.target !== undefined) danger.set(it.target, (danger.get(it.target) ?? 0) + hit);
+      return;
+    }
     if (it.type === "slam") {
       // Tint the whole area (that's where you'd get hit), but not squares holding its own pieces.
       for (const sq of slamArea(p, it.center)) if (sq !== u.sq && !p.units.some((v) => v.sq === sq)) danger.set(sq, (danger.get(sq) ?? 0) + hit);
@@ -173,12 +182,17 @@ export function SilatBoard({
   const arrowAngle = (u: { sq: number }, it: Intent) => {
     if (it.type === "charge") return it.dir * 45;
     if (it.type === "slam") return 0;
+    if (it.type === "special") {
+      if (it.target === undefined || moveDef(it.move)?.kind !== "kick") return 0;
+      return Math.round((Math.atan2(row(s, it.target) - row(s, u.sq), col(s, it.target) - col(s, u.sq)) * 180) / Math.PI) + 90;
+    }
     const to = it.type === "move" ? it.to : it.target;
     return Math.round((Math.atan2(row(s, to) - row(s, u.sq), col(s, to) - col(s, u.sq)) * 180) / Math.PI) + 90;
   };
 
   return (
     <div className={`sl-board${preview ? " preview" : ""}`} style={{ background: look.ground, boxShadow: `0 6px 0 ${look.edge}${preview ? ", 0 0 0 3px #ffc800" : ""}` }}>
+      {s.tint && <div className="sl-tint" style={{ background: s.tint }} aria-hidden="true" />}
       {s.scene === "cell" && <div className="sl-bars" aria-hidden="true" />}
       <div className="sl-grid" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
         {Array.from({ length: n * n }, (_, sq) => {
@@ -213,9 +227,10 @@ export function SilatBoard({
       ))}
       {s.units.map((u) => {
         const b = badges.get(u.id);
-        const attack = b && b.it.type !== "move";
+        const special = b?.it.type === "special" ? moveDef(b.it.move) : undefined;
+        const attack = b && b.it.type !== "move" && (!special || special.kind === "kick");
         return (
-          <div key={`u${u.id}`} className={`sl-tok${marks.get(u.sq)?.gone ? " sl-doomed" : ""}`} style={at(u.sq)}>
+          <div key={`u${u.id}`} className={`sl-tok${marks.get(u.sq)?.gone ? " sl-doomed" : ""}${u.boss ? " sl-bossglow" : ""}`} style={at(u.sq)}>
             <Sprite
               id={spriteFor(u.kind, u.boss)}
               play="hit"
@@ -223,11 +238,18 @@ export function SilatBoard({
               fallback={<Piece code={u.kind} />}
             />
             <span className="sl-hp" style={u.boss ? { borderColor: "#B81F1F" } : undefined}>{u.hp}</span>
+            {!!u.block && <span className="sl-eblock" aria-label={`shield ${u.block}`}>{u.block}</span>}
+            {!!u.empower && <span className="sl-empower" aria-label={`commanded: hits +${u.empower}`}>+{u.empower}</span>}
             {b && (
-              <span key={JSON.stringify(b.it)} className="sl-intent" style={{ background: attack ? "#FF4B4B" : "#8C8C8C" }} aria-label={`acts ${b.ord}${attack ? `, hits for ${b.hit}` : ", moves"}`}>
+              <span key={JSON.stringify(b.it)} className="sl-intent" style={{ background: attack ? "#FF4B4B" : special ? SPECIAL_COLOR[special.kind] : "#8C8C8C" }}
+                aria-label={`acts ${b.ord}${special ? `, ${special.name}` : ""}${attack ? `, hits for ${b.hit}` : special ? "" : ", moves"}`} title={special ? `${special.name}: ${b.it.type === "special" ? moveText(b.it.move) : ""}` : undefined}>
                 {b.ord}
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style={{ transform: `rotate(${arrowAngle(u, b.it)}deg)` }}>
-                  {b.it.type === "slam" ? (
+                  {special && special.kind !== "kick" ? (
+                    <path d={SPECIAL_ICON[special.kind]} stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  ) : special ? (
+                    <path d="M2 2 L5 5 L2 8 M5 2 L8 5 L5 8" stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  ) : b.it.type === "slam" ? (
                     <path d="M5 1 V3 M5 7 V9 M1 5 H3 M7 5 H9 M2 2 L3.4 3.4 M6.6 6.6 L8 8 M8 2 L6.6 3.4 M3.4 6.6 L2 8" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
                   ) : b.it.type === "strike" ? (
                     <path d="M5 1 V9 M1 5 H9" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
@@ -239,6 +261,11 @@ export function SilatBoard({
               </span>
             )}
             {u.target && !b && <span className="sl-badge" style={{ background: "#FFC800", color: "#5C4200" }}>★</span>}
+            {!!u.traits?.length && (
+              <span className="sl-trait" aria-label={`Powers: ${u.traits.map((t) => TRAITS[t].name).join(", ")}`} title={u.traits.map((t) => `${TRAITS[t].name}: ${TRAITS[t].text}`).join("\n")}>
+                {u.traits.map((t) => TRAITS[t].name[0]).join("")}
+              </span>
+            )}
             {isGuarded(s, u) && (
               <span className="sl-guard" aria-label="guarded">
                 <svg viewBox="0 0 24 26" aria-hidden="true"><path d="M12 1 L22 5 V12 C22 19 17 23 12 25 C7 23 2 19 2 12 V5z" fill="#1CB0F6" stroke="#fff" strokeWidth="2.5" /></svg>

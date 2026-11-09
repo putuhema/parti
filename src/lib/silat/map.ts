@@ -25,7 +25,7 @@ export const NODE_INFO: Record<NodeKind, { name: string; sub: string; color: str
   shop: { name: "Warung", sub: "Buy cards and Pusaka, heal, remove a card", color: "#2BB673", edge: "#1E7A4C" },
   event: { name: "Mystery", sub: "Something happens. You choose", color: "#CE82FF", edge: "#8A4FB5" },
   treasure: { name: "Treasure", sub: "Pick a Pusaka", color: "#FFC800", edge: "#B88A00" },
-  boss: { name: "Boss", sub: "Raja Hitam, the enemy King", color: "#3C3C3C", edge: "#1A1A1A" },
+  boss: { name: "Boss", sub: "The prison's warden. Beat it to escape", color: "#3C3C3C", edge: "#1A1A1A" },
 };
 
 function rng(seed: number) {
@@ -39,21 +39,24 @@ function rng(seed: number) {
   };
 }
 
-function kindFor(row: number, r: () => number): NodeKind {
+function kindFor(row: number, r: () => number, depth: number): NodeKind {
   if (row === 0) return "fight";
   if (row === MAP_ROWS - 2) return "camp";
   const roll = r();
   if (row === 1) return roll < 0.75 ? "fight" : "event";
   if (row === 3 && roll < 0.2) return "treasure";
-  if (roll < 0.45) return "fight";
+  // Deeper prisons swap some plain fights for elites.
+  const elite = Math.min(0.12, 0.03 * (depth - 1));
+  if (roll < 0.45 - elite) return "fight";
   if (roll < 0.62) return "elite";
   if (roll < 0.78) return "event";
   if (roll < 0.9) return "shop";
   return "camp";
 }
 
-export function makeMap(seed: number): RunMap {
-  const r = rng(seed * 31 + 7);
+/** One prison's map. Each depth of an endless run gets its own. */
+export function makeMap(seed: number, depth = 1): RunMap {
+  const r = rng(seed * 31 + 7 + (depth - 1) * 104_729);
   const nodes = new Map<string, MapNode>();
   const edges: [string, string][] = [];
   const id = (row: number, lane: number) => `${row}-${lane}`;
@@ -89,7 +92,7 @@ export function makeMap(seed: number): RunMap {
   nodes.set(bossId, { id: bossId, row: MAP_ROWS - 1, lane: 1.5, kind: "boss", seed: 0 });
   for (const n of nodes.values()) {
     n.seed = Math.floor(r() * 1e9);
-    if (n.kind !== "boss" && n.id !== start) n.kind = kindFor(n.row, r);
+    if (n.kind !== "boss" && n.id !== start) n.kind = kindFor(n.row, r, depth);
   }
   // Never two elites in a row, and never a shop right after a shop.
   for (const [f, t] of edges) {

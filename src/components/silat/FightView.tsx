@@ -8,7 +8,7 @@ import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { CARDS, canCapture, canPlay, canReady, cardCost, isAttack, playCombo, readyCard, typeOf, type ComboItem } from "@/lib/silat/cards";
 import { rangkaiById, rangkaiFor, rangkaiStarts, type Rangkai } from "@/lib/silat/rangkai";
-import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, jabChance, reactionDamage, sqName, TENAGA, unitName, type Fight } from "@/lib/silat/rules";
+import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, jabChance, reactionDamage, sqName, TENAGA, TRAITS, unitName, type Fight } from "@/lib/silat/rules";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -280,6 +280,15 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
           <span style={{ fontSize: 12, fontWeight: 800, color: "var(--plum-soft)" }}>
             {[f.name, `Turn ${f.turn}`].filter(Boolean).join(" · ")}
           </span>
+          {(() => {
+            // Boss powers, so you know what you're up against.
+            const boss = f.units.find((u) => u.boss && u.traits?.length);
+            return boss ? (
+              <span className="sl-powers" aria-label={`${boss.boss} powers`}>
+                {boss.traits!.map((t) => <span key={t} title={TRAITS[t].text}>{TRAITS[t].name}</span>)}
+              </span>
+            ) : null;
+          })()}
           {f.survive && f.status !== "won" && (
             <span style={{ marginTop: 2, padding: "1px 8px", borderRadius: 999, background: "#FFF4CC", color: "#8A6400", fontSize: 12, fontWeight: 900 }}>
               Survive {Math.max(1, f.survive - f.turn + 1)} more {f.survive - f.turn + 1 === 1 ? "turn" : "turns"} (or beat the King)
@@ -293,14 +302,16 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }} aria-label={`Health ${display.hero.hp} of ${f.hero.max}`}>
-          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 C5 15 2.5 11.5 2.5 8 a4.8 4.8 0 0 1 9.5 -1 a4.8 4.8 0 0 1 9.5 1 C21.5 11.5 19 15 12 21z" fill="#FF4B4B" /></svg>
+          {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
+          <img src="/silat/pixel/ui-heart.png" alt="" className="px" style={{ width: 22, height: 22 }} />
           <span style={{ flex: 1, height: 12, borderRadius: 7, background: "#FFDFE0", overflow: "hidden" }}>
             <span style={{ display: "block", height: "100%", width: `${(display.hero.hp / f.hero.max) * 100}%`, background: "#FF4B4B", borderRadius: 7, transition: "width 300ms" }} />
           </span>
           <span style={{ fontSize: 14, fontWeight: 900, color: "#B81F1F" }}>{display.hero.hp}/{f.hero.max}</span>
         </div>
         <span style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 10, background: "#D7FFB8", fontSize: 14, fontWeight: 900, color: "#2F6E00" }} aria-label={`Block ${display.hero.block}`}>
-          <svg width="14" height="15" viewBox="0 0 24 26" aria-hidden="true"><path d="M12 1 L22 5 V12 C22 19 17 23 12 25 C7 23 2 19 2 12 V5z" fill="#46A302" /></svg>
+          {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
+          <img src="/silat/pixel/ui-shield.png" alt="" className="px" style={{ width: 18, height: 18 }} />
           {display.hero.block}
         </span>
         <span style={{ display: "flex", gap: 8, padding: "0 4px" }} aria-label={`Tenaga ${display.tenaga} of ${TENAGA}`}>

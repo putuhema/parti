@@ -1,20 +1,30 @@
 // Raja Silat: a run is a path through a map of fights, elites, campfires, shops, mystery
 // events and treasure, ending with a boss. You collect cards, gold and Pusaka (relics).
 // Saved on the device.
-import { CARDS, POOL, STARTER, isAttack, type Style } from "./cards";
+import { CARDS, POOL, STARTER, STYLE_CARDS, TIER_NAMES, isAttack, tierOf, type Style } from "./cards";
 import { MAP_ROWS, makeMap, nextNodes, nodeById, type MapNode, type RunMap } from "./map";
 import { ALL_RELICS, RELICS } from "./relics";
-import { KO_GOLD, makeFight, type Fight, type Kind, type Scene, type Setup } from "./rules";
+import { BALANCE } from "./config";
+import { bossFor, generateBossFight, generateFight, generateWarmup, prisonFor } from "./endless";
+import { KO_GOLD, makeFight, type Fight, type Scene, type Setup } from "./rules";
 
 export const FLOORS = MAP_ROWS; // the last row is the boss
-export const HEAL_AFTER_FIGHT = 1;
-export const START_HP = 16;
+export const HEAL_AFTER_FIGHT = BALANCE.hero.healAfterFight;
+export const START_HP = BALANCE.hero.startHp;
 const KEY = "pums:silat-run";
 const BEST_KEY = "pums:silat-best";
 
 export type RunStatus = "style" | "map" | "fight" | "reward" | "camp" | "shop" | "event" | "treasure" | "won" | "lost";
 
-export interface Reward { gold: number; cards: string[]; relics: string[] }
+export interface Reward {
+  gold: number;
+  cards: string[];
+  relics: string[];
+  /** You beat the boss: taking it moves you to the next prison. */
+  escape?: boolean;
+  /** A new tier of cards just started showing up (its name, for the notice). */
+  unlocked?: string;
+}
 export interface ShopItem { id: string; price: number; sold: boolean }
 export interface Shop { cards: ShopItem[]; relic: ShopItem | null; removePrice: number; removed: boolean; healPrice: number; healed: boolean }
 
@@ -41,9 +51,15 @@ export interface Run {
   treasure: string[] | null;
   ringOuts: number;
   bestCombo: number;
+  /** Endless runs: which prison you're in (1 = Raja Hitam's). Older saves have none: 1. */
+  depth?: number;
+  /** The highest card tier you've been told about (for the "new cards unlocked" notice). */
+  tierSeen?: number;
 }
 
-export interface Best { floor: number; wins: number; runs: number }
+export interface Best { floor: number; wins: number; runs: number; /** Deepest prison reached. */ depth?: number }
+
+export const depthOf = (run: Pick<Run, "depth">) => run.depth ?? 1;
 
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -66,149 +82,28 @@ export function sceneFor(floor: number): Scene {
   if (floor <= 4) return "yard";
   return "wall";
 }
-export const floorName = (floor: number) => (floor >= FLOORS - 1 ? "Boss: Raja Hitam at the Gate" : `${AREAS[sceneFor(floor)]} · Floor ${floor + 1}`);
-
-/** The first fight is handmade: kick the pawn in front of you into the pawn behind it. */
-function firstFight(hp: number, max: number, deck: string[], seed: number): Setup {
-  const sq = (c: number, r: number) => r * 6 + c;
-  return {
-    hero: sq(2, 4),
-    heroHp: hp,
-    heroMax: max,
-    units: [
-      { kind: "k", sq: sq(4, 0) },
-      { kind: "p", sq: sq(2, 3) },
-      { kind: "p", sq: sq(2, 1) },
-      { kind: "n", sq: sq(5, 1) },
-    ],
-    mud: [sq(0, 5), sq(1, 5)],
-    deck,
-    seed,
-    name: "Warm-up",
-  };
+/** "Prison Yard · Floor 4", or the boss's name on the last floor. Pass the run for the boss name. */
+export function floorName(floor: number, run?: Pick<Run, "seed" | "depth">) {
+  if (floor >= FLOORS - 1) return run ? `Boss: ${bossFor(run.seed, depthOf(run)).name}` : "Boss";
+  return `${AREAS[sceneFor(floor)]} · Floor ${floor + 1}`;
+}
+/** "Penjara Raja Hitam", "Penjara Kabut · Depth 3"... */
+export function prisonName(run: Pick<Run, "seed" | "depth">) {
+  const d = depthOf(run);
+  return d > 1 ? `${prisonFor(run.seed, d).name} · Depth ${d}` : prisonFor(run.seed, 1).name;
 }
 
-/** Enemy formations. Each picks squares for its army. */
-type PickSq = (rows: number[], cols?: number[]) => number;
-interface Layout {
-  name: string;
-  /** Win by surviving this many turns (knocking out the king still wins too). */
-  survive?: number;
-  army: (pick: PickSq, floor: number) => Setup["units"];
-}
-
-const LAYOUTS: Record<string, Layout> = {
-  barisan: {
-    name: "Pawn Wall",
-    army: (pick, floor) => {
-      // A staggered line: each back pawn guards the two front pawns beside it.
-      const king = pick([0], [1, 2, 3]);
-      const c = Math.min(2, Math.max(0, (king % 6) - 1)); // the wall spans columns c..c+3, in front of the king
-      const units: Setup["units"] = [{ kind: "k", sq: king }];
-      for (let i = 0; i < 4; i++) units.push({ kind: "p", sq: pick([i % 2 ? 1 : 2], [c + i]) });
-      if (floor >= 2) units.push({ kind: "n", sq: pick([1, 2]) });
-      return units;
-    },
-  },
-  kuda: {
-    name: "Cavalry",
-    army: (pick, floor) => [
-      { kind: "k", sq: pick([0]) },
-      { kind: "n", sq: pick([1, 2]) },
-      { kind: "n", sq: pick([1, 2]) },
-      ...(floor >= 3 ? [{ kind: "n" as Kind, sq: pick([2]) }] : []),
-      { kind: "p", sq: pick([2]) },
-    ],
-  },
-  pemanah: {
-    name: "Snipers",
-    army: (pick, floor) => [
-      { kind: "k", sq: pick([0], [2, 3]) },
-      { kind: "b", sq: pick([0, 1], [0, 1]) },
-      { kind: floor >= 3 ? "q" : "r", sq: pick([0, 1], [4, 5]) },
-      { kind: "p", sq: pick([2]) },
-      { kind: "p", sq: pick([2]) },
-    ],
-  },
-  kepung: {
-    name: "Siege",
-    army: (pick, floor) => [
-      { kind: "k", sq: pick([0]) },
-      { kind: "p", sq: pick([3, 4], [0]) },
-      { kind: "p", sq: pick([3, 4], [5]) },
-      { kind: "n", sq: pick([2, 3], [0, 1]) },
-      { kind: "n", sq: pick([2, 3], [4, 5]) },
-      ...(floor >= 4 ? [{ kind: "b" as Kind, sq: pick([1]) }] : []),
-    ],
-  },
-  bertahan: {
-    name: "Hold Out",
-    survive: 5,
-    army: (pick, floor) => [
-      { kind: "k", sq: pick([0]) },
-      ...(["p", "p", "p", "n", "n", floor >= 3 ? "r" : "b"] as Kind[]).map((kind) => ({ kind, sq: pick([1, 2]) })),
-    ],
-  },
-};
-
-/** Which formations can show up on each floor (floor 0 is the handmade first fight, the last is the boss). */
-const FLOOR_LAYOUTS: string[][] = [
-  [],
-  ["barisan", "kuda"],
-  ["pemanah", "barisan", "kuda"],
-  ["kepung", "bertahan", "kuda"],
-  ["pemanah", "kepung", "bertahan"],
-  ["barisan", "kuda", "pemanah", "kepung", "bertahan"],
-];
-
-function randomFight(floor: number, hp: number, max: number, deck: string[], seed: number): Setup {
-  const r = rng(seed * 7919 + floor);
-  const n = 6;
-  const taken = new Set<number>();
-  const pick: PickSq = (rows, cols) => {
-    for (let i = 0; i < 200; i++) {
-      const c = cols ? cols[Math.floor(r() * cols.length)] : Math.floor(r() * n);
-      const sq = rows[Math.floor(r() * rows.length)] * n + Math.min(n - 1, Math.max(0, c));
-      if (!taken.has(sq)) { taken.add(sq); return sq; }
-    }
-    // Fall back to any free square in those rows.
-    for (const row of rows) for (let c = 0; c < n; c++) if (!taken.has(row * n + c)) { taken.add(row * n + c); return row * n + c; }
-    throw new Error("board full");
-  };
-  const hero = 5 * n + 2 + Math.floor(r() * 2);
-  taken.add(hero);
-  const boss = floor === FLOORS - 1;
-  const options = FLOOR_LAYOUTS[Math.min(floor, FLOOR_LAYOUTS.length - 1)];
-  const layout = boss ? null : LAYOUTS[options[Math.floor(r() * options.length)]];
-  const units: Setup["units"] = boss
-    ? [
-        // The final boss: the enemy King himself. Below half HP he rises in fury (see rules.ts, fury).
-        { kind: "k", sq: pick([0], [2, 3]), target: true, boss: "Raja Hitam", hp: 30, hit: 4 },
-        { kind: "r", sq: pick([0], [0, 5]) },
-        ...(["b", "n", "n", "p", "p", "p"] as Kind[]).map((kind) => ({ kind, sq: pick([1, 2]) })),
-      ]
-    : layout!.army(pick, floor);
-  const things: Setup["things"] = [];
-  const mud: number[] = [];
-  for (let i = 0; i < 2; i++) mud.push(pick([4, 5]));
-  return {
-    hero, heroHp: hp, heroMax: max, units, things, mud, deck, seed: seed + floor * 101,
-    limit: floor >= 4 ? 99 : floor >= 2 ? 4 : floor >= 1 ? 3 : 2,
-    name: boss ? "Raja Hitam" : layout!.name,
-    survive: layout?.survive,
-  };
-}
-
+/** Every fight is generated from the run's seed (src/lib/silat/endless.ts), the Warm-up included. */
 function fightSetup(run: Run, node: MapNode): Setup {
-  const base = node.row === 0
-    ? firstFight(run.hp, run.max, run.deck, run.seed)
-    : randomFight(node.kind === "boss" ? FLOORS - 1 : Math.min(FLOORS - 2, node.row + (node.kind === "elite" ? 1 : 0)), run.hp, run.max, run.deck, node.seed);
-  if (node.kind === "elite") {
-    // Elites: every piece is tougher.
-    base.units = base.units.map((u) => ({ ...u, hp: (u.hp ?? { p: 3, n: 5, b: 5, r: 7, q: 7, k: 16 }[u.kind]) + 2 }));
-    base.name = `Elite · ${base.name}`;
-  }
-  return { ...base, relics: run.relics, scene: sceneFor(node.kind === "boss" ? FLOORS - 1 : node.row) };
+  const depth = depthOf(run);
+  const hero = { heroHp: run.hp, heroMax: run.max, deck: run.deck };
+  const base: Setup =
+    node.kind === "boss"
+      ? generateBossFight(run.seed, depth, hero)
+      : node.row === 0 && depth === 1
+        ? generateWarmup(run.seed, hero)
+        : generateFight({ depth, row: node.row, kind: node.kind === "elite" ? "elite" : "fight", scene: sceneFor(node.row), seed: node.seed }, hero);
+  return { ...base, relics: run.relics, scene: base.scene ?? sceneFor(node.kind === "boss" ? FLOORS - 1 : node.row), tint: prisonFor(run.seed, depth).tint ?? undefined };
 }
 
 export function fightFor(run: Run, node: MapNode): Fight {
@@ -216,12 +111,9 @@ export function fightFor(run: Run, node: MapNode): Fight {
 }
 
 /** Everyone starts with these, plus two cards of their style. */
-export const BASE_DECK = ["tendang", "tendang", "tendang", "tangkis", "tangkis", "tangkis", "kuda", "dalam"];
-export const STYLE_STARTER: Record<Style, string[]> = {
-  harimau: ["terkam", "rantai"],
-  bangau: ["napas", "balas"],
-  ular: ["liuk", "lilit"],
-};
+export const BASE_DECK = STARTER;
+/** Each style's one signature card (like Slay the Spire's Bash). */
+export const STYLE_STARTER: Record<Style, string[]> = STYLE_CARDS;
 
 /** Pick your playstyle: sets your starting deck, then you're on the map. */
 export function chooseStyle(run: Run, style: Style): Run {
@@ -234,8 +126,8 @@ export function newRun(seed = Math.floor(Math.random() * 2 ** 31)): Run {
   // Every run starts with a random common Pusaka, so runs differ from the first fight.
   const starter = pickOne(r, ALL_RELICS.filter((x) => !x.rare)).id;
   return {
-    v: 2, seed, floor: 0, hp: START_HP, max: START_HP, gold: 20, deck: [...STARTER], relics: [starter],
-    map: makeMap(seed), at: null, path: [], status: "style",
+    v: 2, seed, floor: 0, hp: START_HP, max: START_HP, gold: BALANCE.hero.startGold, deck: [...STARTER], relics: [starter],
+    map: makeMap(seed, 1), at: null, path: [], status: "style", depth: 1,
     fight: null, reward: null, shop: null, event: null, treasure: null, ringOuts: 0, bestCombo: 0,
   };
 }
@@ -269,11 +161,18 @@ const backToMap = (run: Run): Run => ({ ...run, status: "map", fight: null, rewa
 
 // ---------- Rewards ----------
 
-function cardChoices(run: Run, r: () => number, n = 3): string[] {
+/** Which tiers of cards you can be offered: more open up the deeper you go. Elites reach one tier ahead. */
+export function unlockedTier(run: Pick<Run, "floor" | "depth">, elite = false): 1 | 2 | 3 {
+  const base = depthOf(run) >= 2 ? 3 : run.floor >= 3 ? 2 : 1;
+  return Math.min(3, base + (elite ? 1 : 0)) as 1 | 2 | 3;
+}
+
+function cardChoices(run: Run, r: () => number, n = 3, elite = false): string[] {
   const out: string[] = [];
   // The first reward always has something flashy.
-  if (run.floor === 0) out.push(pickOne(r, ["badai", "tolak", "benteng"]));
-  const pool = POOL.filter((id) => !out.includes(id));
+  if (run.floor === 0 && depthOf(run) === 1) out.push(pickOne(r, ["lurus", "bantingan", "sabit"]));
+  const tier = unlockedTier(run, elite);
+  const pool = POOL.filter((id) => !out.includes(id) && tierOf(id) <= tier);
   // Your style's cards show up far more often; other styles' cards less.
   const weight = (id: string) => {
     const c = CARDS[id];
@@ -307,16 +206,32 @@ export function settle(run: Run): Run {
   const node = run.at ? nodeById(run.map, run.at) : null;
   const heal = HEAL_AFTER_FIGHT + (run.relics.includes("jamu") ? 4 : 0);
   const done: Run = { ...run, ...stats, hp: Math.min(run.max, f.hero.hp + heal) };
-  if (node?.kind === "boss") return { ...done, status: "won", fight: null };
   const r = rng((node?.seed ?? run.seed) + 99);
+  if (node?.kind === "boss") {
+    // Escaped! A big reward, then on to the next prison.
+    const gold = 40 + (f.kos ?? 0) * KO_GOLD;
+    const opened = (run.tierSeen ?? 1) < 3 ? TIER_NAMES[3] : undefined;
+    return { ...done, tierSeen: 3, status: "reward", fight: null, reward: { gold, cards: cardChoices({ ...done, depth: depthOf(done) + 1, floor: 0 }, r), relics: relicChoices(done, r, 3), escape: true, unlocked: opened } };
+  }
   const elite = node?.kind === "elite";
   // Base gold, plus what every knockout dropped during the fight.
   const gold = (elite ? 25 + Math.floor(r() * 11) : 10 + Math.floor(r() * 7)) + (f.kos ?? 0) * KO_GOLD;
-  return { ...done, status: "reward", fight: null, reward: { gold, cards: cardChoices(done, r), relics: elite ? relicChoices(done, r, 2) : [] } };
+  // Tell the player the first time a new tier of cards shows up.
+  const tier = unlockedTier(done, elite);
+  const opened = tier > (run.tierSeen ?? 1) ? TIER_NAMES[tier] : undefined;
+  return { ...done, tierSeen: Math.max(run.tierSeen ?? 1, tier), status: "reward", fight: null, reward: { gold, cards: cardChoices(done, r, 3, elite), relics: elite ? relicChoices(done, r, 2) : [], unlocked: opened } };
 }
 
 export function takeReward(run: Run, card: string | null, relic: string | null): Run {
   if (!run.reward) return run;
+  if (run.reward.escape) {
+    return nextPrison({
+      ...run,
+      gold: run.gold + run.reward.gold,
+      deck: card ? [...run.deck, card] : run.deck,
+      relics: relic ? [...run.relics, relic] : run.relics,
+    });
+  }
   return backToMap({
     ...run,
     gold: run.gold + run.reward.gold,
@@ -325,9 +240,24 @@ export function takeReward(run: Run, card: string | null, relic: string | null):
   });
 }
 
+/** You escaped one prison and are thrown into the next, deeper one: a new map, new fights, a new boss.
+ *  You heal half of what you're missing on the way. */
+export function nextPrison(run: Run): Run {
+  const depth = depthOf(run) + 1;
+  return backToMap({
+    ...run,
+    depth,
+    map: makeMap(run.seed, depth),
+    floor: 0,
+    at: null,
+    path: [],
+    hp: Math.min(run.max, run.hp + Math.ceil((run.max - run.hp) / 2)),
+  });
+}
+
 // ---------- Campfire ----------
 
-export const REST_HEAL = 5;
+export const REST_HEAL = BALANCE.hero.restHeal;
 export const rest = (run: Run): Run => backToMap({ ...run, hp: Math.min(run.max, run.hp + REST_HEAL) });
 /** Train: remove a card from your deck for good. */
 export const train = (run: Run, index: number): Run => backToMap({ ...run, deck: run.deck.filter((_, i) => i !== index) });
@@ -335,13 +265,13 @@ export const train = (run: Run, index: number): Run => backToMap({ ...run, deck:
 // ---------- Shop (Warung) ----------
 
 function stockShop(run: Run, r: () => number): Shop {
-  const cards = cardChoices({ ...run, floor: 1 }, r, 3).map((id) => ({ id, price: CARDS[id].rare ? 55 + Math.floor(r() * 11) : 30 + Math.floor(r() * 11), sold: false }));
+  const cards = cardChoices({ ...run, floor: Math.max(1, run.floor) }, r, 3).map((id) => ({ id, price: CARDS[id].rare ? 55 + Math.floor(r() * 11) : 30 + Math.floor(r() * 11), sold: false }));
   const relicId = relicChoices(run, r, 1)[0];
   const relic = relicId ? { id: relicId, price: RELICS[relicId].rare ? 90 : 65, sold: false } : null;
   return { cards, relic, removePrice: 40, removed: false, healPrice: 20, healed: false };
 }
 
-export const SHOP_HEAL = 5;
+export const SHOP_HEAL = BALANCE.hero.shopHeal;
 
 export function buyCard(run: Run, i: number): Run {
   const item = run.shop?.cards[i];
@@ -513,15 +443,23 @@ export function saveRun(run: Run | null) {
 
 export function loadBest(): Best {
   try {
-    return { floor: 0, wins: 0, runs: 0, ...JSON.parse(localStorage.getItem(BEST_KEY) ?? "{}") };
+    return { floor: 0, wins: 0, runs: 0, depth: 1, ...JSON.parse(localStorage.getItem(BEST_KEY) ?? "{}") };
   } catch {
-    return { floor: 0, wins: 0, runs: 0 };
+    return { floor: 0, wins: 0, runs: 0, depth: 1 };
   }
 }
 
 export function recordEnd(run: Run) {
   const b = loadBest();
-  const next: Best = { floor: Math.max(b.floor, run.floor + 1), wins: b.wins + (run.status === "won" ? 1 : 0), runs: b.runs + 1 };
+  // Deepest prison first, then the furthest floor in it. `wins` counts prisons escaped.
+  const deeper = depthOf(run) > (b.depth ?? 1);
+  const same = depthOf(run) === (b.depth ?? 1);
+  const next: Best = {
+    depth: Math.max(b.depth ?? 1, depthOf(run)),
+    floor: deeper ? run.floor + 1 : same ? Math.max(b.floor, run.floor + 1) : b.floor,
+    wins: b.wins + (depthOf(run) - 1) + (run.status === "won" ? 1 : 0),
+    runs: b.runs + 1,
+  };
   try { localStorage.setItem(BEST_KEY, JSON.stringify(next)); } catch {}
   return next;
 }

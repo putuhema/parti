@@ -654,3 +654,21 @@ a { text-decoration: none; }
 .sl-d20 span { color: #fff; font-family: var(--font-display), "Fredoka", sans-serif; font-size: 40px; font-weight: 700; }
 @keyframes sld20 { from { transform: rotate(-540deg) scale(.2); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sl-d20 { animation: none; } }
+/* Endless: each prison washes its boards in its own colour; pieces with powers get a purple tag. */
+.sl-tint { position: absolute; inset: 0; z-index: 0; pointer-events: none; mix-blend-mode: color; opacity: .35; }
+.sl-trait { position: absolute; left: 1px; bottom: 1px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: #8a4fb5; color: #fff; font-size: 9px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.5px #fff; letter-spacing: .02em; }
+.sl-powers { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin-top: 2px; }
+.sl-powers span { padding: 1px 7px; border-radius: 999px; background: #F3E2FF; color: #8a4fb5; font-size: 11px; font-weight: 900; }
+/* Rewards: cards you don't own yet, and a notice when a new tier of cards opens up. */
+.sl-new { position: absolute; top: -10px; right: -6px; z-index: 3; padding: 2px 7px; border-radius: 999px; background: #ff4b4b; color: #fff; font-size: 10px; font-weight: 900; letter-spacing: .06em; box-shadow: 0 2px 0 #b81f1f; }
+.sl-unlock { align-self: center; padding: 6px 14px; border-radius: 999px; background: #ce82ff; color: #fff; font-size: 13px; font-weight: 900; box-shadow: 0 3px 0 #8a4fb5; text-align: center; animation: dotin 300ms var(--spring) both; }
+/* Pixel Atlas sprites: hard pixel edges at any size. */
+.px { image-rendering: pixelated; image-rendering: crisp-edges; }
+.sl-sprite.px { image-rendering: pixelated; }
+.sl-obj { display: block; width: 88%; height: 88%; margin: 6%; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .2)); }
+/* Bosses glow gold, so a warden Rook doesn't look like any other Rook. */
+.sl-bossglow > .sl-sprite, .sl-bossglow > svg { filter: drop-shadow(0 0 4px #ffc800) drop-shadow(0 0 2px #ffc800) !important; }
+.sl-bossglow > .sl-sprite[style*="grayscale"] { filter: grayscale(1) brightness(.75) contrast(1.15) drop-shadow(0 0 4px #ffc800) drop-shadow(0 0 2px #ffc800) !important; }
+/* Enemy shields (from a block move) and commanded pieces. */
+.sl-eblock { position: absolute; left: 1px; top: 36%; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 4px 4px 8px 8px; background: #1899d6; color: #fff; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.5px #fff; z-index: 2; }
+.sl-empower { position: absolute; right: 1px; top: 1px; padding: 0 4px; height: 15px; border-radius: 8px; background: #ce82ff; color: #fff; font-size: 9px; font-weight: 900; display: flex; align-items: center; box-shadow: 0 0 0 1.5px #fff; z-index: 2; }

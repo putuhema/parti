@@ -1,10 +1,12 @@
 // Run with: bun test src/lib/silat
 import { describe, expect, test } from "bun:test";
-import { CARDS, canCapture, canPlay, canReady, cardCost, playCard, playCombo, readyCard } from "./cards";
-import { beginEnemy, clone, enemyStep, enemyTurn, forecast, freeSteps, isGuarded, makeFight, plan, reactionDamage, startTurn, step, unitAt, type Fight, type Setup } from "./rules";
+import { ALL_CARDS, CARDS, TIERS, TIER_NAMES, canCapture, tierOf, val, canPlay, canReady, cardCost, playCard, playCombo, readyCard } from "./cards";
+import { beginEnemy, clone, dist, enemyStep, enemyTurn, forecast, freeSteps, isGuarded, makeFight, plan, reactionDamage, startTurn, step, unitAt, type Fight, type Setup, type Trait } from "./rules";
 import { makeMap, nextNodes, nodeById, MAP_ROWS } from "./map";
+import { bossFor, budgetFor, generateFight, prisonFor } from "./endless";
+import { ENEMIES } from "./config";
 import { ALL_RELICS } from "./relics";
-import { BASE_DECK, EVENTS, buyCard, checkBonus, chooseEvent, rollEvent, chooseStyle, enter, fightFor, newRun, settle, takeReward, type Run } from "./run";
+import { BASE_DECK, EVENTS, unlockedTier, buyCard, checkBonus, chooseEvent, rollEvent, chooseStyle, enter, fightFor, newRun, settle, takeReward, type Run } from "./run";
 
 /** A fresh run already standing in the Warm-up fight, with no relics (so results are predictable). */
 function startRun(seed: number): Run {
@@ -107,16 +109,23 @@ describe("pushes", () => {
     expect(s.units.find((u) => u.kind === "n")!.sq).toBe(sq(2, 3));
   });
 
-  test("the first fight's showcase: kick the front pawn into the one behind it", () => {
-    const run = startRun(5);
-    let s = run.fight!;
-    expect(s.things).toHaveLength(0); // no boulders, crates or villagers
-    s.hand = ["tendang"];
-    s = play(s, "tendang", sq(2, 3));
-    // Front pawn: 3 - 2 kick - 3 crash (it flew 1 square). Back pawn: 3 - 3 crash. Both gone.
-    expect(s.units.filter((u) => u.kind === "p")).toHaveLength(0);
-    expect(s.combo).toBeGreaterThanOrEqual(3);
-    expect(s.hero.hp).toBe(s.hero.max); // untouched
+  test("the Warm-up changes every run, but its first kick always lands a double knockout", () => {
+    const layouts = new Set<string>();
+    for (let seed = 1; seed <= 60; seed++) {
+      const run = startRun(seed);
+      let s = run.fight!;
+      layouts.add(JSON.stringify([s.hero.sq, s.units.map((u) => [u.kind, u.sq]), s.things.map((t) => t.sq)]));
+      // The showcase pawn: the one piece next to you.
+      const near = s.units.filter((u) => dist(s, u.sq, s.hero.sq) === 1);
+      expect(near).toHaveLength(1);
+      expect(isGuarded(s, near[0])).toBe(false);
+      const before = s.units.length + s.things.length;
+      s.hand = ["tendang"];
+      s = play(s, "tendang", near[0].sq);
+      expect(s.units.length + s.things.length).toBeLessThanOrEqual(before - 2); // the pawn and what it hit
+      expect(s.hero.hp).toBe(s.hero.max);
+    }
+    expect(layouts.size).toBeGreaterThan(50);
   });
 });
 
@@ -159,13 +168,32 @@ describe("enemies", () => {
     expect(s.intents.some((i) => i.id === s.units.find((u) => u.kind === "n")!.id)).toBe(true);
   });
 
-  test("pawns that don't act march down and promote on your back row", () => {
-    const s = fight({ hero: sq(0, 0), units: [{ kind: "p", sq: sq(5, 4) }, { kind: "k", sq: sq(3, 0) }], limit: 0 });
+  test("storm pawns (your column and the two beside it) that don't act march down and promote", () => {
+    const s = fight({ hero: sq(4, 0), units: [{ kind: "p", sq: sq(5, 4) }, { kind: "k", sq: sq(1, 0) }], limit: 0 });
     s.intents = [];
     enemyTurn(s);
     const q = s.units.find((u) => u.sq === sq(5, 5))!;
     expect(q.kind).toBe("q");
     expect(q.hp).toBe(7);
+  });
+
+  test("pawns away from your column hold their line", () => {
+    const s = fight({ hero: sq(0, 5), units: [{ kind: "p", sq: sq(4, 1) }, { kind: "p", sq: sq(5, 2) }, { kind: "k", sq: sq(3, 0) }] });
+    enemyTurn(s);
+    expect(s.units.filter((u) => u.kind === "p").map((u) => u.sq).sort()).toEqual([sq(4, 1), sq(5, 2)].sort());
+  });
+
+  test("a pawn that hasn't moved yet storms 2 squares; after that, only 1", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "p", sq: sq(2, 0) }, { kind: "k", sq: sq(5, 0) }] });
+    expect(s.intents.find((i) => i.id === s.units[0].id)).toEqual({ id: s.units[0].id, type: "move", to: sq(2, 2) });
+    enemyTurn(s);
+    expect(s.units[0].sq).toBe(sq(2, 2));
+    expect(s.intents.find((i) => i.id === s.units[0].id)).toEqual({ id: s.units[0].id, type: "move", to: sq(2, 3) });
+  });
+
+  test("the double step can't jump over a piece", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "p", sq: sq(2, 0) }, { kind: "n", sq: sq(2, 1) }, { kind: "k", sq: sq(5, 0) }] });
+    expect(s.intents.find((i) => i.id === s.units[0].id)).toBeUndefined();
   });
 
   test("damaged pieces get angry and act past the limit", () => {
@@ -204,8 +232,8 @@ describe("enemies", () => {
     s.intents = [{ id: pawn.id, type: "strike", target: sq(1, 4) }]; // it planned to hit b2
     s = play(s, "lurus", sq(2, 3)); // kicked flying up, stuck in the mud on c6
     expect(s.units.find((u) => u.id === pawn.id)?.sq).toBe(sq(2, 0));
-    // From c6 it can't reach you, so it marches forward instead of striking.
-    expect(s.intents.find((i) => i.id === pawn.id)).toEqual({ id: pawn.id, type: "move", to: sq(2, 1) });
+    // From c6 it can't reach you, so it storms forward instead of striking: 2 squares, as it hasn't moved yet.
+    expect(s.intents.find((i) => i.id === pawn.id)).toEqual({ id: pawn.id, type: "move", to: sq(2, 2) });
     expect(forecast(s).damage).toBe(0);
   });
 
@@ -309,14 +337,14 @@ describe("runs", () => {
     expect(run.relics).toHaveLength(1);
     run = chooseStyle(run, "bangau");
     expect(run.status).toBe("map");
-    expect(run.deck).toEqual([...BASE_DECK, "napas", "balas"]);
+    expect(run.deck).toEqual([...BASE_DECK, "balas"]);
     run = enter(run, nextNodes(run.map, null)[0]);
     expect(run.status).toBe("fight");
     run.fight!.status = "won";
     run = settle(run);
     expect(run.status).toBe("reward");
     expect(run.reward!.cards).toHaveLength(3);
-    expect(["badai", "tolak", "benteng"]).toContain(run.reward!.cards[0]);
+    expect(["lurus", "bantingan", "sabit"]).toContain(run.reward!.cards[0]); // the first reward always has something flashy (from the basics)
     expect(run.reward!.gold).toBeGreaterThan(0);
     const gold = run.gold;
     run = takeReward(run, run.reward!.cards[0], null);
@@ -362,16 +390,20 @@ describe("runs", () => {
     expect(s.status).toBe("won");
   });
 
-  test("every fight on every map can be set up, including elites and the boss", () => {
-    for (let seed = 1; seed < 30; seed++) {
-      const run = newRun(seed);
-      for (const node of run.map.nodes.filter((n) => n.kind === "fight" || n.kind === "elite" || n.kind === "boss")) {
-        const f = fightFor({ ...run, floor: node.row }, node);
-        expect(f.units.some((u) => u.target)).toBe(true);
-        expect(f.hand.length).toBe(5);
-        expect(f.things).toHaveLength(0);
-        const spots = [f.hero.sq, ...f.units.map((u) => u.sq), ...f.things.map((t) => t.sq)];
-        expect(new Set(spots).size).toBe(spots.length);
+  test("every fight on every map, at every depth, can be set up, including elites and the boss", () => {
+    for (let seed = 1; seed < 20; seed++) {
+      for (let depth = 1; depth <= 8; depth++) {
+        const run = { ...newRun(seed), depth, map: makeMap(seed, depth) };
+        for (const node of run.map.nodes.filter((n) => n.kind === "fight" || n.kind === "elite" || n.kind === "boss")) {
+          const f = fightFor({ ...run, floor: node.row }, node);
+          expect(f.units.filter((u) => u.target)).toHaveLength(1);
+          expect(f.hand.length).toBe(5);
+          const spots = [f.hero.sq, ...f.units.map((u) => u.sq), ...f.things.map((t) => t.sq)];
+          expect(new Set(spots).size).toBe(spots.length);
+          expect(spots.every((x) => x >= 0 && x < f.n * f.n)).toBe(true);
+          expect(f.mud.every((m) => !spots.includes(m))).toBe(true);
+          expect(f.n).toBe(depth === 1 ? 6 : depth === 2 ? 7 : 8);
+        }
       }
     }
   });
@@ -568,6 +600,34 @@ describe("random play never breaks the board", () => {
       if (s.status === "won" || s.status === "lost") finished++;
     }
     expect(finished).toBeGreaterThan(200);
+  });
+  test("200 generated fights across depths 1-8, with every new card in the deck", () => {
+    let r = 11;
+    const rnd = () => ((r = (r * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const deck = ALL_CARDS.map((c) => c.id);
+    for (let g = 0; g < 200; g++) {
+      const depth = 1 + (g % 8);
+      const base = { ...newRun(g + 101), depth, map: makeMap(g + 101, depth) };
+      const fights = base.map.nodes.filter((n) => n.kind === "fight" || n.kind === "elite" || n.kind === "boss");
+      const node = fights[g % fights.length];
+      let s = fightFor({ ...base, floor: node.row, deck, hp: 40, max: 40 }, node);
+      for (let turn = 0; turn < 40 && s.status === "play"; turn++) {
+        for (let tries = 0; tries < 6; tries++) {
+          const i = Math.floor(rnd() * Math.max(1, s.hand.length));
+          const id = s.hand[i];
+          if (!id || !canPlay(s, id)) continue;
+          const ts = CARDS[id].targets(s);
+          s = playCard(s, i, ts[Math.floor(rnd() * ts.length)]);
+          if (s.status !== "play") break;
+        }
+        if (s.status !== "play") break;
+        enemyTurn(s);
+        const spots = [s.hero.sq, ...s.units.map((u) => u.sq), ...s.things.map((t) => t.sq)];
+        expect(new Set(spots).size).toBe(spots.length);
+        for (const x of spots) expect(x >= 0 && x < s.n * s.n).toBe(true);
+        for (const u of s.units) expect(u.hp).toBeLessThanOrEqual(u.max);
+      }
+    }
   });
 });
 
@@ -867,5 +927,200 @@ describe("Siap, natural 20/1 and event checks (Baldur's Gate pass)", () => {
     expect(a.next.status).toBe("map");
     expect(rollEvent({ ...run, gold: 5 }, "bet")).toBeNull();
     expect(checkBonus({ ...run, relics: ["akik", "tasbih"] }, EVENTS.dadu.choices[0].check!)).toBe(4);
+  });
+});
+
+describe("endless runs", () => {
+  test("every prison has its own name, board size and boss; names don't repeat back to back", () => {
+    for (let seed = 1; seed < 40; seed++) {
+      expect(prisonFor(seed, 1).name).toBe("Penjara Raja Hitam");
+      expect(bossFor(seed, 1).name).toBe("Raja Hitam");
+      for (let d = 2; d <= 12; d++) {
+        expect(prisonFor(seed, d).name).not.toBe(prisonFor(seed, d - 1).name);
+        expect(bossFor(seed, d).name).not.toBe(bossFor(seed, d - 1).name);
+        expect(prisonFor(seed, d)).toEqual(prisonFor(seed, d)); // seeded: the same every time
+        const b = bossFor(seed, d);
+        expect(b.traits.length).toBe(d <= 3 ? 1 : d <= 5 ? 2 : 3);
+        expect(new Set(b.traits).size).toBe(b.traits.length);
+        expect(b.hp).toBeGreaterThan(bossFor(seed, d - 1).hp);
+      }
+    }
+  });
+  test("difficulty grows with the floor, with depth, and for elites", () => {
+    for (let d = 1; d <= 10; d++) {
+      for (let row = 1; row < 6; row++) expect(budgetFor(d, row)).toBeGreaterThan(budgetFor(d, row - 1));
+      expect(budgetFor(d + 1, 1)).toBeGreaterThan(budgetFor(d, 1));
+      expect(budgetFor(d, 3, true)).toBeGreaterThan(budgetFor(d, 3));
+    }
+  });
+  test("deeper fights field more army on average", () => {
+    const army = (depth: number) => {
+      let total = 0;
+      for (let seed = 1; seed <= 40; seed++) {
+        const s = generateFight({ depth, row: 3, kind: "fight", scene: "yard", seed }, { heroHp: 20, heroMax: 20, deck: [] });
+        total += s.units.reduce((a, u) => a + (u.hp ?? 0), 0);
+      }
+      return total;
+    };
+    expect(army(3)).toBeGreaterThan(army(1));
+    expect(army(6)).toBeGreaterThan(army(3));
+  });
+  test("beating the boss: an escape reward, then a new, deeper prison with a fresh map", () => {
+    let run = startRun(3);
+    const bossNode = run.map.nodes.find((n) => n.kind === "boss")!;
+    run = { ...run, at: bossNode.id, floor: bossNode.row, fight: fightFor(run, bossNode) };
+    run.fight!.status = "won";
+    run = settle(run);
+    expect(run.status).toBe("reward");
+    expect(run.reward!.escape).toBe(true);
+    expect(run.reward!.relics.length).toBe(3);
+    const before = run.map;
+    run = takeReward(run, run.reward!.cards[0], run.reward!.relics[0]);
+    expect(run.depth).toBe(2);
+    expect(run.status).toBe("map");
+    expect(run.floor).toBe(0);
+    expect(run.path).toEqual([]);
+    expect(run.map).not.toEqual(before);
+    const first = nextNodes(run.map, null)[0];
+    const next = enter(run, first);
+    expect(next.fight!.n).toBe(7);
+  });
+});
+
+describe("boss and elite powers", () => {
+  const withTrait = (t: Trait, extra: Partial<Setup> = {}) =>
+    fight({ hero: sq(2, 4), units: [{ kind: "r", sq: sq(2, 3), hp: 20, target: true, boss: "Sipir Uji", traits: [t] }], ...extra }, ["dalam", "tendang"]);
+  test("Perisai: every hit deals 1 less", () => {
+    expect(unitAt(play(withTrait("perisai"), "dalam", sq(2, 3)), sq(2, 3))!.hp).toBe(17); // 20 - (4 - 1)
+  });
+  test("Duri: hurting it on your turn costs you 1", () => {
+    expect(play(withTrait("duri"), "dalam", sq(2, 3)).hero.hp).toBe(19);
+  });
+  test("Kokoh: pushes can't move it", () => {
+    expect(unitAt(play(withTrait("kokoh"), "tendang", sq(2, 3)), sq(2, 3))).toBeDefined();
+  });
+  test("Pulih: heals 2 at the end of the enemy turn", () => {
+    const s = withTrait("pulih");
+    s.units[0].hp = 10;
+    s.intents = [];
+    enemyTurn(s);
+    expect(s.units[0].hp).toBe(12);
+  });
+  test("Bayangan: ends the enemy turn far from you if you're next to it", () => {
+    const s = withTrait("bayangan");
+    s.intents = [];
+    enemyTurn(s);
+    expect(dist(s, s.units[0].sq, s.hero.sq)).toBeGreaterThan(1);
+  });
+  test("Murka works on any boss: below half HP it hits harder and calls pawns", () => {
+    const s = withTrait("murka");
+    s.units[0].hp = 13;
+    const f = play(s, "dalam", sq(2, 3));
+    const b = f.units.find((u) => u.boss)!;
+    expect(b.phase).toBe(2);
+    expect(f.units.length).toBeGreaterThan(1);
+  });
+});
+
+describe("Slay the Spire style deck", () => {
+  test("every style starts with 5 Tendang, 4 Tangkis and 1 signature card", () => {
+    for (const [style, sig] of [["harimau", "terkam"], ["bangau", "balas"], ["ular", "liuk"]] as const) {
+      const run = chooseStyle(newRun(1), style);
+      expect(run.deck.filter((c) => c === "tendang")).toHaveLength(5);
+      expect(run.deck.filter((c) => c === "tangkis")).toHaveLength(4);
+      expect(run.deck).toHaveLength(10);
+      expect(run.deck).toContain(sig);
+    }
+  });
+  test("every card except the two basics is in exactly one tier", () => {
+    const all = [...TIERS[1], ...TIERS[2], ...TIERS[3]];
+    expect(new Set(all).size).toBe(all.length);
+    expect(all.sort()).toEqual(ALL_CARDS.map((c) => c.id).filter((id) => id !== "tendang" && id !== "tangkis").sort());
+  });
+  test("cards unlock as you go: basics first, tactics from floor 4, rare cards from the second prison", () => {
+    expect(unlockedTier({ floor: 1, depth: 1 })).toBe(1);
+    expect(unlockedTier({ floor: 3, depth: 1 })).toBe(2);
+    expect(unlockedTier({ floor: 1, depth: 2 })).toBe(3);
+    expect(unlockedTier({ floor: 1, depth: 1 }, true)).toBe(2); // elites reach one tier ahead
+    for (let seed = 1; seed < 40; seed++) {
+      let run = startRun(seed);
+      run.fight!.status = "won";
+      run = settle(run);
+      for (const id of run.reward!.cards) expect(tierOf(id)).toBe(1);
+    }
+  });
+  test("the first reward after a new tier opens says so, once", () => {
+    let run: Run = { ...startRun(4), floor: 3, tierSeen: 1 };
+    run.fight!.status = "won";
+    run = settle(run);
+    expect(run.reward!.unlocked).toBe(TIER_NAMES[2]);
+    expect(run.tierSeen).toBe(2);
+    let again: Run = { ...run, status: "fight", fight: { ...startRun(4).fight!, status: "won" } };
+    again = settle(again);
+    expect(again.reward!.unlocked).toBeUndefined();
+  });
+});
+
+describe("config files and enemy movesets", () => {
+  test("Kuda Liar back-kicks you when you stand right beside it, and sends you flying", () => {
+    const s = fight({ hero: sq(2, 3), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "n", sq: sq(2, 2), variant: "wild_horse" }] });
+    const it = s.intents.find((i) => i.id === s.units[1].id)!;
+    expect(it).toMatchObject({ type: "special", move: "back_kick", target: sq(2, 3) });
+    const after = resolveEnemy(s);
+    expect(after.hero.hp).toBe(20 - ENEMIES.moves.back_kick.damage!);
+    expect(after.hero.sq).toBe(sq(2, 5)); // kicked 2 squares away
+  });
+  test("a plain knight beside you can't hit you: the back kick is the variant's own move", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "n", sq: sq(2, 3) }] });
+    expect(s.intents.find((i) => i.id === s.units[1].id)?.type).not.toBe("special");
+  });
+  test("shields (block moves) soak damage first and drop when the enemy turn starts", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "r", sq: sq(2, 2), variant: "tower" }] }, ["dalam"]);
+    expect(s.units[1].hp).toBe(9); // Menara's own hp
+    const it = s.intents.find((i) => i.id === s.units[1].id)!;
+    expect(it).toMatchObject({ type: "special", move: "fortify" });
+    s.intents = [it];
+    const after = resolveEnemy(s);
+    expect(after.units[1].block).toBe(5);
+    after.status = "play";
+    after.hand = ["dalam"];
+    after.tenaga = 3;
+    after.hero.sq = sq(2, 3);
+    const hit = play(after, "dalam", sq(2, 2));
+    expect(hit.units[1].hp).toBe(9); // 4 damage, all soaked
+    expect(hit.units[1].block).toBe(1);
+  });
+  test("Dukun heals the most hurt ally; Raja Perang commands one to act and hit harder", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "b", sq: sq(2, 1), variant: "dukun" }, { kind: "p", sq: sq(3, 1) }] });
+    s.units[2].hp = 1;
+    plan(s);
+    expect(s.intents.find((i) => i.id === s.units[1].id)).toMatchObject({ type: "special", move: "mend", target: s.units[2].id });
+    const after = resolveEnemy(s);
+    expect(after.units[2].hp).toBe(3);
+    const c = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(2, 0), variant: "war_king" }, { kind: "n", sq: sq(3, 1) }] });
+    expect(c.intents.find((i) => i.id === c.units[0].id)).toMatchObject({ type: "special", move: "command", target: c.units[1].id });
+    const cc = resolveEnemy(c);
+    expect(cc.units[1].empower).toBe(ENEMIES.moves.command.bonus);
+    expect(cc.units[1].angry).toBe(true);
+  });
+  test("signature moves wait for their cooldown", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "k", sq: sq(2, 0), variant: "war_king" }, { kind: "n", sq: sq(5, 0) }, { kind: "n", sq: sq(0, 0) }] });
+    enemyTurn(s);
+    expect(s.intents.find((i) => i.id === s.units[0].id && i.type === "special" && i.move === "command")).toBeUndefined();
+  });
+  test("fights pick variants by floor: young kings early, old kings late", () => {
+    const kings = (row: number) => new Set(Array.from({ length: 30 }, (_, seed) => generateFight({ depth: 1, row, kind: "fight", scene: "yard", seed: seed + 1 }, { heroHp: 20, heroMax: 20, deck: [] }).units.find((u) => u.kind === "k")!.variant));
+    expect([...kings(1)]).toEqual(["young_king"]);
+    expect([...kings(5)]).toEqual(["old_king"]);
+  });
+  test("cards read their numbers from cards.json, and JSON-only cards work", () => {
+    expect(CARDS.tangkis.text).toBe(`Block ${val("tangkis", "block")}`);
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "n", sq: sq(2, 3) }] }, ["beruntun", "tapakbesi"]);
+    const a = play(s, "beruntun", sq(2, 3));
+    expect(a.units[1].hp).toBe(5 - 3);
+    expect(a.combo).toBeGreaterThanOrEqual(3);
+    const b = play(s, "tapakbesi", sq(1, 4));
+    expect(b.hero.sq).toBe(sq(1, 4));
+    expect(b.hero.block).toBe(3);
   });
 });

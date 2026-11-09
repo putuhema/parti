@@ -14,10 +14,16 @@ export interface Sheet {
   frames?: number;
   /** Frames per second. */
   fps?: number;
+  /** Pixel art: scale with hard edges (no blur). */
+  pixel?: boolean;
+  /** A CSS filter, e.g. to darken enemy pieces into one army colour. */
+  filter?: string;
 }
 export type Manifest = Partial<Record<SpriteId, Partial<Record<Anim, Sheet>>>>;
 
 const DIR = "/silat/sprites";
+/** A file starting with "/" is a path from the site root; otherwise it's inside /silat/sprites. */
+const srcOf = (sh: Sheet) => (sh.file.startsWith("/") ? sh.file : `${DIR}/${sh.file}`);
 let manifest: Manifest | null = null;
 let loading: Promise<Manifest> | null = null;
 
@@ -29,7 +35,7 @@ function loadManifest(): Promise<Manifest> {
     .then((m: Record<string, unknown>) => {
       const clean: Manifest = {};
       for (const [k, v] of Object.entries(m ?? {})) if (!k.startsWith("_") && v && typeof v === "object") clean[k as SpriteId] = v as Manifest[SpriteId];
-      for (const anims of Object.values(clean)) for (const sh of Object.values(anims ?? {})) if (sh?.file) new Image().src = `${DIR}/${sh.file}`;
+      for (const anims of Object.values(clean)) for (const sh of Object.values(anims ?? {})) if (sh?.file) new Image().src = srcOf(sh);
       manifest = clean;
       return clean;
     });
@@ -58,10 +64,11 @@ function SheetPlayer({ sheet, loop, onDone }: { sheet: Sheet; loop: boolean; onD
   const moving = frames > 1;
   return (
     <span
-      className="sl-sprite"
+      className={`sl-sprite${sheet.pixel ? " px" : ""}`}
       onAnimationEnd={onDone}
       style={{
-        backgroundImage: `url("${DIR}/${sheet.file}")`,
+        backgroundImage: `url("${srcOf(sheet)}")`,
+        filter: sheet.filter ? `${sheet.filter} drop-shadow(0 2px 0 rgba(0, 0, 0, .15))` : undefined,
         backgroundSize: `${frames * 100}% 100%`,
         animation: moving ? `slsheet ${frames / fps}s steps(${frames}, jump-none) ${loop ? "infinite" : "1 forwards"}` : undefined,
       }}

@@ -793,3 +793,155 @@ New prison events, each with a check that shows the number you need, your Pusaka
 | Prisoners' Dice | 11+ (bet 15 gold) | +30 gold | the 15 gold | Batu Akik +2, Tasbih +2 |
 A natural 20 always wins, a natural 1 always loses. The roll is seeded by the run, so leaving and coming
 back gives the same result. The result screen shows the d20, the sum and what happened.
+
+## 20. Endless runs (2026-11-09) — `src/lib/silat/endless.ts`
+
+A run never finishes. Beat a prison's boss and you **escape** (LOLOS!): a big reward (40 gold plus
+knockouts, a card, a choice of 3 Pusaka), you heal half of what you're missing, and you're thrown into the
+next, deeper prison. Everything below is generated from the run's seed, so a run is reproducible and
+reloading never rerolls anything.
+
+### Each prison (depth)
+- Depth 1 is **Penjara Raja Hitam** (6×6, Raja Hitam at the gate, the handmade Warm-up first).
+- Deeper prisons get a generated name ("Penjara Kabut", "Penjara Besi"... never the same twice in a row),
+  their own colour wash over every board, a **new map** (more elites the deeper you go), and a bigger
+  board: **7×7** at depth 2, **8×8** from depth 3.
+- The floors keep their areas (Cells → Cell Block → Yard → Wall → Gate), each with its own terrain:
+  firecracker crates in the cells, boulders in the corridors and on the wall, mud in the yard and at the
+  gate.
+
+### Difficulty
+| | Formula |
+|---|---|
+| Army budget per fight | `4 + 2.2 × floor + 5.5 × (depth − 1)`, elites × 1.4, bosses' escort × 0.8 |
+| Piece costs | pawn 1, knight 3, bishop 3, rook 5, queen 8 |
+| Piece HP | × `1 + 0.15 × (depth − 1)`; elites +2 |
+| Piece hits | + `⌊(depth − 1) / 2⌋` |
+| Pieces acting per turn | `2 + ⌈floor / 2⌉ + (depth − 1)`, max 9 |
+| Max pieces on the board | board size + 2 + ⌊depth / 2⌋ |
+
+### Formations (chess structures that spend the budget)
+| Formation | Shape | Appears from |
+|---|---|---|
+| Pawn Chain | zigzag pawns guarding each other in front of the king | floor 2 |
+| Cavalry | knights and pawns | floor 2 |
+| Castled King | king tucked in a corner behind a rook and a pawn shield | floor 3 |
+| Fianchetto | bishops on the long diagonals behind a pawn wall | floor 3 |
+| Snipers | rook/queen and bishop in the back corners, thin pawn screen | floor 3 |
+| Siege | knights and pawns on both of your flanks from the start | floor 4 |
+| Ambush | two knights already beside you, the rest at the back | floor 4 |
+| Hold Out | 30% more army; survive 5 turns (+1 per 3 depths) or beat the King | floor 4 |
+From depth 2 on, every formation can appear on any floor. Elites give 1 piece (2 from depth 3) a power.
+
+### Bosses
+Depth 1: Raja Hitam (King, 30 HP, Murka). From depth 2: a generated warden.
+- **Piece**: King, Queen, Rook, Bishop or Knight, each with its own titles (Raja/Sultan, Ratu/Permaisuri,
+  Sipir/Mandor, Dukun/Penasihat, Panglima/Pendekar) plus an epithet (Besi, Kelam, Api, Tanpa Wajah...).
+  Never the same name as the previous boss.
+- **HP** `24 + 6 × depth`, **hit** `4 + ⌊depth / 2⌋`, always heavy.
+- **Powers**: 1 (depth 2–3), 2 (depth 4–5), 3 (depth 6+), all different, from:
+
+| Power | Effect |
+|---|---|
+| Perisai | Armoured: every hit on it deals 1 less (at least 1) |
+| Pulih | Heals 2 HP at the end of every enemy turn |
+| Duri | Spiked: each time you hurt it on your turn, you take 1 |
+| Pemanggil | Calls a pawn every 2 turns |
+| Kokoh | Rooted: pushes, throws, pulls and swaps can't move it |
+| Murka | Below half HP: hits harder and calls 2 pawns (a King also castles away and walks at you) |
+| Bayangan | If you end next to it, it vanishes to the far side of the board |
+
+Powers show as chips under the fight title, as a purple tag on the piece, and as lines in the log.
+Elite pieces use Perisai, Kokoh, Duri or Pulih.
+
+### Records
+The home screen shows the deepest prison and floor reached, and prisons escaped across all runs.
+
+### The Warm-up is generated too
+The first fight used to be one handmade layout, so every run opened the same way. Now it's generated from
+the run's seed (`generateWarmup`), and stays easy:
+- You start on the bottom-middle rows; a pawn sits right next to you, with a pawn or (30%) a firecracker
+  crate lined up two squares behind it, straight up or along a diagonal. One Tendang always sends it
+  flying into the other for a double knockout.
+- The King and 1–2 extra pieces (knights or pawns) are placed so none of them guards that pawn (a guarded
+  pawn only budges 1 square) and none starts next to you. Two mud squares on the bottom row.
+- When the shot is diagonal, that pawn can strike you, so the first kick also takes away the only threat.
+- Over 60 seeds the tests see more than 50 different Warm-ups, and the first kick always lands.
+
+## 21. Pawn storm and the double step (2026-11-09)
+
+Pawns still follow chess rules (forward only, strike diagonally, promote on your back row), but they now
+hunt you instead of all marching blindly:
+- **Double step:** a pawn that hasn't moved by itself yet can step 2 squares, if both are empty. Being
+  pushed doesn't use it up; its own move does.
+- **Pawn storm:** pawns in your column and the two beside it advance toward you every turn (2 squares on
+  their first move), as an intent or as part of the end-of-turn march. Pawns further away **hold their
+  line**, so pawn chains, castled kings and walls keep their shape.
+- Chess players still have the edge: pawns never move sideways or back, so getting beside or behind a pawn
+  wall leaves it powerless, and stepping out of the storm columns slows the storm.
+- The stalling clock now comes from the storm: wherever you stand, the pawns near you march and promote.
+
+## 22. Slay the Spire style deck (2026-11-09)
+
+You start small and earn the rest:
+- **Starting deck (10):** 5× Tendang, 4× Tangkis, and 1 signature card for your style:
+  Harimau **Terkam**, Bangau **Balas**, Ular **Liuk**. (Langkah Kuda and Pukulan Dalam are now earned.)
+- **Card tiers** (`TIERS` in cards.ts) open up as the run goes on. Rewards and shops only offer unlocked tiers;
+  elite rewards reach one tier ahead.
+  | Tier | Opens | Cards |
+  |---|---|---|
+  | 1 | from the start | 20 simple cards: Pukulan Dalam, Langkah Kuda, Tendangan Lurus, Sabit, Bantingan, Tarik, Gajah Miring, Kuda-kuda, Tangkisan, Elakan, Terkam, Rantai, Balas, Napas Panjang, Liuk, Sabetan, Langkah Pion, Cambuk, Intai, Fianchetto |
+  | 2 | floor 4 of the first prison | 25 chess tactics, stances and style powers |
+  | 3 | the second prison | 12 rare and rule-bending cards: Badai, Momentum, Pantulan, Bayangan, Langkah Ratu, Sogok, Putar Balik, Naik Pangkat, Tambah, Atur Napas, Buang Ganti, Zugzwang |
+- The first reward still always has something flashy, now from the basics (Tendangan Lurus, Bantingan or
+  Sabit).
+- Rewards tag cards you don't own yet as **NEW**, and the first reward after a tier opens says
+  "New cards unlocked: …".
+
+## 23. Pixel Atlas art in the web game (2026-11-10)
+
+32 sprites picked from `art/pixel-atlas` are copied to `public/silat/pixel/` (`picks.json` lists each one's
+dataset row and caption; licence notes in `art/pixel-atlas/README.md`):
+- **Pusaka icons** (`relic-<id>.png`): Keris Pusaka gold kris, Keris Berapi flaming sword, Selendang red scarf,
+  Peci Hitam fez darkened into a black cap, Gelang Besi cuff bracelet, Kopi Tubruk copper coffee pot, Tasbih
+  beaded bracelet, Sandal Jepit sandal, Batu Akik gem ring, Jamu cup of herbal tea, Kendang hand drum,
+  Songket gold-woven sash.
+- **Map icons** (`map-<kind>.png`): crossed swords (fight), skull idol (elite), campfire, bag of gold (shop),
+  question mark (mystery), treasure chest, imperial crown (boss). The campfire screen uses the campfire too.
+- **Board objects**: firecracker for the Petasan crate, a basalt boulder for Batu.
+- **Enemy pieces** come through `public/silat/sprites/sprites.json` (pawn … king), each darkened with
+  `grayscale(1) brightness(.75) contrast(1.15)` so mixed-colour pixel pieces read as one army; Raja Hitam is a
+  gold King. Every boss also gets a gold glow, so a warden Rook doesn't look like a normal Rook.
+- **UI**: pixel heart (HP), knight shield (Block), coin (gold).
+- `sprites.json` now accepts `"file": "/path/from/site/root.png"`, `"pixel": true` (hard pixel edges) and
+  `"filter"` (a CSS filter). Pixel images scale with `image-rendering: pixelated` (`.px`).
+
+## 24. Config files and enemy movesets (2026-11-10) — `src/lib/silat/config/`
+
+The tunable parts of the game live in JSON, so they can be changed without code. A broken file stops the game
+with an error naming the field. How to edit each file: `src/lib/silat/config/README.md`.
+- **balance.json**: hero (HP, gold, Tenaga, hand size, heals), push and crash rules, d20 targets, gold per
+  knockout, the difficulty formulas, boss scaling and how many powers bosses get.
+- **cards.json**: every card's name, cost, type, style, tier, rare, exhaust, text (with `{placeholders}`) and
+  numbers (`values`), the starter deck and style cards. New cards can be made in JSON alone from a `target` and a
+  list of `effects` (kick, hit, push, block, draw, move, lock, heal, tenaga). Two examples ship: Pukulan Beruntun
+  (hit a neighbor 3 times for 1) and Tapak Besi (step and Block 3).
+- **enemies.json**: piece stats and budget costs, signature **moves**, enemy **variants**, trait texts, elite
+  traits, and boss names/powers.
+
+### Enemy variants (Slay the Spire style movesets)
+Each piece in a generated fight gets a variant, by weight, among those allowed on that floor and depth. A variant
+can change HP/hit and adds signature moves, which it uses (when ready and when they make sense) before its normal
+chess move. Moves have cooldowns and show as coloured intent badges.
+| Variant | Piece | Move | Appears |
+|---|---|---|---|
+| Pion Perisai | Pawn (4 HP) | Angkat Perisai: shield 3 | floor 3+ |
+| Kuda Liar | Knight | Sepak Belakang: if you stand right beside it (a knight's blind spot), kicks for 3 and sends you 2 squares away | floor 2+ |
+| Dukun | Bishop | Jampi: heals the most hurt ally within 2 for 3 | floor 3+ |
+| Menara | Rook (9 HP) | Bertahan: shield 5 | floor 4+ |
+| Ratu Perang | Queen | Perintah: an ally acts next turn and hits +2 | second prison on |
+| Raja Muda | King | none | floors 1–2 |
+| Raja Perang | King | Perintah, Panggil Pengawal (calls a pawn) | floors 3–4 |
+| Raja Tua | King | Bertahan, Panggil Pengawal | floor 5+ |
+Plain versions of each piece stay in the mix. Enemy shields soak damage before HP and drop when the next enemy turn
+starts. Signature moves use one of the turn's action slots, like any other enemy action.

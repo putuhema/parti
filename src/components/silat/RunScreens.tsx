@@ -5,25 +5,19 @@ import { useState, type ReactNode } from "react";
 import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { NODE_INFO as JOURNEY_ICONS } from "@/lib/journey";
 import { CARDS, STYLES, type Style } from "@/lib/silat/cards";
-import { MAP_LANES, MAP_ROWS, NODE_INFO, nextNodes, type MapNode, type NodeKind } from "@/lib/silat/map";
+import { MAP_LANES, MAP_ROWS, NODE_INFO, nextNodes, type MapNode } from "@/lib/silat/map";
+import { bossFor } from "@/lib/silat/endless";
 import { RELICS } from "@/lib/silat/relics";
 import {
-  EVENTS, REST_HEAL, SHOP_HEAL, STYLE_STARTER, buyCard, checkBonus, chooseStyle, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, rollEvent, takeReward, takeTreasure, train, type RollResult, type Run,
+  EVENTS, REST_HEAL, depthOf, prisonName, SHOP_HEAL, STYLE_STARTER, buyCard, checkBonus, chooseStyle, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, rollEvent, takeReward, takeTreasure, train, type RollResult, type Run,
 } from "@/lib/silat/run";
 
-const ICON_PATH: Record<NodeKind, string> = {
-  fight: JOURNEY_ICONS.battle.icon,
-  elite: JOURNEY_ICONS.elite.icon,
-  camp: JOURNEY_ICONS.rest.icon,
-  shop: JOURNEY_ICONS.shop.icon,
-  event: JOURNEY_ICONS.mystery.icon,
-  treasure: JOURNEY_ICONS.treasure.icon,
-  boss: JOURNEY_ICONS.boss.icon,
-};
 
 // ---------- Small pieces ----------
+
+/** Pixel icons from the Pixel Atlas (public/silat/pixel). Peci Hitam is a black cap: the fez, darkened. */
+const RELIC_FILTER: Record<string, string> = { peci: "grayscale(1) brightness(.45) contrast(1.4)" };
 
 export function RelicIcon({ id, size = 30 }: { id: string; size?: number }) {
   const r = RELICS[id];
@@ -31,10 +25,11 @@ export function RelicIcon({ id, size = 30 }: { id: string; size?: number }) {
   return (
     <span
       title={`${r.name}: ${r.text}`}
-      style={{ width: size, height: size, borderRadius: size / 3, background: r.color, color: "#fff", fontWeight: 900, fontSize: size * 0.42, display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: `0 3px 0 rgba(0,0,0,.25)${r.rare ? ", 0 0 0 2px #FFC800" : ""}`, flexShrink: 0 }}
+      style={{ width: size, height: size, borderRadius: size / 3, background: "#FFF8EC", border: `2px solid ${r.color}`, display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: `0 3px 0 rgba(0,0,0,.2)${r.rare ? ", 0 0 0 2px #FFC800" : ""}`, flexShrink: 0 }}
       aria-hidden="true"
     >
-      {r.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+      {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite, no optimisation needed */}
+      <img src={`/silat/pixel/relic-${id}.png`} alt="" className="px" style={{ width: "78%", height: "78%", filter: RELIC_FILTER[id] }} />
     </span>
   );
 }
@@ -55,7 +50,8 @@ function RelicRow({ id }: { id: string }) {
 function Gold({ n }: { n: number }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 14, fontWeight: 900, color: "#8A6400" }}>
-      <span style={{ width: 16, height: 16, borderRadius: "50%", background: "#FFC800", boxShadow: "inset 0 -2px 0 #E5A800" }} aria-hidden="true" />
+      {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
+      <img src="/silat/pixel/ui-coin.png" alt="" className="px" style={{ width: 18, height: 18 }} />
       {n}
     </span>
   );
@@ -73,7 +69,8 @@ export function RunHeader({ run, title }: { run: Run; title: string }) {
       </header>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 14, fontWeight: 900, color: "#B81F1F" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 C5 15 2.5 11.5 2.5 8 a4.8 4.8 0 0 1 9.5 -1 a4.8 4.8 0 0 1 9.5 1 C21.5 11.5 19 15 12 21z" fill="#FF4B4B" /></svg>
+          {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
+          <img src="/silat/pixel/ui-heart.png" alt="" className="px" style={{ width: 18, height: 18 }} />
           {run.hp}/{run.max}
         </span>
         <Gold n={run.gold} />
@@ -132,8 +129,8 @@ export function MapScreen({ run, onChange }: { run: Run; onChange: (r: Run) => v
   const [peek, setPeek] = useState<MapNode | null>(null);
   return (
     <Screen>
-      <RunHeader run={run} title="Escape" />
-      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>Choose your path out. Raja Hitam guards the gate at the top.</p>
+      <RunHeader run={run} title={prisonName(run)} />
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>Choose your path out. {bossFor(run.seed, depthOf(run)).name} guards the gate at the top.</p>
       <div style={{ position: "relative", height, borderRadius: 24, background: "#EAF3DE", border: "2px solid #D2E6BC" }} aria-label="Run map">
         <svg width="100%" height={height} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
           {run.map.edges.map(([f, t]) => {
@@ -168,9 +165,8 @@ export function MapScreen({ run, onChange }: { run: Run; onChange: (r: Run) => v
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}
             >
-              <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" aria-hidden="true">
-                <path d={ICON_PATH[n.kind]} stroke={can || here || past ? "#fff" : info.color} strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
+              <img src={`/silat/pixel/map-${n.kind}.png`} alt="" className="px" style={{ width: size * 0.66, height: size * 0.66, opacity: past && !here ? 0.55 : 1 }} />
             </button>
           );
         })}
@@ -201,12 +197,18 @@ export function RewardScreen({ run, onChange }: { run: Run; onChange: (r: Run) =
   const needRelic = rw.relics.length > 0 && !relic;
   return (
     <Screen dark>
-      <span className="stamp" style={{ alignSelf: "center", marginTop: 12, padding: "8px 20px", borderRadius: 14, background: "#FFC800", color: "#4A3200", fontSize: 26, fontWeight: 900, boxShadow: "0 5px 0 #E5A800" }}>MENANG!</span>
+      <span className="stamp" style={{ alignSelf: "center", marginTop: 12, padding: "8px 20px", borderRadius: 14, background: "#FFC800", color: "#4A3200", fontSize: 26, fontWeight: 900, boxShadow: "0 5px 0 #E5A800" }}>{rw.escape ? "LOLOS!" : "MENANG!"}</span>
+      {rw.escape && (
+        <span style={{ textAlign: "center", fontSize: 15, fontWeight: 700, color: "#E8D6C0", lineHeight: 1.4 }}>
+          You broke out of {prisonName(run)}. Outside, the Black King&apos;s guards are waiting: next stop,{" "}
+          <b style={{ color: "#FFC800" }}>{prisonName({ ...run, depth: depthOf(run) + 1 })}</b>. Tougher pieces, a bigger board, a new warden.
+        </span>
+      )}
       <span style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: "#E8D6C0" }}>+{rw.gold} gold · HP {run.hp}/{run.max}</span>
 
       {rw.relics.length > 0 && (
         <>
-          <span className="label" style={{ textAlign: "center", color: "#C9B49C", marginTop: 6 }}>Elite reward: pick a Pusaka</span>
+          <span className="label" style={{ textAlign: "center", color: "#C9B49C", marginTop: 6 }}>{rw.escape ? "Escape reward: pick a Pusaka" : "Elite reward: pick a Pusaka"}</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {rw.relics.map((id) => (
               <button key={id} type="button" onClick={() => { feedback.tap(); setRelic(id); }} aria-pressed={relic === id}
@@ -218,6 +220,9 @@ export function RewardScreen({ run, onChange }: { run: Run; onChange: (r: Run) =
         </>
       )}
 
+      {rw.unlocked && (
+        <span className="sl-unlock">New cards unlocked: {rw.unlocked}</span>
+      )}
       <span className="label" style={{ textAlign: "center", color: "#C9B49C", marginTop: 6 }}>Add a card to your deck</span>
       <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
         {rw.cards.map((id, i) => (
@@ -225,6 +230,7 @@ export function RewardScreen({ run, onChange }: { run: Run; onChange: (r: Run) =
             onClick={() => { feedback.tap(); setCard(card === id ? null : id); }}
             style={{ position: "relative", bottom: 0, transform: card === id ? "translateY(-12px) scale(1.08)" : card ? "scale(.92)" : undefined, opacity: card && card !== id ? 0.5 : 1 }}>
             <span className="deal" style={{ animationDelay: `${120 + i * 100}ms` }}><span className="bob" style={{ animationDelay: `${-i * 0.9}s` }}><SilatCard id={id} on={card === id} /></span></span>
+            {!run.deck.includes(id) && <span className="sl-new">NEW</span>}
           </button>
         ))}
       </div>
@@ -246,7 +252,8 @@ export function CampScreen({ run, onChange }: { run: Run; onChange: (r: Run) => 
       <RunHeader run={run} title="Campfire" />
       <div className="grow" />
       <div style={{ fontSize: 72, textAlign: "center" }} aria-hidden="true">
-        <svg width="96" height="96" viewBox="0 0 24 24"><path d={ICON_PATH.camp} stroke="#FF9600" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        {/* eslint-disable-next-line @next/next/no-img-element -- pixel sprite */}
+        <img src="/silat/pixel/map-camp.png" alt="" className="px" style={{ width: 112, height: 112 }} />
       </div>
       <p style={{ margin: 0, textAlign: "center", fontSize: 16, fontWeight: 700, color: "var(--plum-soft)" }}>A quiet night by the fire. Do one thing.</p>
       <button className="pill-btn primary" onClick={() => { feedback.correct(); onChange(rest(run)); }}>Rest · heal {REST_HEAL} HP</button>
@@ -403,7 +410,7 @@ export function StyleScreen({ run, onChange }: { run: Run; onChange: (r: Run) =>
     <Screen>
       <RunHeader run={run} title="Choose your style" />
       <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>
-        Each style starts with two of its own cards, and its cards show up more as rewards.
+        Everyone starts with 5 Tendang and 4 Tangkis. Your style adds its signature card, and its cards show up more as rewards.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {(Object.keys(STYLES) as Style[]).map((id) => {

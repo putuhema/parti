@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ShellPage, SilatKing } from "@/components/shell";
 import { Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { FLOORS, floorName, loadBest, loadRun, newRun, saveRun, type Best, type Run } from "@/lib/silat/run";
+import { FLOORS, floorName, loadBest, loadRun, newRun, prisonName, saveRun, type Best, type Run } from "@/lib/silat/run";
 
 export default function SilatHome() {
   const router = useRouter();
@@ -37,11 +37,11 @@ export default function SilatHome() {
           <span style={{ paddingLeft: "0.9em" }}>Silat</span>
         </h1>
         <p style={{ margin: "8px 0 0", fontSize: 15, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>
-          Locked in the Black King’s prison. Kick your way out.
+          Locked in the Black King’s prisons. Kick your way out, as deep as you can go.
         </p>
         {best && best.runs > 0 && (
           <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--plum-soft)" }}>
-            Best: floor {Math.min(best.floor, FLOORS)}/{FLOORS} · {best.wins} {best.wins === 1 ? "win" : "wins"} in {best.runs} {best.runs === 1 ? "run" : "runs"}
+            Deepest: prison {best.depth ?? 1}, floor {Math.min(best.floor, FLOORS)} · {best.wins} {best.wins === 1 ? "escape" : "escapes"} in {best.runs} {best.runs === 1 ? "run" : "runs"}
           </p>
         )}
       </div>
@@ -50,7 +50,7 @@ export default function SilatHome() {
         {saved && (
           <Link href="/silat/play" className="pill-btn primary" onClick={() => { feedback.unlock(); feedback.tap(); }} style={{ flexDirection: "column", gap: 0, lineHeight: 1.1 }}>
             <span>Continue Run</span>
-            <span style={{ fontSize: 13, fontWeight: 800, opacity: 0.75 }}>{floorName(saved.floor)} · HP {saved.fight?.hero.hp ?? saved.hp}/{saved.max}</span>
+            <span style={{ fontSize: 13, fontWeight: 800, opacity: 0.75 }}>{prisonName(saved)} · {floorName(saved.floor, saved)} · HP {saved.fight?.hero.hp ?? saved.hp}/{saved.max}</span>
           </Link>
         )}
         <button className={`pill-btn${saved ? "" : " primary"}`} onClick={() => (saved ? setConfirm(true) : start())}>New Run</button>

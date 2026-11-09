@@ -1,0 +1,52 @@
+{
+  "_about": "Raja Silat balance. Edit numbers here; the game reloads in dev. See README.md in this folder.",
+  "hero": {
+    "startHp": 16,
+    "startGold": 20,
+    "tenaga": 3,
+    "handSize": 5,
+    "healAfterFight": 1,
+    "restHeal": 5,
+    "shopHeal": 5
+  },
+  "push": {
+    "_about": "A crash deals bump + 1 per crashPerSquares flown (rounded up), up to crashMax, to both pieces.",
+    "bump": 2,
+    "crashPerSquares": 2,
+    "crashMax": 5,
+    "heavyRingOut": 5,
+    "heavySlide": 2,
+    "guardReach": 2,
+    "slamReach": 2
+  },
+  "dice": {
+    "_about": "d20 needed: enemy jabs as you arrive, your Elakan dodge, your Tangkisan kick-back.",
+    "react": 10,
+    "dodge": 8,
+    "counter": 8
+  },
+  "enemies": {
+    "summonEvery": 3,
+    "koGold": 2
+  },
+  "difficulty": {
+    "_about": "Army budget = budgetBase + budgetPerFloor x floor + budgetPerDepth x (depth - 1); elites x eliteMultiplier.",
+    "budgetBase": 4,
+    "budgetPerFloor": 2.2,
+    "budgetPerDepth": 5.5,
+    "eliteMultiplier": 1.4,
+    "eliteHpBonus": 2,
+    "bossEscortMultiplier": 0.8,
+    "hpPerDepth": 0.15,
+    "hitEveryDepths": 2,
+    "actorsBase": 2,
+    "maxActors": 9
+  },
+  "bosses": {
+    "hpBase": 24,
+    "hpPerDepth": 6,
+    "hitBase": 4,
+    "hitEveryDepths": 2,
+    "powersByDepth": [[3, 1], [5, 2], [99, 3]]
+  }
+}

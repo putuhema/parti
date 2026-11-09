@@ -1,9 +1,63 @@
 // Raja Silat cards: what each one targets and what it does.
 import {
-  DIRS, FLY, KNIGHT, checkEnd, clone, dist, setReadyHook, doStep, shuffle, drawCards, freeSteps, has, heroMoved, lockUnit, react, retarget, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
+  DIRS, FLY, KNIGHT, checkEnd, clone, dist, hasTrait, setReadyHook, doStep, shuffle, drawCards, freeSteps, has, heroMoved, lockUnit, react, retarget, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
   unitAt, unitName, type Fight,
 } from "./rules";
 import { announce, rangkaiFor } from "./rangkai";
+import cardsJson from "./config/cards.json";
+import { fillText } from "./config";
+
+// ---------- Card data (config/cards.json) ----------
+
+/** What JSON-only cards can target. */
+type TargetKind = "self" | "adjacent" | "adjacentUnit" | "emptyAdjacent" | "knight" | "anyUnit" | "lineUnit";
+/** One step of a JSON-only card. Numbers can be literal or the name of one of the card's values. */
+interface Effect {
+  do: "kick" | "hit" | "block" | "draw" | "move" | "lock" | "heal" | "tenaga" | "push";
+  dmg?: number | string;
+  push?: number | string | "fly";
+  crash?: number | string;
+  amount?: number | string;
+  n?: number | string;
+}
+interface CardData {
+  name: string;
+  cost: number;
+  type: CardType;
+  text: string;
+  style?: Style;
+  tier?: 1 | 2 | 3;
+  rare?: boolean;
+  exhaust?: boolean;
+  values?: Record<string, number>;
+  target?: TargetKind;
+  pattern?: Record<string, Mark>;
+  effects?: Effect[];
+}
+const CARD_TYPES: CardType[] = ["Serang", "Gerak", "Tangkis", "Jurus", "Siasat"];
+const TARGETS: TargetKind[] = ["self", "adjacent", "adjacentUnit", "emptyAdjacent", "knight", "anyUnit", "lineUnit"];
+const EFFECTS: Effect["do"][] = ["kick", "hit", "block", "draw", "move", "lock", "heal", "tenaga", "push"];
+const cardFail = (msg: string): never => { throw new Error(`Raja Silat config (cards.json): ${msg}`); };
+
+const DATA = cardsJson as unknown as { starterDeck: string[]; styleCards: Record<string, string[]>; cards: Record<string, CardData> };
+for (const [id, c] of Object.entries(DATA.cards)) {
+  if (typeof c.name !== "string" || !c.name) cardFail(`${id}.name is missing`);
+  if (typeof c.cost !== "number") cardFail(`${id}.cost must be a number`);
+  if (!CARD_TYPES.includes(c.type)) cardFail(`${id}.type must be one of ${CARD_TYPES.join(", ")}`);
+  if (c.tier !== undefined && ![1, 2, 3].includes(c.tier)) cardFail(`${id}.tier must be 1, 2 or 3`);
+  for (const [k, v] of Object.entries(c.values ?? {})) if (typeof v !== "number") cardFail(`${id}.values.${k} must be a number`);
+  if (c.effects) {
+    if (!c.target || !TARGETS.includes(c.target)) cardFail(`${id}.target must be one of ${TARGETS.join(", ")} for a card with effects`);
+    for (const e of c.effects) if (!EFFECTS.includes(e.do)) cardFail(`${id}: effect "${e.do}" isn't one of ${EFFECTS.join(", ")}`);
+  }
+}
+
+/** A number from a card's "values" in cards.json. */
+export function val(id: string, key: string): number {
+  const v = DATA.cards[id]?.values?.[key];
+  if (typeof v !== "number") cardFail(`card "${id}" needs a number values.${key}`);
+  return v as number;
+}
 
 /** Siasat = tactics: cards that bend the rules (your deck, your hand, the dice). */
 export type CardType = "Serang" | "Gerak" | "Tangkis" | "Jurus" | "Siasat";
@@ -16,20 +70,30 @@ export const STYLES: Record<Style, { name: string; animal: string; text: string;
 };
 export type Mark = "hit" | "push" | "go" | "guard";
 
-export interface CardDef {
-  id: string;
+/** A card as the game uses it: its data from config/cards.json plus its behaviour (from code, or built
+ *  from the JSON "effects" list). */
+export interface CardDef extends CardCode {
   name: string;
   cost: number;
   type: CardType;
   text: string;
   rare?: boolean;
   style?: Style;
+  /** Gone for the rest of the fight once played. */
+  exhaust?: boolean;
+  /** When it starts showing up in rewards (1-3). Basics have none. */
+  tier?: 1 | 2 | 3;
+  /** The numbers from config/cards.json ("values"). */
+  values: Record<string, number>;
+}
+
+/** Card behaviour written in code. Everything tunable lives in config/cards.json. */
+export interface CardCode {
+  id: string;
   /** Cost that changes during a fight (otherwise `cost`). */
   costFor?: (s: Fight) => number;
   /** Plays on your own king (no target to pick). */
   self?: boolean;
-  /** Gone for the rest of the fight once played. */
-  exhaust?: boolean;
   /** Move cards: enemy squares this move could land on by capturing (needs an attack that knocks it out). */
   reach?: (s: Fight) => number[];
   /** Attack cards: the damage it deals to one piece, used when it's paired with a move to capture. */
@@ -115,31 +179,32 @@ const P = {
 
 // ---------- The cards ----------
 
-const list: CardDef[] = [
+/** Card behaviour. Names, costs, types, texts, tiers and numbers are in config/cards.json. */
+const code: CardCode[] = [
   {
-    id: "tendang", strike: () => 1, name: "Tendang", cost: 1, type: "Serang", text: "Hit 1, send it flying",
-    pattern: P.kick, targets: adjacentThings, play: (s, sq) => kick(s, sq, 1, FLY),
+    id: "tendang", strike: () => val("tendang", "dmg"),
+    pattern: P.kick, targets: adjacentThings, play: (s, sq) => kick(s, sq, val("tendang", "dmg"), FLY),
   },
   {
-    id: "lurus", strike: () => 1, style: "harimau", name: "Tendangan Lurus", cost: 1, type: "Serang", text: "Hit 1, flies, crash +2",
-    pattern: { 7: "hit", 2: "push" }, targets: adjacentThings, play: (s, sq) => kick(s, sq, 1, FLY, 2),
+    id: "lurus", strike: () => val("lurus", "dmg"),
+    pattern: { 7: "hit", 2: "push" }, targets: adjacentThings, play: (s, sq) => kick(s, sq, val("lurus", "dmg"), FLY, val("lurus", "crash")),
   },
   {
-    id: "dalam", strike: () => 4, name: "Pukulan Dalam", cost: 1, type: "Serang", text: "Hit 4. No push",
-    pattern: { 7: "hit" }, targets: adjacentUnits, play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, 4 + s.powers.harimau); },
+    id: "dalam", strike: () => val("dalam", "dmg"),
+    pattern: { 7: "hit" }, targets: adjacentUnits, play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, val("dalam", "dmg") + s.powers.harimau); },
   },
   {
-    id: "sabit", name: "Tendangan Sabit", cost: 1, type: "Serang", text: "Arc of 3: hit 1, push 1",
+    id: "sabit",
     pattern: { 6: "hit", 7: "hit", 8: "hit", 1: "push", 2: "push", 3: "push" },
     targets: (s) => neighbors(s, hero(s)),
     play: (s, sq) => {
       const d = dirTo(s, hero(s), sq);
       const squares = [d + 7, d, d + 1].map((x) => offset(s, hero(s), DIRS[x % 8][0], DIRS[x % 8][1]));
-      for (const t of squares) if (t !== null) kick(s, t, 1, 1);
+      for (const t of squares) if (t !== null) kick(s, t, val("sabit", "dmg"), val("sabit", "push"));
     },
   },
   {
-    id: "bantingan", strike: () => 1, name: "Bantingan", cost: 1, type: "Serang", text: "Throw it behind you, flying",
+    id: "bantingan", strike: () => val("bantingan", "dmg"),
     pattern: { 7: "hit", 17: "push", 22: "push" }, targets: adjacentUnits,
     play: (s, sq) => {
       const u = unitAt(s, sq);
@@ -147,14 +212,14 @@ const list: CardDef[] = [
       if (!u || d < 0) return;
       const back = (d + 4) % 8;
       const land = offset(s, hero(s), DIRS[back][0], DIRS[back][1]);
-      damageUnit(s, u, 1 + s.powers.harimau);
-      if (!s.units.includes(u)) return;
+      damageUnit(s, u, val("bantingan", "dmg") + s.powers.harimau);
+      if (!s.units.includes(u) || hasTrait(u, "kokoh")) return;
       if (land === null) return ringOut(s, { t: "unit", u }, back);
       const other = occupant(s, land);
       if (other) {
         // Slammed straight into whatever is behind you.
-        damageUnit(s, u, 2);
-        hitOcc(s, other, 2);
+        damageUnit(s, u, val("bantingan", "slam"));
+        hitOcc(s, other, val("bantingan", "slam"));
         return;
       }
       u.sq = land;
@@ -163,13 +228,13 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "tarik", strike: () => 1, name: "Tarik", cost: 1, type: "Serang", text: "Pull a piece next to you, hit 1",
+    id: "tarik", strike: () => val("tarik", "dmg"),
     pattern: { 2: "hit", 7: "go" },
     targets: (s) => {
       const out: number[] = [];
       for (const [dx, dy] of DIRS) {
         let cur = hero(s);
-        for (let i = 1; i <= 3; i++) {
+        for (let i = 1; i <= val("tarik", "range"); i++) {
           const next = offset(s, cur, dx, dy);
           if (next === null) break;
           if (!isEmpty(s, next)) { if (i >= 2) out.push(next); break; }
@@ -183,12 +248,12 @@ const list: CardDef[] = [
       const dest = offset(s, hero(s), DIRS[d][0], DIRS[d][1]);
       const o = occupant(s, sq);
       if (dest === null || !o || o.t === "hero") return;
-      if (o.t === "unit") { o.u.sq = dest; damageUnit(s, o.u, 1); }
+      if (o.t === "unit") { if (!hasTrait(o.u, "kokoh")) o.u.sq = dest; damageUnit(s, o.u, val("tarik", "dmg")); }
       else o.th.sq = dest;
     },
   },
   {
-    id: "tolak", style: "harimau", name: "Tolak Angin", cost: 2, type: "Serang", text: "Send everything around you flying",
+    id: "tolak",
     pattern: { 6: "push", 7: "push", 8: "push", 11: "push", 13: "push", 16: "push", 17: "push", 18: "push" },
     self: true, targets: self,
     play: (s) => {
@@ -201,24 +266,24 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "badai", strike: () => 3, style: "harimau", name: "Badai", cost: 2, type: "Serang", rare: true, text: "Hit 3, flies, crash +2",
+    id: "badai", strike: () => val("badai", "dmg"),
     pattern: { 7: "hit", 2: "push", 1: "hit", 3: "hit" }, targets: adjacentUnits,
-    play: (s, sq) => kick(s, sq, 3, FLY, 2),
+    play: (s, sq) => kick(s, sq, val("badai", "dmg"), FLY, val("badai", "crash")),
   },
   {
-    id: "kuda", reach: (s) => KNIGHT.map(([dx, dy]) => offset(s, hero(s), dx, dy)).filter((x): x is number => x !== null && !!unitAt(s, x)), name: "Langkah Kuda", cost: 1, type: "Gerak", text: "Jump like a knight",
+    id: "kuda", reach: (s) => KNIGHT.map(([dx, dy]) => offset(s, hero(s), dx, dy)).filter((x): x is number => x !== null && !!unitAt(s, x)),
     pattern: { 1: "go", 3: "go", 5: "go", 9: "go", 15: "go", 19: "go", 21: "go", 23: "go" },
     targets: (s) => KNIGHT.map(([dx, dy]) => offset(s, hero(s), dx, dy)).filter((x): x is number => x !== null && isEmpty(s, x)),
     play: (s, sq) => { s.hero.sq = sq; },
   },
   {
-    id: "gajah", reach: (s) => firstInLines(s, [1, 3, 5, 7]).filter((x) => !!unitAt(s, x.sq) && dist(s, hero(s), x.sq) <= 3).map((x) => x.sq), style: "ular", name: "Gajah Miring", cost: 1, type: "Gerak", text: "Dash diagonally up to 3",
+    id: "gajah", reach: (s) => firstInLines(s, [1, 3, 5, 7]).filter((x) => !!unitAt(s, x.sq) && dist(s, hero(s), x.sq) <= val("gajah", "range")).map((x) => x.sq),
     pattern: { 6: "go", 8: "go", 16: "go", 18: "go", 0: "go", 4: "go", 20: "go", 24: "go" },
-    targets: (s) => slides(s, [1, 3, 5, 7], 3),
+    targets: (s) => slides(s, [1, 3, 5, 7], val("gajah", "range")),
     play: (s, sq) => { s.hero.sq = sq; },
   },
   {
-    id: "benteng", style: "ular", name: "Sapu Benteng", cost: 2, type: "Gerak", text: "Dash, kick what you hit flying",
+    id: "benteng",
     pattern: { 2: "go", 7: "go", 10: "go", 11: "go", 13: "go", 14: "go", 17: "go", 22: "go" },
     targets: (s) => [0, 2, 4, 6].map((d) => offset(s, hero(s), DIRS[d][0], DIRS[d][1])).filter((x): x is number => x !== null),
     play: (s, sq) => {
@@ -227,32 +292,32 @@ const list: CardDef[] = [
       for (;;) {
         const next = offset(s, hero(s), DIRS[d][0], DIRS[d][1]);
         if (next === null) return;
-        if (!isEmpty(s, next)) return kick(s, next, 2, FLY);
+        if (!isEmpty(s, next)) return kick(s, next, val("benteng", "dmg"), FLY);
         s.hero.sq = next;
       }
     },
   },
   {
-    id: "tangkis", name: "Tangkis", cost: 1, type: "Tangkis", text: "Block 4",
-    pattern: P.guard, self: true, targets: self, play: (s) => { s.hero.block += 4; },
+    id: "tangkis",
+    pattern: P.guard, self: true, targets: self, play: (s) => { s.hero.block += val("tangkis", "block"); },
   },
   {
-    id: "kudakuda", style: "bangau", name: "Kuda-kuda", cost: 2, type: "Tangkis", text: "Block 8",
-    pattern: P.guard, self: true, targets: self, play: (s) => { s.hero.block += 8; },
+    id: "kudakuda",
+    pattern: P.guard, self: true, targets: self, play: (s) => { s.hero.block += val("kudakuda", "block"); },
   },
   {
-    id: "tangkisan", style: "bangau", name: "Tangkisan", cost: 1, type: "Tangkis", text: "Block 3. Attackers next to you: d20 8+ kicks them back",
+    id: "tangkisan",
     pattern: { ...P.guard, 2: "push" }, self: true, targets: self,
-    play: (s) => { s.hero.block += 3; s.counter = Math.max(s.counter, 1); },
+    play: (s) => { s.hero.block += val("tangkisan", "block"); s.counter = Math.max(s.counter, val("tangkisan", "kickback")); },
   },
   {
-    id: "elakan", style: "ular", name: "Elakan", cost: 1, type: "Tangkis", text: "Dodge the first hit (d20 8+)",
+    id: "elakan",
     pattern: { 11: "go", 13: "go" },
     targets: (s) => neighbors(s, hero(s)).filter((sq) => isEmpty(s, sq)),
     play: (s, sq) => { s.hop = sq; },
   },
   {
-    id: "kuncian", style: "bangau", name: "Kuncian", cost: 1, type: "Tangkis", text: "Cancel a neighbor's attack",
+    id: "kuncian",
     pattern: { 7: "guard" },
     targets: (s) => adjacentUnits(s).filter((sq) => { const u = unitAt(s, sq)!; return u.boss || s.intents.some((i) => i.id === u.id); }),
     play: (s, sq) => {
@@ -262,66 +327,66 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "harimau", style: "harimau", name: "Gaya Harimau", cost: 1, type: "Jurus", text: "Your kicks hit +1",
-    pattern: { 6: "hit", 8: "hit", 16: "hit", 18: "hit" }, self: true, exhaust: true, targets: self,
-    play: (s) => { s.powers.harimau++; },
+    id: "harimau",
+    pattern: { 6: "hit", 8: "hit", 16: "hit", 18: "hit" }, self: true, targets: self,
+    play: (s) => { s.powers.harimau += val("harimau", "bonus"); },
   },
   {
-    id: "momentum", style: "harimau", name: "Momentum", cost: 2, type: "Jurus", rare: true, text: "Crashes deal +2",
-    pattern: { 7: "push", 2: "push", 17: "push", 22: "push" }, self: true, exhaust: true, targets: self,
-    play: (s) => { s.powers.momentum += 2; },
+    id: "momentum",
+    pattern: { 7: "push", 2: "push", 17: "push", 22: "push" }, self: true, targets: self,
+    play: (s) => { s.powers.momentum += val("momentum", "bonus"); },
   },
   // ---------- Harimau (tiger): crash and chain ----------
   {
-    id: "terkam", strike: () => 1, style: "harimau", name: "Terkam", cost: 1, type: "Serang", text: "Hit 1, flies. If it crashes, draw 1",
+    id: "terkam", strike: () => val("terkam", "dmg"),
     pattern: { 7: "hit", 2: "push" }, targets: adjacentThings,
     play: (s, sq) => {
       const before = s.tf?.crashes ?? 0;
-      kick(s, sq, 1, FLY);
-      if ((s.tf?.crashes ?? 0) > before) { drawCards(s, 1); say(s, "Terkam: draw 1", "good"); }
+      kick(s, sq, val("terkam", "dmg"), FLY);
+      if ((s.tf?.crashes ?? 0) > before) { drawCards(s, val("terkam", "draw")); say(s, `Terkam: draw ${val("terkam", "draw")}`, "good"); }
     },
   },
   {
-    id: "rantai", strike: () => 1, style: "harimau", name: "Rantai", cost: 1, type: "Serang", text: "Hit 1, flies. Free after a crash this turn",
+    id: "rantai", strike: () => val("rantai", "dmg"),
     pattern: { 7: "hit", 2: "push", 1: "push" }, targets: adjacentThings,
     costFor: (s) => ((s.tf?.crashes ?? 0) > 0 ? 0 : 1),
-    play: (s, sq) => kick(s, sq, 1, FLY),
+    play: (s, sq) => kick(s, sq, val("rantai", "dmg"), FLY),
   },
   {
-    id: "amuk", style: "harimau", name: "Amuk", cost: 1, type: "Jurus", text: "This fight: each crash you cause gives 2 Block",
-    pattern: { 6: "hit", 8: "hit", 16: "guard", 18: "guard" }, self: true, exhaust: true, targets: self,
+    id: "amuk",
+    pattern: { 6: "hit", 8: "hit", 16: "guard", 18: "guard" }, self: true, targets: self,
     play: (s) => { s.powers.amuk = (s.powers.amuk ?? 0) + 1; },
   },
   // ---------- Bangau (crane): defend and punish ----------
   {
-    id: "balas", strike: (s) => s.hero.block + 2, style: "bangau", name: "Balas", cost: 0, type: "Serang", text: "Hit a neighbor for your Block +2",
+    id: "balas", strike: (s) => s.hero.block + val("balas", "bonus"),
     pattern: { 7: "hit", 12: "guard" }, targets: adjacentUnits,
-    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, s.hero.block + 2 + s.powers.harimau); },
+    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, s.hero.block + val("balas", "bonus") + s.powers.harimau); },
   },
   {
-    id: "napas", style: "bangau", name: "Napas Panjang", cost: 1, type: "Tangkis", text: "Block 4, draw 1",
+    id: "napas",
     pattern: P.guard, self: true, targets: self,
-    play: (s) => { s.hero.block += 4; drawCards(s, 1); },
+    play: (s) => { s.hero.block += val("napas", "block"); drawCards(s, val("napas", "draw")); },
   },
   {
-    id: "bentengdiri", style: "bangau", name: "Benteng Diri", cost: 1, type: "Jurus", text: "This fight: start each turn with 3 Block",
-    pattern: P.guard, self: true, exhaust: true, targets: self,
+    id: "bentengdiri",
+    pattern: P.guard, self: true, targets: self,
     play: (s) => { s.powers.benteng = (s.powers.benteng ?? 0) + 1; },
   },
   {
-    id: "pantulan", style: "bangau", name: "Pantulan", cost: 2, type: "Jurus", rare: true, text: "This fight: Block you soak hits back",
-    pattern: { ...P.guard, 2: "hit" }, self: true, exhaust: true, targets: self,
+    id: "pantulan",
+    pattern: { ...P.guard, 2: "hit" }, self: true, targets: self,
     play: (s) => { s.powers.pantulan = (s.powers.pantulan ?? 0) + 1; },
   },
   // ---------- Ular (snake): move and strike ----------
   {
-    id: "liuk", reach: adjacentUnits, style: "ular", name: "Liuk", cost: 0, type: "Gerak", text: "Step 1 square, draw 1",
+    id: "liuk", reach: adjacentUnits,
     pattern: { 11: "go", 13: "go", 7: "go", 17: "go" },
     targets: (s) => neighbors(s, hero(s)).filter((sq) => isEmpty(s, sq)),
-    play: (s, sq) => { s.hero.sq = sq; drawCards(s, 1); },
+    play: (s, sq) => { s.hero.sq = sq; drawCards(s, val("liuk", "draw")); },
   },
   {
-    id: "lilit", style: "ular", name: "Lilit", cost: 2, type: "Serang", text: "Pull a piece next to you and lock it",
+    id: "lilit",
     pattern: { 2: "hit", 7: "guard" },
     targets: (s) => CARDS.tarik.targets(s).filter((sq) => !!unitAt(s, sq)),
     play: (s, sq) => {
@@ -329,30 +394,30 @@ const list: CardDef[] = [
       const d = dirTo(s, hero(s), sq);
       const dest = offset(s, hero(s), DIRS[d][0], DIRS[d][1]);
       if (!u || dest === null) return;
-      u.sq = dest;
+      if (!hasTrait(u, "kokoh")) u.sq = dest;
       say(s, `You wrap up the ${unitName(u)}`, "you");
       lockUnit(s, u);
     },
   },
   {
-    id: "sabetan", style: "ular", name: "Sabetan", cost: 1, type: "Serang", text: "Hit every piece around you for 1",
+    id: "sabetan",
     pattern: { 6: "hit", 7: "hit", 8: "hit", 11: "hit", 13: "hit", 16: "hit", 17: "hit", 18: "hit" }, self: true,
     targets: (s) => (adjacentUnits(s).length ? self(s) : []),
-    play: (s) => { for (const sq of adjacentUnits(s)) { const u = unitAt(s, sq); if (u) damageUnit(s, u, 1 + s.powers.harimau); } },
+    play: (s) => { for (const sq of adjacentUnits(s)) { const u = unitAt(s, sq); if (u) damageUnit(s, u, val("sabetan", "dmg") + s.powers.harimau); } },
   },
   {
-    id: "lincah", style: "ular", name: "Lincah", cost: 1, type: "Jurus", text: "This fight: each move makes your next kick +2",
-    pattern: { 11: "go", 13: "go", 7: "hit" }, self: true, exhaust: true, targets: self,
+    id: "lincah",
+    pattern: { 11: "go", 13: "go", 7: "hit" }, self: true, targets: self,
     play: (s) => { s.powers.lincah = (s.powers.lincah ?? 0) + 1; },
   },
   {
-    id: "bayangan", style: "ular", name: "Bayangan", cost: 2, type: "Jurus", rare: true, text: "This fight: moving never sets off reactions",
-    pattern: { 6: "go", 8: "go", 16: "go", 18: "go" }, self: true, exhaust: true, targets: self,
+    id: "bayangan",
+    pattern: { 6: "go", 8: "go", 16: "go", 18: "go" }, self: true, targets: self,
     play: (s) => { s.powers.bayangan = (s.powers.bayangan ?? 0) + 1; },
   },
   // ---------- Chess pieces you move like ----------
   {
-    id: "pion", name: "Langkah Pion", cost: 0, type: "Gerak", text: "Step up 1, or hit diagonally up for 2. Top row: promote",
+    id: "pion",
     pattern: { 7: "go", 6: "hit", 8: "hit" },
     targets: (s) => {
       const up = offset(s, hero(s), 0, -1);
@@ -361,7 +426,7 @@ const list: CardDef[] = [
     },
     play: (s, sq) => {
       const u = unitAt(s, sq);
-      if (u) { damageUnit(s, u, 2 + s.powers.harimau); return; }
+      if (u) { damageUnit(s, u, val("pion", "dmg") + s.powers.harimau); return; }
       s.hero.sq = sq;
       if (Math.floor(sq / s.n) === 0) {
         // The card that was just played (now on top of the discard pile) becomes a queen's move.
@@ -373,15 +438,15 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "ratu", reach: lineUnits, name: "Langkah Ratu", cost: 2, type: "Gerak", rare: true, text: "Move like a queen, any distance",
+    id: "ratu", reach: lineUnits,
     pattern: { 0: "go", 2: "go", 4: "go", 6: "go", 7: "go", 8: "go", 10: "go", 11: "go", 13: "go", 14: "go", 16: "go", 17: "go", 18: "go", 20: "go", 22: "go", 24: "go" },
     targets: (s) => slides(s, [0, 1, 2, 3, 4, 5, 6, 7], 99),
     play: (s, sq) => { s.hero.sq = sq; },
   },
   {
-    id: "rokade", name: "Rokade", cost: 1, type: "Gerak", text: "Swap places with a piece or object in a straight line",
+    id: "rokade",
     pattern: { 2: "go", 10: "go", 14: "go", 22: "go" },
-    targets: (s) => firstInLines(s, [0, 2, 4, 6]).map((x) => x.sq),
+    targets: (s) => firstInLines(s, [0, 2, 4, 6]).map((x) => x.sq).filter((sq) => { const u = unitAt(s, sq); return !u || !hasTrait(u, "kokoh"); }),
     play: (s, sq) => {
       const o = occupant(s, sq);
       if (!o || o.t === "hero") return;
@@ -395,18 +460,18 @@ const list: CardDef[] = [
   },
   // ---------- Chess tactics ----------
   {
-    id: "garpu", name: "Garpu Kuda", cost: 2, type: "Serang", text: "Jump like a knight, then hit 2 on every piece a knight's jump away",
+    id: "garpu",
     pattern: { 1: "go", 3: "go", 5: "hit", 9: "hit", 15: "hit", 19: "hit", 21: "go", 23: "go" },
     targets: (s) => CARDS.kuda.targets(s),
     play: (s, sq) => {
       s.hero.sq = sq;
       const forked = KNIGHT.map(([dx, dy]) => offset(s, sq, dx, dy)).map((x) => (x === null ? undefined : unitAt(s, x))).filter((u): u is NonNullable<typeof u> => !!u);
       if (forked.length >= 2) say(s, `Fork! ${forked.length} pieces at once`, "good");
-      for (const u of forked) damageUnit(s, u, 2 + s.powers.harimau);
+      for (const u of forked) damageUnit(s, u, val("garpu", "dmg") + s.powers.harimau);
     },
   },
   {
-    id: "paku", name: "Paku", cost: 1, type: "Tangkis", text: "Pin the first piece in a line: it can't act. Hit 2 if a piece is behind it",
+    id: "paku",
     pattern: { 2: "guard", 7: "guard" },
     targets: lineUnits,
     play: (s, sq) => {
@@ -415,12 +480,12 @@ const list: CardDef[] = [
       if (!u || d < 0) return;
       const back = behind(s, sq, d);
       say(s, `You pin the ${unitName(u)}`, "you");
-      if (back !== null && unitAt(s, back)) { say(s, "It's pinned to the piece behind it!", "good"); damageUnit(s, u, 2); }
+      if (back !== null && unitAt(s, back)) { say(s, "It's pinned to the piece behind it!", "good"); damageUnit(s, u, val("paku", "dmg")); }
       if (s.units.includes(u)) lockUnit(s, u);
     },
   },
   {
-    id: "tusuk", name: "Tusuk Sate", cost: 2, type: "Serang", text: "Skewer: hit 3 on the first piece in a line and 2 on the one behind it",
+    id: "tusuk",
     pattern: { 7: "hit", 2: "hit" },
     targets: lineUnits,
     play: (s, sq) => {
@@ -429,12 +494,12 @@ const list: CardDef[] = [
       if (!first || d < 0) return;
       const back = behind(s, sq, d);
       const second = back !== null ? unitAt(s, back) : undefined;
-      damageUnit(s, first, 3 + s.powers.harimau);
-      if (second) damageUnit(s, second, 2 + s.powers.harimau);
+      damageUnit(s, first, val("tusuk", "dmg") + s.powers.harimau);
+      if (second) damageUnit(s, second, val("tusuk", "dmg2") + s.powers.harimau);
     },
   },
   {
-    id: "terbuka", name: "Serangan Terbuka", cost: 1, type: "Gerak", text: "Step 1. Every piece in a clear line from where you stood takes 1",
+    id: "terbuka",
     pattern: { 11: "go", 13: "go", 2: "hit", 22: "hit" },
     targets: (s) => neighbors(s, hero(s)).filter((sq) => isEmpty(s, sq)),
     play: (s, sq) => {
@@ -447,17 +512,17 @@ const list: CardDef[] = [
         if (t !== null && unitAt(s, t)) hits.push(t);
       }
       if (hits.length) say(s, `Discovered attack on ${hits.length} ${hits.length === 1 ? "piece" : "pieces"}!`, "good");
-      for (const t of hits) { const u = unitAt(s, t); if (u) damageUnit(s, u, 1); }
+      for (const t of hits) { const u = unitAt(s, t); if (u) damageUnit(s, u, val("terbuka", "dmg")); }
     },
   },
   {
-    id: "passant", name: "En Passant", cost: 0, type: "Serang", text: "Hit 3 on a neighbor that moved last enemy turn",
+    id: "passant",
     pattern: { 11: "hit", 13: "hit" },
     targets: (s) => adjacentUnits(s).filter((sq) => (s.movedLast ?? []).includes(unitAt(s, sq)!.id)),
-    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, 3 + s.powers.harimau); },
+    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, val("passant", "dmg") + s.powers.harimau); },
   },
   {
-    id: "skak", name: "Skak!", cost: 2, type: "Serang", text: "The King in a clear line: hit 3 and it loses its action",
+    id: "skak",
     pattern: { 2: "hit", 7: "go" },
     targets: (s) => firstInLines(s).filter((x) => unitAt(s, x.sq)?.target).map((x) => x.sq),
     play: (s, sq) => {
@@ -465,18 +530,18 @@ const list: CardDef[] = [
       if (!u) return;
       s.fx.push({ t: "castle", sq });
       say(s, "Skak!", "good");
-      damageUnit(s, u, 3);
+      damageUnit(s, u, val("skak", "dmg"));
       if (s.units.includes(u)) lockUnit(s, u);
     },
   },
   // ---------- Street fighting ----------
   {
-    id: "kerambit", strike: () => 3, name: "Kerambit", cost: 0, type: "Serang", exhaust: true, text: "Hit a neighbor for 3. Once per fight",
+    id: "kerambit", strike: () => val("kerambit", "dmg"),
     pattern: { 7: "hit" }, targets: adjacentUnits,
-    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, 3 + s.powers.harimau); },
+    play: (s, sq) => { const u = unitAt(s, sq); if (u) damageUnit(s, u, val("kerambit", "dmg") + s.powers.harimau); },
   },
   {
-    id: "cambuk", strike: () => 2, name: "Cambuk", cost: 1, type: "Serang", text: "Lash the first piece in a straight line: hit 2, pull it next to you",
+    id: "cambuk", strike: () => val("cambuk", "dmg"),
     pattern: { 2: "hit", 7: "go" },
     targets: (s) => firstInLines(s, [0, 2, 4, 6]).filter((x) => !!unitAt(s, x.sq)).map((x) => x.sq),
     play: (s, sq) => {
@@ -484,44 +549,44 @@ const list: CardDef[] = [
       const d = dirTo(s, hero(s), sq);
       if (!u || d < 0) return;
       const dest = offset(s, hero(s), DIRS[d][0], DIRS[d][1]);
-      if (dest !== null && dest !== sq) u.sq = dest;
-      damageUnit(s, u, 2 + s.powers.harimau);
+      if (dest !== null && dest !== sq && !hasTrait(u, "kokoh")) u.sq = dest;
+      damageUnit(s, u, val("cambuk", "dmg") + s.powers.harimau);
     },
   },
   {
-    id: "sogok", name: "Sogok", cost: 1, type: "Siasat", exhaust: true, text: "Bribe any piece: it skips its next action. Once per fight",
+    id: "sogok",
     pattern: { 7: "guard", 2: "guard" },
     targets: (s) => s.units.map((u) => u.sq),
     play: (s, sq) => { const u = unitAt(s, sq); if (u) { say(s, `You slip the ${unitName(u)} a few coins`, "you"); lockUnit(s, u); } },
   },
   {
-    id: "asap", name: "Bom Asap", cost: 1, type: "Siasat", text: "Smoke: enemies can't react to your moves this turn. Block 2",
+    id: "asap",
     pattern: { 6: "go", 8: "go", 16: "go", 18: "go", 12: "guard" }, self: true, targets: self,
-    play: (s) => { s.luck = { ...s.luck!, smoke: true }; s.hero.block += 2; },
+    play: (s) => { s.luck = { ...s.luck!, smoke: true }; s.hero.block += val("asap", "block"); },
   },
   // ---------- Deck and hand ----------
   {
-    id: "intai", name: "Intai", cost: 1, type: "Siasat", text: "Scout: draw 2",
+    id: "intai",
     pattern: { 7: "go", 17: "go" }, self: true, targets: self,
-    play: (s) => drawCards(s, 2),
+    play: (s) => drawCards(s, val("intai", "draw")),
   },
   {
-    id: "putar", name: "Putar Balik", cost: 0, type: "Siasat", exhaust: true, text: "Shuffle your discard pile into your draw pile, draw 1",
+    id: "putar",
     pattern: { 11: "go", 13: "go" }, self: true, targets: self,
     play: (s) => {
       s.draw = shuffle(s, [...s.draw, ...s.discard]);
       s.discard = [];
       say(s, "You reshuffle your discard pile", "you");
-      drawCards(s, 1);
+      drawCards(s, val("putar", "draw"));
     },
   },
   {
-    id: "simpan", name: "Simpan", cost: 0, type: "Siasat", text: "Keep your unplayed cards for next turn",
+    id: "simpan",
     pattern: { 12: "guard" }, self: true, targets: self,
     play: (s) => { s.keepHand = true; },
   },
   {
-    id: "pangkat", name: "Naik Pangkat", cost: 1, type: "Siasat", exhaust: true, text: "Promote every card in your hand for this fight",
+    id: "pangkat",
     pattern: { 2: "go", 7: "go" }, self: true,
     targets: (s) => (s.hand.some((id) => PROMOTE[id]) ? self(s) : []),
     play: (s) => {
@@ -532,65 +597,65 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "tambah", name: "Tambah", cost: 1, type: "Jurus", exhaust: true, text: "This fight: hold 1 more card each turn",
+    id: "tambah",
     pattern: { 11: "go", 13: "go", 12: "guard" }, self: true, targets: self,
-    play: (s) => { s.handBonus = (s.handBonus ?? 0) + 1; drawCards(s, 1); },
+    play: (s) => { s.handBonus = (s.handBonus ?? 0) + val("tambah", "hand"); drawCards(s, val("tambah", "draw")); },
   },
   // ---------- Dice ----------
   {
-    id: "elang", name: "Mata Elang", cost: 0, type: "Siasat", text: "Until your next turn, roll your d20s twice, keep the best. Draw 1",
+    id: "elang",
     pattern: { 7: "go", 12: "guard" }, self: true, targets: self,
-    play: (s) => { s.luck = { ...s.luck!, adv: true }; drawCards(s, 1); },
+    play: (s) => { s.luck = { ...s.luck!, adv: true }; drawCards(s, val("elang", "draw")); },
   },
   {
-    id: "tenang", name: "Tenang", cost: 0, type: "Siasat", text: "Until your next turn, +4 on your d20s. Block 2",
+    id: "tenang",
     pattern: P.guard, self: true, targets: self,
-    play: (s) => { s.luck = { ...s.luck!, bonus: (s.luck?.bonus ?? 0) + 4 }; s.hero.block += 2; },
+    play: (s) => { s.luck = { ...s.luck!, bonus: (s.luck?.bonus ?? 0) + val("tenang", "bonus") }; s.hero.block += val("tenang", "block"); },
   },
   {
-    id: "ejek", name: "Ejek", cost: 1, type: "Siasat", text: "Taunt: enemy jabs roll twice and keep the worst this turn. Block 3",
+    id: "ejek",
     pattern: { 6: "hit", 8: "hit", 12: "guard" }, self: true, targets: self,
-    play: (s) => { s.luck = { ...s.luck!, taunt: true }; s.hero.block += 3; },
+    play: (s) => { s.luck = { ...s.luck!, taunt: true }; s.hero.block += val("ejek", "block"); },
   },
   // ---------- Rules you can bend: your step, your turn, your hand ----------
   {
-    id: "kakikuda", name: "Kaki Kuda", cost: 0, type: "Siasat", text: "This turn your free step jumps like a knight",
+    id: "kakikuda",
     pattern: { 1: "go", 3: "go", 9: "go", 13: "go", 15: "go", 19: "go", 21: "go", 23: "go" }, self: true, targets: self,
     play: (s) => { s.knightStep = true; },
   },
   {
-    id: "ganda", name: "Langkah Ganda", cost: 0, type: "Siasat", text: "+1 free step this turn",
+    id: "ganda",
     pattern: { 11: "go", 13: "go", 7: "go" }, self: true, targets: self,
-    play: (s) => { s.extraSteps += 1; },
+    play: (s) => { s.extraSteps += val("ganda", "steps"); },
   },
   {
-    id: "napasatur", name: "Atur Napas", cost: 1, type: "Siasat", text: "Next turn you start with +2 Tenaga. Block 2",
+    id: "napasatur",
     pattern: P.guard, self: true, targets: self,
-    play: (s) => { s.nextTenaga = (s.nextTenaga ?? 0) + 2; s.hero.block += 2; },
+    play: (s) => { s.nextTenaga = (s.nextTenaga ?? 0) + val("napasatur", "tenaga"); s.hero.block += val("napasatur", "block"); },
   },
   {
-    id: "gambit", name: "Gambit", cost: 0, type: "Siasat", text: "Sacrifice 2 HP for +2 Tenaga now",
+    id: "gambit",
     pattern: { 12: "hit", 7: "go" }, self: true,
-    targets: (s) => (s.hero.hp > 2 ? self(s) : []),
-    play: (s) => { s.hero.hp -= 2; s.tenaga += 2; s.fx.push({ t: "dmg", sq: hero(s), n: 2, hero: true }); say(s, "Gambit: you give up 2 HP for tempo", "you"); },
+    targets: (s) => (s.hero.hp > val("gambit", "hp") ? self(s) : []),
+    play: (s) => { s.hero.hp -= val("gambit", "hp"); s.tenaga += val("gambit", "tenaga"); s.fx.push({ t: "dmg", sq: hero(s), n: val("gambit", "hp"), hero: true }); say(s, `Gambit: you give up ${val("gambit", "hp")} HP for tempo`, "you"); },
   },
   {
-    id: "mulligan", name: "Buang Ganti", cost: 0, type: "Siasat", exhaust: true, text: "Discard your hand, draw that many. Once per fight",
+    id: "mulligan",
     pattern: { 11: "go", 13: "go", 7: "go", 17: "go" }, self: true, targets: self,
     play: (s) => { const n = s.hand.length; s.discard.push(...s.hand); s.hand = []; drawCards(s, n); say(s, `You swap out ${n} ${n === 1 ? "card" : "cards"}`, "you"); },
   },
   // ---------- More chess ----------
   {
-    id: "zugzwang", name: "Zugzwang", cost: 1, type: "Siasat", text: "Neighbors with no empty square to move to lose their action",
+    id: "zugzwang",
     pattern: { 6: "guard", 7: "guard", 8: "guard", 11: "guard", 13: "guard" }, self: true,
     targets: (s) => (zugzwanged(s).length ? self(s) : []),
     play: (s) => { for (const u of zugzwanged(s)) lockUnit(s, u); },
   },
   {
-    id: "oposisi", name: "Oposisi", cost: 1, type: "Tangkis", text: "Block 3. A King exactly 2 squares away in a line loses its action",
+    id: "oposisi",
     pattern: { 2: "guard", 12: "guard" }, self: true, targets: self,
     play: (s) => {
-      s.hero.block += 3;
+      s.hero.block += val("oposisi", "block");
       for (const u of s.units) {
         if (u.kind !== "k" || dist(s, u.sq, hero(s)) !== 2 || dirTo(s, hero(s), u.sq) < 0) continue;
         say(s, "Opposition! The King has to give way", "good");
@@ -599,14 +664,78 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "fianchetto", name: "Fianchetto", cost: 1, type: "Gerak", text: "Dash diagonally up to 2. Block 3",
-    reach: (s) => firstInLines(s, [1, 3, 5, 7]).filter((x) => !!unitAt(s, x.sq) && dist(s, hero(s), x.sq) <= 2).map((x) => x.sq),
+    id: "fianchetto",
+    reach: (s) => firstInLines(s, [1, 3, 5, 7]).filter((x) => !!unitAt(s, x.sq) && dist(s, hero(s), x.sq) <= val("fianchetto", "range")).map((x) => x.sq),
     pattern: { 6: "go", 8: "go", 16: "go", 18: "go", 0: "go", 4: "go", 12: "guard" },
-    targets: (s) => slides(s, [1, 3, 5, 7], 2),
-    play: (s, sq) => { s.hero.sq = sq; s.hero.block += 3; },
+    targets: (s) => slides(s, [1, 3, 5, 7], val("fianchetto", "range")),
+    play: (s, sq) => { s.hero.sq = sq; s.hero.block += val("fianchetto", "block"); },
   },
 ];
 
+// ---------- JSON-only cards: built from "target" and "effects" ----------
+
+const TARGET_FN: Record<TargetKind, (s: Fight) => number[]> = {
+  self,
+  adjacent: adjacentThings,
+  adjacentUnit: adjacentUnits,
+  emptyAdjacent: (s) => neighbors(s, hero(s)).filter((sq) => isEmpty(s, sq)),
+  knight: (s) => KNIGHT.map(([dx, dy]) => offset(s, hero(s), dx, dy)).filter((x): x is number => x !== null && isEmpty(s, x)),
+  anyUnit: (s) => s.units.map((u) => u.sq),
+  lineUnit: lineUnits,
+};
+const DEFAULT_PATTERN: Record<TargetKind, Partial<Record<number, Mark>>> = {
+  self: P.guard, adjacent: P.kick, adjacentUnit: { 7: "hit" }, emptyAdjacent: { 7: "go", 11: "go", 13: "go" },
+  knight: { 1: "go", 3: "go", 9: "go", 13: "go" }, anyUnit: { 2: "hit" }, lineUnit: { 2: "hit", 7: "hit" },
+};
+
+function buildFromEffects(id: string, d: CardData): CardCode {
+  const num = (x: number | string | undefined, fallback = 0) => (typeof x === "string" ? val(id, x) : x ?? fallback);
+  return {
+    id,
+    self: d.target === "self",
+    pattern: d.pattern ? Object.fromEntries(Object.entries(d.pattern).map(([k, v]) => [Number(k), v])) : DEFAULT_PATTERN[d.target!],
+    targets: TARGET_FN[d.target!],
+    strike: d.effects!.every((e) => e.do === "hit") ? () => d.effects!.reduce((a, e) => a + num(e.dmg), 0) : undefined,
+    play: (s, sq) => {
+      for (const e of d.effects!) {
+        const u = unitAt(s, sq);
+        switch (e.do) {
+          case "kick": kick(s, sq, num(e.dmg), e.push === "fly" ? FLY : num(e.push, 1), num(e.crash)); break;
+          case "hit": if (u) damageUnit(s, u, num(e.dmg) + s.powers.harimau); break;
+          case "push": { const dd = dirTo(s, hero(s), sq); if (dd >= 0 && occupant(s, sq)) push(s, sq, dd, e.push === "fly" ? FLY : num(e.push, 1)); break; }
+          case "block": s.hero.block += num(e.amount); break;
+          case "draw": drawCards(s, num(e.n, 1)); break;
+          case "move": if (isEmpty(s, sq)) s.hero.sq = sq; break;
+          case "lock": if (u) lockUnit(s, u); break;
+          case "heal": s.hero.hp = Math.min(s.hero.max, s.hero.hp + num(e.amount)); break;
+          case "tenaga": s.tenaga += num(e.n, 1); break;
+        }
+        if (s.status !== "play") return;
+      }
+    },
+  };
+}
+
+const codeById = new Map(code.map((c) => [c.id, c]));
+for (const id of codeById.keys()) if (!DATA.cards[id]) cardFail(`card "${id}" exists in code but not in cards.json`);
+for (const [id, d] of Object.entries(DATA.cards)) if (!codeById.has(id) && !d.effects) cardFail(`card "${id}" has no code behind it: give it a "target" and "effects"`);
+
+const list: CardDef[] = Object.entries(DATA.cards).map(([id, d]) => {
+  const behaviour = codeById.get(id) ?? buildFromEffects(id, d);
+  const values = d.values ?? {};
+  return {
+    ...behaviour,
+    name: d.name,
+    cost: d.cost,
+    type: d.type,
+    text: fillText(d.text, values),
+    style: d.style,
+    rare: d.rare,
+    exhaust: d.exhaust,
+    tier: d.tier,
+    values,
+  };
+});
 export const CARDS: Record<string, CardDef> = Object.fromEntries(list.map((c) => [c.id, c]));
 
 // ---------- Siap: ready a Tangkis card for the enemy turn ----------
@@ -638,10 +767,24 @@ setReadyHook((s, id) => {
 });
 export const ALL_CARDS = list;
 
-export const STARTER = ["tendang", "tendang", "tendang", "dalam", "tangkis", "tangkis", "tangkis", "kuda", "tarik", "bantingan"];
+/** The starting deck, Slay the Spire style (config/cards.json "starterDeck"). Your style adds its signature card. */
+export const STARTER: string[] = DATA.starterDeck;
+/** Each style's signature card(s) (config/cards.json "styleCards"). */
+export const STYLE_CARDS = DATA.styleCards as Record<Style, string[]>;
+for (const id of [...STARTER, ...Object.values(STYLE_CARDS).flat()]) if (!DATA.cards[id]) cardFail(`starter card "${id}" isn't in "cards"`);
+
+/** When a card can start showing up in rewards and shops (each card's "tier" in cards.json).
+ *  1: from the start. 2: from floor 4 of the first prison. 3: from the second prison on. */
+export const TIERS: Record<1 | 2 | 3, string[]> = {
+  1: list.filter((c) => c.tier === 1).map((c) => c.id),
+  2: list.filter((c) => c.tier === 2).map((c) => c.id),
+  3: list.filter((c) => c.tier === 3).map((c) => c.id),
+};
+export const tierOf = (id: string): 1 | 2 | 3 => CARDS[id]?.tier ?? 3;
+export const TIER_NAMES: Record<1 | 2 | 3, string> = { 1: "Basics", 2: "Chess tactics and stances", 3: "Rare and rule-bending cards" };
 /** Cards you can win after a fight. */
 /** Cards you can win or buy: everything except the plain basics. */
-export const POOL = list.map((c) => c.id).filter((id) => !["tendang", "tangkis", "kuda", "dalam"].includes(id));
+export const POOL = list.filter((c) => c.tier !== undefined).map((c) => c.id);
 
 export const isAttack = (id: string) => CARDS[id]?.type === "Serang";
 export const typeOf = (id: string) => CARDS[id]?.type;
