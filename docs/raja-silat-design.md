@@ -551,6 +551,16 @@ won 100% at 24 HP. Now: **20 HP, heal 2** after each fight. Bot: ~60% runs won, 
 - **Balance:** 16 HP, heal 1 after fights (campfires and events give more). Boss: 30 HP with an
   extra knight. Bot taking random paths: ~70% runs won, most losses on floors 2–4 and at the boss.
 
+**Slams and knockout impact (player: "no reason to Block, kills don't feel satisfying").**
+- **Hantam (slam):** rooks, queens, the king and the boss slam when you're within 2 squares,
+  hitting your square and all 8 around it (their own allies included). One free step can't escape
+  it, so you Block it, knock the slammer out of reach, lock it, or use a move card. Shown as a red
+  3×3 and a burst badge.
+- **Knockouts:** white flash, the piece bursts into fragments, a stamped "KO!", heavier sound and
+  vibration, a falling-whoosh-and-gong for ring outs, and +2 gold per knockout added to the reward.
+  The end-of-fight screen waits ~1 second so the final blow lands.
+- Bot (random paths): ~48% runs won (was ~70%); losses spread over floors 2–4 and the boss.
+
 ## 16. Open questions
 
 1. **Tab name**: "Silat" (short, fits the tab bar) or "Raja Silat"?

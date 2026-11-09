@@ -3,7 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import { Piece } from "@/components/chess/Board";
 import { SilatKing } from "@/components/shell";
-import { DIRS, PIECE, chargeEnd, col, intentValid, isGuarded, occupant, row, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
+import { DIRS, PIECE, chargeEnd, col, intentValid, isGuarded, occupant, row, slamArea, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
 
 const FILES = "abcdefgh";
 
@@ -37,7 +37,7 @@ function Boulder() {
 const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   dmg: (f) => [`-${"n" in f ? f.n : ""}`, "hero" in f && f.hero ? "#FF4B4B" : "#FF9600"],
   block: (f) => [`${"n" in f ? f.n : ""} blocked`, "#2F6E00"],
-  ko: () => ["KO", "#FFC800"],
+  ko: () => ["KO!", "#FFC800"],
   ringout: () => ["RING OUT", "#FFC800"],
   boom: () => ["BOOM", "#FF9600"],
   miss: () => ["miss", "#6F6F6F"],
@@ -46,6 +46,8 @@ const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   castle: () => ["CASTLES!", "#FFC800"],
   summon: () => ["+PAWN", "#CE82FF"],
   react: () => ["STRIKES!", "#FF4B4B"],
+  slam: () => ["HANTAM!", "#FF4B4B"],
+  gold: (f) => [`+${"n" in f ? f.n : ""} gold`, "#FFC800"],
 };
 
 export function SilatBoard({
@@ -79,6 +81,10 @@ export function SilatBoard({
     const u = p.units.find((x) => x.id === it.id)!;
     const hit = u.hit ?? PIECE[u.kind].hit;
     badges.set(it.id, { ord: p.intents.indexOf(it) + 1, it, hit });
+    if (it.type === "slam") {
+      for (const sq of slamArea(p, it.center)) if (sq !== u.sq) danger.set(sq, (danger.get(sq) ?? 0) + hit);
+      return;
+    }
     const sq = it.type === "strike" ? it.target : it.type === "charge" ? chargeEnd(p, it) : null;
     if (sq !== null && sq !== undefined && (it.type === "strike" || occupant(p, sq))) danger.set(sq, (danger.get(sq) ?? 0) + hit);
   });
@@ -124,6 +130,7 @@ export function SilatBoard({
   }
   const arrowAngle = (u: { sq: number }, it: Intent) => {
     if (it.type === "charge") return it.dir * 45;
+    if (it.type === "slam") return 0;
     const to = it.type === "move" ? it.to : it.target;
     return Math.round((Math.atan2(row(s, to) - row(s, u.sq), col(s, to) - col(s, u.sq)) * 180) / Math.PI) + 90;
   };
@@ -169,7 +176,9 @@ export function SilatBoard({
               <span className="sl-intent" style={{ background: attack ? "#FF4B4B" : "#8C8C8C" }} aria-label={`acts ${b.ord}${attack ? `, hits for ${b.hit}` : ", moves"}`}>
                 {b.ord}
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style={{ transform: `rotate(${arrowAngle(u, b.it)}deg)` }}>
-                  {b.it.type === "strike" ? (
+                  {b.it.type === "slam" ? (
+                    <path d="M5 1 V3 M5 7 V9 M1 5 H3 M7 5 H9 M2 2 L3.4 3.4 M6.6 6.6 L8 8 M8 2 L6.6 3.4 M3.4 6.6 L2 8" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+                  ) : b.it.type === "strike" ? (
                     <path d="M5 1 V9 M1 5 H9" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                   ) : (
                     <path d="M5 9 V2 M2 4.5 L5 1.5 L8 4.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -229,6 +238,18 @@ export function SilatBoard({
         </div>
       ))}
 
+      {s.fx.map((f, i) => (f.t === "ko" || f.t === "ringout") ? (
+        <div key={`b${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 6 }} aria-hidden="true">
+          <span className="sl-burst">
+            {Array.from({ length: 10 }, (_, k) => <i key={k} style={{ ["--a" as string]: `${k * 36 + (i * 17) % 36}deg`, ["--d" as string]: `${150 + (k % 3) * 45}%` }} />)}
+          </span>
+          <span className="sl-ring" />
+        </div>
+      ) : f.t === "slam" ? (
+        <div key={`s${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 5 }} aria-hidden="true"><span className="sl-quake" /></div>
+      ) : null)}
+      {s.fx.some((f) => f.t === "ko" || f.t === "ringout") && <div key={`f${fxKey}`} className="sl-flash" aria-hidden="true" />}
+
       {combo >= 3 && (
         <div key={`c${fxKey}`} className="sl-combo">COMBO ×{combo}!</div>
       )}
@@ -242,7 +263,7 @@ export function SilatBoard({
           seen.set(f.sq, k + 1);
           return (
             <div key={`${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 6 }}>
-              <span className="sl-float" style={{ color: txt[1], top: `${-k * 34}%`, animationDelay: `${Math.min(i, 6) * 90}ms` }}>{txt[0]}</span>
+              <span className={`sl-float${f.t === "ko" || f.t === "ringout" ? " big" : ""}`} style={{ color: txt[1], top: `${-k * 34}%`, animationDelay: `${f.t === "gold" ? 280 : Math.min(i, 6) * 90}ms` }}>{txt[0]}</span>
             </div>
           );
         });

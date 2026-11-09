@@ -48,11 +48,11 @@ export default function SilatPlay() {
           onChange={(next: Fight) => update({ ...run, fight: next })}
         />
         {over && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(43,26,18,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div className="rise" style={{ width: "100%", maxWidth: 360, borderRadius: 26, background: "var(--paper)", padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
+          <div className="sl-endpause" style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(43,26,18,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div className="rise" style={{ animationDelay: "900ms", width: "100%", maxWidth: 360, borderRadius: 26, background: "var(--paper)", padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
               <span className="stamp display" style={{ fontSize: 40, color: f.status === "won" ? "#2F6E00" : "#B81F1F" }}>{f.status === "won" ? "MENANG!" : "KALAH"}</span>
               <span style={{ fontSize: 15, fontWeight: 700, color: "var(--plum-soft)" }}>
-                {f.status === "won" ? `The enemy kneels. Ring outs: ${f.ringOuts} · best combo: ${f.bestCombo}` : "You were knocked down. The run ends here."}
+                {f.status === "won" ? `The enemy kneels. Knockouts: ${f.kos ?? 0} (+${(f.kos ?? 0) * 2} gold) · best combo: ${f.bestCombo}` : "You were knocked down. The run ends here."}
               </span>
               <button className="pill-btn primary" style={{ marginTop: 6 }} onClick={() => { feedback.tap(); update(settle(run)); }}>
                 {f.status === "won" ? (run.floor >= FLOORS - 1 ? "Finish the run" : "Collect your reward") : "See results"}

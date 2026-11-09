@@ -4,7 +4,7 @@
 import { CARDS, POOL, STARTER, isAttack } from "./cards";
 import { MAP_ROWS, makeMap, nextNodes, nodeById, type MapNode, type RunMap } from "./map";
 import { ALL_RELICS, RELICS } from "./relics";
-import { makeFight, type Fight, type Kind, type Setup } from "./rules";
+import { KO_GOLD, makeFight, type Fight, type Kind, type Setup } from "./rules";
 
 export const FLOORS = MAP_ROWS; // the last row is the boss
 export const HEAL_AFTER_FIGHT = 1;
@@ -273,7 +273,8 @@ export function settle(run: Run): Run {
   if (node?.kind === "boss") return { ...done, status: "won", fight: null };
   const r = rng((node?.seed ?? run.seed) + 99);
   const elite = node?.kind === "elite";
-  const gold = elite ? 25 + Math.floor(r() * 11) : 10 + Math.floor(r() * 7);
+  // Base gold, plus what every knockout dropped during the fight.
+  const gold = (elite ? 25 + Math.floor(r() * 11) : 10 + Math.floor(r() * 7)) + (f.kos ?? 0) * KO_GOLD;
   return { ...done, status: "reward", fight: null, reward: { gold, cards: cardChoices(done, r), relics: elite ? relicChoices(done, r, 2) : [] } };
 }
 

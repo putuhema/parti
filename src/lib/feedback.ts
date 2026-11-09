@@ -99,6 +99,32 @@ export const feedback = {
     tone(660, 0.09, 0.12, "square", 0.06);
     buzz([20, 40, 20]);
   },
+  /** A piece is knocked out: heavy thump, then a bright two-note chime. */
+  ko() {
+    tone(95, 0, 0.16, "square", 0.13);
+    tone(150, 0.02, 0.12, "sawtooth", 0.06);
+    tone(988, 0.09, 0.14, "triangle", 0.14);
+    tone(1480, 0.16, 0.22, "triangle", 0.12);
+    buzz([30, 30, 60]);
+  },
+  /** A piece flies off the board: falling whoosh, then a gong-ish ring. */
+  ringout() {
+    [880, 740, 600, 470, 360].forEach((f, i) => tone(f, i * 0.035, 0.07, "sine", 0.08));
+    tone(196, 0.2, 0.5, "triangle", 0.14);
+    tone(392, 0.2, 0.4, "sine", 0.06);
+    buzz([20, 20, 80]);
+  },
+  /** A heavy piece slams the ground. */
+  slam() {
+    tone(70, 0, 0.25, "square", 0.14);
+    tone(110, 0.04, 0.2, "sawtooth", 0.07);
+    buzz([60, 30, 40]);
+  },
+  /** Coins drop. */
+  coin() {
+    tone(1568, 0, 0.06, "square", 0.04);
+    tone(2093, 0.05, 0.1, "square", 0.04);
+  },
   /** Soft click when a dragged piece passes over a square it can move to. */
   detent() {
     tone(1500, 0, 0.025, "sine", 0.035);

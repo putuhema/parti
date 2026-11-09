@@ -350,6 +350,42 @@ describe("runs", () => {
   });
 });
 
+describe("slams (Hantam)", () => {
+  test("a rook within 2 squares slams: one step can't escape it, Block can", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "r", sq: sq(2, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["tangkis"]);
+    plan(s);
+    const rook = s.units[0];
+    expect(s.intents.find((i) => i.id === rook.id)).toEqual({ id: rook.id, type: "slam", center: sq(2, 4) });
+    // Step one square: still inside the 3x3.
+    expect(forecast(step(s, sq(1, 5))).damage).toBe(4);
+    // Block 4 soaks it.
+    expect(forecast(play(s, "tangkis", sq(2, 4))).damage).toBe(0);
+  });
+
+  test("a slam hits the slammer's own allies around you too", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "q", sq: sq(2, 2) }, { kind: "p", sq: sq(1, 3) }, { kind: "k", sq: sq(5, 0) }] });
+    s.intents = [{ id: s.units[0].id, type: "slam", center: sq(2, 4) }];
+    const after = forecast(s).after;
+    expect(after.units.find((u) => u.kind === "p")).toBeUndefined(); // 3 HP pawn, queen hits for 5
+  });
+
+  test("kick the slammer out of reach and its slam is cancelled", () => {
+    let s = fight({ hero: sq(2, 4), units: [{ kind: "b", sq: sq(2, 3), hp: 9 }, { kind: "r", sq: sq(2, 2), hp: 9 }, { kind: "k", sq: sq(5, 0) }] }, ["lurus"]);
+    const rook = s.units[1];
+    s.intents = [{ id: rook.id, type: "slam", center: sq(2, 4) }];
+    s.units[1].sq = sq(3, 3); // the rook stands diagonally next to you
+    s = play(s, "lurus", sq(3, 3)); // heavy: slides 2 up-right to f5, 3 squares from you
+    expect(forecast(s).damage).toBe(0);
+  });
+
+  test("every knockout counts toward gold", () => {
+    let s = fight({ hero: sq(1, 1), units: [{ kind: "b", sq: sq(1, 0) }, { kind: "k", sq: sq(5, 5) }] }, ["tendang"]);
+    s = play(s, "tendang", sq(1, 0));
+    expect(s.kos).toBe(1);
+    expect(s.fx.some((f) => f.t === "gold")).toBe(true);
+  });
+});
+
 describe("Pusaka (relics)", () => {
   const withRelic = (relic: string, o: Parameters<typeof fight>[0], hand: string[] = []) => {
     const s = fight({ ...o, relics: [relic] }, hand);

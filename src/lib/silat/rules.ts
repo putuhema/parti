@@ -46,7 +46,12 @@ export interface Thing {
 export type Intent =
   | { id: number; type: "strike"; target: number }
   | { id: number; type: "charge"; dir: number }
-  | { id: number; type: "move"; to: number };
+  | { id: number; type: "move"; to: number }
+  /** Hantam: a heavy piece slams the ground, hitting the centre square and all 8 around it. */
+  | { id: number; type: "slam"; center: number };
+
+/** Heavy pieces (rook, queen, king, bosses) slam when you're this close. */
+export const SLAM_REACH = 2;
 
 export type Fx =
   | { t: "dmg"; sq: number; n: number; hero?: boolean }
@@ -60,6 +65,8 @@ export type Fx =
   | { t: "castle"; sq: number }
   | { t: "summon"; sq: number }
   | { t: "react"; sq: number }
+  | { t: "slam"; sq: number }
+  | { t: "gold"; sq: number; n: number }
   | { t: "lunge"; sq: number; dir: number };
 
 export type LogKind = "turn" | "you" | "enemy" | "good" | "bad";
@@ -101,6 +108,8 @@ export interface Fight {
   combo: number;
   bestCombo: number;
   ringOuts: number;
+  /** Enemies knocked out this fight (each one drops gold). */
+  kos: number;
   /** What happened, oldest first. */
   log: LogLine[];
   /** Enemies that already struck back at you this turn. */
@@ -174,7 +183,11 @@ export const has = (s: Fight, relic: string) => (s.relics ?? []).includes(relic)
 const yours = (s: Fight) => s.status === "play";
 
 /** A piece was knocked out on your turn (Kopi Tubruk: first one each turn gives +1 Tenaga). */
-function onKnockout(s: Fight) {
+export const KO_GOLD = 2;
+
+function onKnockout(s: Fight, sq: number) {
+  s.kos = (s.kos ?? 0) + 1;
+  s.fx.push({ t: "gold", sq, n: KO_GOLD });
   if (!yours(s) || !has(s, "kopi") || s.tf?.ko) return;
   s.tf = { ...(s.tf ?? { crashed: false, ko: false }), ko: true };
   s.tenaga++;
@@ -207,7 +220,7 @@ export function damageUnit(s: Fight, u: Unit, n: number) {
     s.units = s.units.filter((x) => x !== u);
     s.fx.push({ t: "ko", sq: u.sq, id: u.id });
     say(s, `${unitName(u)} takes ${n} and is knocked out`, "good");
-    onKnockout(s);
+    onKnockout(s, u.sq);
   } else {
     say(s, `${unitName(u)} takes ${n} (${u.hp} left)`);
     u.angry = true;
@@ -333,7 +346,7 @@ export function ringOut(s: Fight, o: Occ, dir?: number) {
   s.fx.push({ t: "ringout", sq: o.u.sq, dir, id: o.u.id });
   say(s, `${unitName(o.u)} flies off the board!`, "good");
   s.units = s.units.filter((x) => x !== o.u);
-  onKnockout(s);
+  onKnockout(s, o.u.sq);
   if (yours(s) && has(s, "tasbih") && s.hero.hp < s.hero.max) {
     s.hero.hp++;
     say(s, "Tasbih: +1 HP", "good");
@@ -466,7 +479,10 @@ function exposure(s: Fight, u: Unit, sq: number): number {
 /** How much a piece on `sq` would threaten you. */
 function threat(s: Fight, u: Unit, sq: number): number {
   const hero = s.hero.sq;
-  if (SLIDES[u.kind]) return (SLIDES[u.kind] ?? []).includes(dirTo(s, sq, hero)) ? 5 : 0;
+  if (SLIDES[u.kind]) {
+    const slam = isHeavy(u) && dist(s, sq, hero) <= SLAM_REACH ? 5 : 0;
+    return Math.max(slam, (SLIDES[u.kind] ?? []).includes(dirTo(s, sq, hero)) ? 5 : 0);
+  }
   const reach = new Set(strikeSquares(s, { ...u, sq }));
   let t = reach.has(hero) ? 5 : 0;
   for (const n of neighbors(s, hero)) if (reach.has(n) && isEmpty(s, n)) t += 1;
@@ -492,6 +508,8 @@ function chooseIntent(s: Fight, u: Unit): Intent | null {
   const hero = s.hero.sq;
   let moves: number[];
   if (SLIDES[u.kind]) {
+    // Heavy pieces close to you slam: you can't just step out of it.
+    if (isHeavy(u) && dist(s, u.sq, hero) <= SLAM_REACH) return { id: u.id, type: "slam", center: hero };
     // Charge only down a clear line at you. Never into its own ally.
     const d = lineDir(s, u, hero);
     if (d >= 0 && firstInLine(s, u.sq, d) === hero) return { id: u.id, type: "charge", dir: d };
@@ -526,7 +544,7 @@ function chooseIntent(s: Fight, u: Unit): Intent | null {
 /** The king holds its throne behind its army and strikes if you come close.
  *  (Running away every turn made fights a long chase.) */
 function kingIntent(s: Fight, k: Unit): Intent | null {
-  if (strikeSquares(s, k).includes(s.hero.sq)) return { id: k.id, type: "strike", target: s.hero.sq };
+  if (dist(s, k.sq, s.hero.sq) <= SLAM_REACH) return { id: k.id, type: "slam", center: s.hero.sq };
   // You're two squares away: step back into the formation if there's a safer spot (more allies around,
   // further from you, not on the edge). Otherwise hold the throne.
   if (dist(s, k.sq, s.hero.sq) !== 2) return null;
@@ -616,6 +634,31 @@ export function react(s: Fight) {
   }
 }
 
+/** The squares a slam hits. */
+export const slamArea = (s: Fight, center: number) => [center, ...neighbors(s, center)];
+
+function slam(s: Fight, u: Unit, center: number) {
+  const area = new Set(slamArea(s, center));
+  const hit = unitHit(u);
+  s.fx.push({ t: "slam", sq: center });
+  say(s, `${unitName(u)} slams the ground around ${sqName(s, center)}!`, "enemy");
+  // You: Elakan only saves you if it hops you out of the area. Block soaks it.
+  if (area.has(s.hero.sq)) {
+    const hop = s.hop;
+    if (hop !== null && area.has(hop)) s.hop = null;
+    attackHero(s, u, hit);
+    if (s.hop === null && hop !== null && area.has(hop)) s.hop = hop;
+  }
+  // Everything else in the area, its own allies included.
+  for (const sq of area) {
+    if (sq === s.hero.sq || sq === u.sq) continue;
+    const o = occupant(s, sq);
+    if (!o || o.t === "hero") continue;
+    if (o.t === "unit") damageUnit(s, o.u, hit);
+    else if (o.th.kind === "petasan") explode(s, o.th);
+  }
+}
+
 function charge(s: Fight, u: Unit, dir: number) {
   const [dx, dy] = DIRS[dir];
   for (let guard = 0; guard < s.n * 2; guard++) {
@@ -651,6 +694,7 @@ export function intentValid(s: Fight, it: Intent): boolean {
   const u = s.units.find((x) => x.id === it.id);
   if (!u) return false;
   if (it.type === "charge") return true;
+  if (it.type === "slam") return dist(s, u.sq, it.center) <= SLAM_REACH;
   if (it.type === "strike") return strikeSquares(s, u).includes(it.target);
   if (u.kind === "p") return offset(s, u.sq, 0, 1) === it.to;
   if (u.kind === "n") return KNIGHT.some(([dx, dy]) => offset(s, u.sq, dx, dy) === it.to);
@@ -676,6 +720,7 @@ export function resolveIntent(s: Fight, it: Intent) {
     return;
   }
   if (it.type === "charge") { say(s, `${unitName(u)} charges ${DIR_NAMES[it.dir]}`, "enemy"); return charge(s, u, it.dir); }
+  if (it.type === "slam") return slam(s, u, it.center);
   const o = occupant(s, it.target);
   if (!o || (o.t === "thing" && o.th.kind === "batu")) {
     s.fx.push({ t: "miss", sq: it.target });
@@ -909,6 +954,7 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     combo: 0,
     bestCombo: 0,
     ringOuts: 0,
+    kos: 0,
     log: [],
     reacted: [],
     name: o.name,

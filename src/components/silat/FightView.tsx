@@ -12,11 +12,15 @@ import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuard
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function sound(f: Fight) {
-  if (f.fx.some((x) => x.t === "boom" || x.t === "ringout")) feedback.clear();
+  const has = (t: string) => f.fx.some((x) => x.t === t);
+  if (has("ringout")) feedback.ringout();
+  else if (has("ko")) feedback.ko();
+  else if (has("slam")) feedback.slam();
+  else if (has("boom")) feedback.clear();
   else if (f.fx.some((x) => x.t === "dmg" && x.hero)) feedback.wrong();
-  else if (f.fx.some((x) => x.t === "ko")) feedback.capture();
-  else if (f.fx.some((x) => x.t === "dmg")) feedback.capture();
+  else if (has("dmg")) feedback.capture();
   else feedback.move();
+  if (has("gold")) setTimeout(() => feedback.coin(), 260);
 }
 
 export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floorLabel: string; onChange: (f: Fight) => void }) {
@@ -30,7 +34,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
 
   // Shake the board on big hits.
   useEffect(() => {
-    const big = fight.fx.some((x) => x.t === "boom" || x.t === "ringout" || (x.t === "dmg" && x.hero)) || fight.combo >= 3;
+    const big = fight.fx.some((x) => x.t === "boom" || x.t === "ringout" || x.t === "ko" || x.t === "slam" || (x.t === "dmg" && x.hero)) || fight.combo >= 3;
     if (!big || !shakeRef.current?.animate) return;
     try {
       shakeRef.current.animate(
