@@ -486,6 +486,39 @@ villager shoves it without hurting it. Enemies act in order of how close they ar
 After this change the same bot wins ~70% of runs, loses ~3.7 HP and ~0.9 villagers per fight,
 and fights last ~5 turns. Losses cluster on floors 5–7.
 
+**Billiards kicks and smarter enemies, added after the second playtest ("kicks too small, enemies
+stupid").**
+- A kicked piece flies until it hits something. A crash deals 2, +1 per square flown (max 7), and
+  knocks what it hit one square on (Newton's cradle), so one kick can chain. Heavy pieces slide at
+  most 2. Explosions send enemies flying. Villagers are only ever shoved one square.
+- Cards: Tendang "hit 2, send it flying"; Tendangan Lurus "hit 1, flies, crash +3"; Badai (2 cost)
+  "hit 4, flies, crash +3"; Tolak Angin sends everything around you flying. Gaya Harimau: kicks +1.
+  Momentum: crashes +2.
+- Enemies pick squares that threaten you and villagers, and avoid squares where you could kick
+  them off the board or into their friends. Every 3 turns the king (or boss) calls a pawn.
+- Bot results: ~64% runs won, ~4.4 turns per fight, 2.3 pieces knocked off the board per fight
+  (was 0.8), best combo per fight 4.4 (was 3.6).
+
+**Guards and harder hits, added after the third playtest ("I can pick pieces off one by one, no big
+decisions, no sweat").**
+- **Guarded pieces** (chess defence): a piece is guarded when an ally covers its square: pawns the
+  two squares diagonally in front, knights their jumps, the king the squares around it, sliders 2
+  squares along their lines. Kicks only budge a guarded piece 1 square and it can't be knocked off
+  the board (it takes 5 instead). Shown as a blue shield. So the order of your attacks matters:
+  break the guard first, or crash a flying piece into the formation.
+- Enemies prefer squares where an ally guards them.
+- Enemy hits: pawn 2, knight 3, bishop 3, rook 4, queen 5, king 4. A knight now kills a villager
+  in one hit. Enemies acting per turn: 2 on floor 1, 3 on floor 2, 4 on floors 3–4, all from floor 5.
+- Bot results: ~56% runs won, ~4.4 turns per fight, 1.3 ring outs per fight, best combo 4.2.
+
+**Reactions (zone of control), added at the player's request.** Ending any move (free step or a
+move card) on a square an enemy covers makes that enemy strike you at once, for half its normal hit
+(rounded up). Each enemy reacts at most once per turn. Covered squares are the same ones it guards
+allies on, so one rule teaches both. Step dots and move-card targets turn red with the damage.
+Full-damage reactions made the bot refuse to approach anything (0% wins, fights stalled at ~23
+turns); half damage keeps fights moving. To pay for it you start with **30 HP** and heal **6**
+after each fight. Bot: ~63% runs won, ~8.5 HP lost per fight (was ~4), ~4.7 turns per fight.
+
 ## 16. Open questions
 
 1. **Tab name**: "Silat" (short, fits the tab bar) or "Raja Silat"?

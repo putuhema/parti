@@ -1,6 +1,6 @@
 // Raja Silat cards: what each one targets and what it does.
 import {
-  DIRS, KNIGHT, checkEnd, clone, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
+  DIRS, FLY, KNIGHT, checkEnd, clone, react, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
   unitAt, type Fight,
 } from "./rules";
 
@@ -32,18 +32,19 @@ const adjacentThings = (s: Fight) => neighbors(s, hero(s)).filter((sq) => { cons
 const adjacentUnits = (s: Fight) => neighbors(s, hero(s)).filter((sq) => !!unitAt(s, sq));
 const self = (s: Fight) => [hero(s)];
 
-/** Hit what's on `sq` (next to you) and push it away from you. */
-function kick(s: Fight, sq: number, dmg: number, n: number) {
+/** Hit what's on `sq` (next to you) and push it away from you. `n` = FLY sends it flying.
+ *  Villagers are only shoved one square, gently. */
+function kick(s: Fight, sq: number, dmg: number, n: number, crash = 0) {
   const d = dirTo(s, hero(s), sq);
   const o = occupant(s, sq);
   if (!o || o.t === "hero" || d < 0) return;
   if (o.t === "thing") {
     if (o.th.kind === "petasan") explode(s, o.th);
-    else push(s, sq, d, n);
+    else push(s, sq, d, o.th.kind === "warga" ? 1 : n, crash);
     return;
   }
-  damageUnit(s, o.u, dmg);
-  if (s.units.includes(o.u)) push(s, o.u.sq, d, n);
+  damageUnit(s, o.u, dmg + s.powers.harimau);
+  if (s.units.includes(o.u)) push(s, o.u.sq, d, n, crash);
 }
 
 /** Empty squares you can slide to along these directions, up to `max` squares. */
@@ -70,12 +71,12 @@ const P = {
 
 const list: CardDef[] = [
   {
-    id: "tendang", name: "Tendang", cost: 1, type: "Serang", text: "Hit 2, push 1",
-    pattern: P.kick, targets: adjacentThings, play: (s, sq) => kick(s, sq, 2, 1),
+    id: "tendang", name: "Tendang", cost: 1, type: "Serang", text: "Hit 2, send it flying",
+    pattern: P.kick, targets: adjacentThings, play: (s, sq) => kick(s, sq, 2, FLY),
   },
   {
-    id: "lurus", name: "Tendangan Lurus", cost: 1, type: "Serang", text: "Hit 2, push 3",
-    pattern: { 7: "hit", 2: "push" }, targets: adjacentThings, play: (s, sq) => kick(s, sq, 2, 3),
+    id: "lurus", name: "Tendangan Lurus", cost: 1, type: "Serang", text: "Hit 1, flies, crash +3",
+    pattern: { 7: "hit", 2: "push" }, targets: adjacentThings, play: (s, sq) => kick(s, sq, 1, FLY, 3),
   },
   {
     id: "dalam", name: "Pukulan Dalam", cost: 1, type: "Serang", text: "Hit 5. No push",
@@ -99,7 +100,7 @@ const list: CardDef[] = [
       const d = dirTo(s, hero(s), sq);
       if (!u || d < 0) return;
       const back = offset(s, hero(s), -DIRS[d][0], -DIRS[d][1]);
-      if (back === null) return ringOut(s, { t: "unit", u });
+      if (back === null) return ringOut(s, { t: "unit", u }, (d + 4) % 8);
       const other = occupant(s, back);
       if (other) {
         damageUnit(s, u, 2);
@@ -136,7 +137,7 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "tolak", name: "Tolak Angin", cost: 2, type: "Serang", text: "Push all around you 2",
+    id: "tolak", name: "Tolak Angin", cost: 2, type: "Serang", text: "Send everything around you flying",
     pattern: { 6: "push", 7: "push", 8: "push", 11: "push", 13: "push", 16: "push", 17: "push", 18: "push" },
     self: true, targets: self,
     play: (s) => {
@@ -144,32 +145,14 @@ const list: CardDef[] = [
         const d = dirTo(s, hero(s), sq);
         const o = occupant(s, sq);
         if (o?.t === "thing" && o.th.kind === "petasan") explode(s, o.th);
-        else push(s, sq, d, 2);
+        else push(s, sq, d, o?.t === "thing" && o.th.kind === "warga" ? 1 : FLY);
       }
     },
   },
   {
-    id: "badai", name: "Badai", cost: 3, type: "Serang", rare: true, text: "Hit 3, push 2, chains",
+    id: "badai", name: "Badai", cost: 2, type: "Serang", rare: true, text: "Hit 4, flies, crash +3",
     pattern: { 7: "hit", 2: "push", 1: "hit", 3: "hit" }, targets: adjacentUnits,
-    play: (s, sq) => {
-      const d = dirTo(s, hero(s), sq);
-      let cur: number | null = sq;
-      for (let i = 0; i < 4 && cur !== null; i++) {
-        const u = unitAt(s, cur);
-        if (!u) break;
-        // Who's in the way? That's the next one to get hit.
-        let next: number | null = null;
-        let look: number | null = u.sq;
-        for (let k = 0; k < 2 + s.powers.momentum; k++) {
-          look = look === null ? null : offset(s, look, DIRS[d][0], DIRS[d][1]);
-          if (look === null) break;
-          if (!isEmpty(s, look)) { next = unitAt(s, look) ? look : null; break; }
-        }
-        damageUnit(s, u, 3);
-        if (s.units.includes(u)) push(s, u.sq, d, 2);
-        cur = next;
-      }
-    },
+    play: (s, sq) => kick(s, sq, 4, FLY, 3),
   },
   {
     id: "kuda", name: "Langkah Kuda", cost: 1, type: "Gerak", text: "Jump like a knight",
@@ -184,7 +167,7 @@ const list: CardDef[] = [
     play: (s, sq) => { s.hero.sq = sq; },
   },
   {
-    id: "benteng", name: "Sapu Benteng", cost: 2, type: "Gerak", text: "Dash, kick what you hit",
+    id: "benteng", name: "Sapu Benteng", cost: 2, type: "Gerak", text: "Dash, kick what you hit flying",
     pattern: { 2: "go", 7: "go", 10: "go", 11: "go", 13: "go", 14: "go", 17: "go", 22: "go" },
     targets: (s) => [0, 2, 4, 6].map((d) => offset(s, hero(s), DIRS[d][0], DIRS[d][1])).filter((x): x is number => x !== null),
     play: (s, sq) => {
@@ -193,7 +176,7 @@ const list: CardDef[] = [
       for (;;) {
         const next = offset(s, hero(s), DIRS[d][0], DIRS[d][1]);
         if (next === null) return;
-        if (!isEmpty(s, next)) return kick(s, next, 2, 1);
+        if (!isEmpty(s, next)) return kick(s, next, 2, FLY);
         s.hero.sq = next;
       }
     },
@@ -229,14 +212,14 @@ const list: CardDef[] = [
     },
   },
   {
-    id: "harimau", name: "Gaya Harimau", cost: 1, type: "Jurus", text: "Collisions deal +1",
+    id: "harimau", name: "Gaya Harimau", cost: 1, type: "Jurus", text: "Your kicks hit +1",
     pattern: { 6: "hit", 8: "hit", 16: "hit", 18: "hit" }, self: true, exhaust: true, targets: self,
     play: (s) => { s.powers.harimau++; },
   },
   {
-    id: "momentum", name: "Momentum", cost: 2, type: "Jurus", rare: true, text: "Pushes go 1 further",
+    id: "momentum", name: "Momentum", cost: 2, type: "Jurus", rare: true, text: "Crashes deal +2",
     pattern: { 7: "push", 2: "push", 17: "push", 22: "push" }, self: true, exhaust: true, targets: self,
-    play: (s) => { s.powers.momentum++; },
+    play: (s) => { s.powers.momentum += 2; },
   },
 ];
 
@@ -266,7 +249,9 @@ export function playCard(s: Fight, idx: number, sq: number): Fight {
   f.hand.splice(idx, 1);
   (c.exhaust ? f.exhausted : f.discard).push(id);
   say(f, c.self ? `You play ${c.name}` : `You play ${c.name} on ${sqName(f, sq)}`, "you");
+  const from = f.hero.sq;
   c.play(f, sq);
+  if (f.hero.sq !== from && f.status === "play") react(f); // moved into an enemy's reach
   f.bestCombo = Math.max(f.bestCombo, f.combo);
   if (f.combo >= 3) say(f, `Combo ×${f.combo}!`, "good");
   checkEnd(f);

@@ -4,7 +4,7 @@ import { CARDS, POOL, STARTER, isAttack } from "./cards";
 import { makeFight, type Fight, type Kind, type Setup } from "./rules";
 
 export const FLOORS = 7; // floor 6 is the boss
-export const HEAL_AFTER_FIGHT = 2;
+export const HEAL_AFTER_FIGHT = 6;
 /** Extra heal when every villager survived the fight. */
 export const SAVED_ALL_HEAL = 3;
 const KEY = "pums:silat-run";
@@ -97,7 +97,7 @@ function randomFight(floor: number, hp: number, max: number, deck: string[], see
   for (let i = 0; i < 2; i++) things.push({ kind: "warga", sq: pick([3, 4]) });
   const mud: number[] = [];
   for (let i = 0; i < 2; i++) mud.push(pick([4, 5]));
-  return { hero, heroHp: hp, heroMax: max, units, things, mud, deck, seed: seed + floor * 101, limit: floor >= 5 ? 4 : floor >= 2 ? 3 : 2 };
+  return { hero, heroHp: hp, heroMax: max, units, things, mud, deck, seed: seed + floor * 101, limit: floor >= 4 ? 99 : floor >= 2 ? 4 : floor >= 1 ? 3 : 2 };
 }
 
 export function fightFor(run: Pick<Run, "floor" | "hp" | "max" | "deck" | "seed">): Fight {
@@ -106,7 +106,7 @@ export function fightFor(run: Pick<Run, "floor" | "hp" | "max" | "deck" | "seed"
 }
 
 export function newRun(seed = Math.floor(Math.random() * 2 ** 31)): Run {
-  const base = { v: 1 as const, seed, floor: 0, hp: 20, max: 20, deck: [...STARTER] };
+  const base = { v: 1 as const, seed, floor: 0, hp: 30, max: 30, deck: [...STARTER] };
   return { ...base, fight: fightFor(base), reward: null, status: "fight", ringOuts: 0, bestCombo: 0 };
 }
 

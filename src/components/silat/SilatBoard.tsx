@@ -1,9 +1,9 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Piece } from "@/components/chess/Board";
 import { SilatKing } from "@/components/shell";
-import { PIECE, chargeEnd, col, intentValid, occupant, row, type Fight, type Fx, type Intent } from "@/lib/silat/rules";
+import { DIRS, PIECE, chargeEnd, col, intentValid, isGuarded, occupant, row, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
 
 const FILES = "abcdefgh";
 
@@ -11,6 +11,8 @@ export interface Highlights {
   targets?: number[];
   pending?: number | null;
   steps?: number[];
+  /** Squares where moving would get you struck, and for how much. */
+  danger?: Map<number, number>;
 }
 
 function Crate() {
@@ -55,6 +57,8 @@ const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   promote: () => ["QUEEN!", "#CE82FF"],
   castle: () => ["CASTLES!", "#FFC800"],
   lost: () => ["VILLAGER LOST", "#FF4B4B"],
+  summon: () => ["+PAWN", "#CE82FF"],
+  react: () => ["STRIKES!", "#FF4B4B"],
 };
 
 export function SilatBoard({
@@ -67,7 +71,8 @@ export function SilatBoard({
 }: {
   fight: Fight;
   hl?: Highlights;
-  preview?: boolean;
+  /** What the board will look like after the selected card. Drawn as ghosts on the real board. */
+  preview?: Fight;
   onTap?: (sq: number) => void;
   fxKey: number;
   combo?: number;
@@ -78,16 +83,59 @@ export function SilatBoard({
   const targets = new Set(hl.targets ?? []);
   const steps = new Set(hl.steps ?? []);
   // Intents: a badge on each acting enemy, and a red tint on the square it will hit. No paths.
-  const live = s.status === "play" || s.status === "enemy" ? s.intents.filter((it, i) => intentValid(s, it) && (s.status !== "enemy" || i >= s.enemyStep)) : [];
+  // While previewing a card, these show what the enemies would do after it.
+  const p = preview ?? s;
+  const live = p.status === "play" || p.status === "enemy" ? p.intents.filter((it, i) => intentValid(p, it) && (p.status !== "enemy" || i >= p.enemyStep)) : [];
   const badges = new Map<number, { ord: number; it: Intent; hit: number }>();
   const danger = new Map<number, number>();
   live.forEach((it) => {
-    const u = s.units.find((x) => x.id === it.id)!;
+    const u = p.units.find((x) => x.id === it.id)!;
     const hit = u.hit ?? PIECE[u.kind].hit;
-    badges.set(it.id, { ord: s.intents.indexOf(it) + 1, it, hit });
-    const sq = it.type === "strike" ? it.target : it.type === "charge" ? chargeEnd(s, it) : null;
-    if (sq !== null && sq !== undefined && (it.type === "strike" || occupant(s, sq))) danger.set(sq, (danger.get(sq) ?? 0) + hit);
+    badges.set(it.id, { ord: p.intents.indexOf(it) + 1, it, hit });
+    const sq = it.type === "strike" ? it.target : it.type === "charge" ? chargeEnd(p, it) : null;
+    if (sq !== null && sq !== undefined && (it.type === "strike" || occupant(p, sq))) danger.set(sq, (danger.get(sq) ?? 0) + hit);
   });
+
+  // Preview: ghosts where things will end up, and what happens to each piece, on top of the real board.
+  type Ghost = { key: string; sq: number; draw: "unit" | "hero" | "warga" | "batu"; code?: Kind };
+  const ghosts: Ghost[] = [];
+  const marks = new Map<number, { dmg: number; gone?: "OFF" | "KO" | "BOOM" }>();
+  if (preview) {
+    for (const u of s.units) {
+      const v = preview.units.find((x) => x.id === u.id);
+      if (!v) {
+        const off = preview.fx.some((f) => f.t === "ringout" && f.id === u.id);
+        marks.set(u.sq, { dmg: 0, gone: off ? "OFF" : "KO" });
+        continue;
+      }
+      if (v.sq !== u.sq) ghosts.push({ key: `u${u.id}`, sq: v.sq, draw: "unit", code: v.kind });
+      if (v.hp < u.hp) marks.set(u.sq, { dmg: u.hp - v.hp });
+    }
+    for (const t of s.things) {
+      const v = preview.things.find((x) => x.id === t.id);
+      if (!v) { marks.set(t.sq, { dmg: 0, gone: t.kind === "petasan" ? "BOOM" : t.kind === "warga" ? "KO" : "OFF" }); continue; }
+      if (v.sq !== t.sq && t.kind !== "petasan") ghosts.push({ key: `t${t.id}`, sq: v.sq, draw: t.kind });
+      if ((v.hp ?? 0) < (t.hp ?? 0)) marks.set(t.sq, { dmg: (t.hp ?? 0) - (v.hp ?? 0) });
+    }
+    if (preview.hero.sq !== s.hero.sq) ghosts.push({ key: "hero", sq: preview.hero.sq, draw: "hero" });
+    const hurt = s.hero.hp - preview.hero.hp;
+    if (hurt > 0) marks.set(preview.hero.sq, { dmg: hurt });
+  }
+
+  // Pieces that just left the board: keep drawing them for a moment while they fly off or fade.
+  type Leaving = { id: number; kind: Kind; from: number; tx: number; ty: number };
+  const [snap, setSnap] = useState<{ key: number; units: Fight["units"]; leaving: Leaving[] }>({ key: fxKey, units: s.units, leaving: [] });
+  if (snap.key !== fxKey) {
+    const leaving = snap.units
+      .filter((u) => !s.units.some((x) => x.id === u.id))
+      .map((u) => {
+        const f = s.fx.find((x): x is Extract<Fx, { t: "ko" | "ringout" }> => (x.t === "ko" || x.t === "ringout") && x.id === u.id);
+        const end = f?.sq ?? u.sq;
+        const [dx, dy] = f?.t === "ringout" && f.dir !== undefined ? DIRS[f.dir] : [0, 0];
+        return { id: u.id, kind: u.kind, from: u.sq, tx: (col(s, end) - col(s, u.sq) + dx * 1.6) * 100, ty: (row(s, end) - row(s, u.sq) + dy * 1.6) * 100 };
+      });
+    setSnap({ key: fxKey, units: s.units, leaving });
+  }
   const arrowAngle = (u: { sq: number }, it: Intent) => {
     if (it.type === "charge") return it.dir * 45;
     const to = it.type === "move" ? it.to : it.target;
@@ -110,7 +158,9 @@ export function SilatBoard({
               {danger.has(sq) && (
                 <span className="sl-danger" aria-hidden="true"><span>{danger.get(sq)}</span></span>
               )}
-              {steps.has(sq) && <span className="sl-dot" />}
+              {steps.has(sq) && (
+                <span className={`sl-dot${hl.danger?.get(sq) ? " risky" : ""}`}>{hl.danger?.get(sq) ? hl.danger.get(sq) : ""}</span>
+              )}
               {s.hop === sq && <span className="sl-hop" />}
             </button>
           );
@@ -127,7 +177,7 @@ export function SilatBoard({
         const b = badges.get(u.id);
         const attack = b && b.it.type !== "move";
         return (
-          <div key={`u${u.id}`} className="sl-tok" style={at(u.sq)}>
+          <div key={`u${u.id}`} className={`sl-tok${marks.get(u.sq)?.gone ? " sl-doomed" : ""}`} style={at(u.sq)}>
             <Piece code={u.kind} />
             <span className="sl-hp" style={u.boss ? { borderColor: "#B81F1F" } : undefined}>{u.hp}</span>
             {b && (
@@ -144,6 +194,11 @@ export function SilatBoard({
               </span>
             )}
             {u.target && !b && <span className="sl-badge" style={{ background: "#FFC800", color: "#5C4200" }}>★</span>}
+            {isGuarded(s, u) && (
+              <span className="sl-guard" aria-label="guarded">
+                <svg viewBox="0 0 24 26" aria-hidden="true"><path d="M12 1 L22 5 V12 C22 19 17 23 12 25 C7 23 2 19 2 12 V5z" fill="#1CB0F6" stroke="#fff" strokeWidth="2.5" /></svg>
+              </span>
+            )}
           </div>
         );
       })}
@@ -157,8 +212,28 @@ export function SilatBoard({
         )}
       </div>
 
+      {snap.leaving.map((g) => (
+        <div key={`x${snap.key}-${g.id}`} className="sl-tok" style={{ ...at(g.from), zIndex: 5 }}>
+          <span className="sl-leave" style={{ ["--tx" as string]: `${g.tx}%`, ["--ty" as string]: `${g.ty}%` }}><Piece code={g.kind} /></span>
+        </div>
+      ))}
+
+      {ghosts.map((g) => (
+        <div key={`g-${g.key}`} className="sl-tok sl-ghost" style={{ ...at(g.sq), zIndex: 3 }}>
+          {g.draw === "unit" ? <Piece code={g.code!} /> : g.draw === "hero" ? <SilatKing /> : g.draw === "warga" ? <Warga /> : <Boulder />}
+        </div>
+      ))}
+      {[...marks].map(([sq, m]) => (
+        <div key={`m${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 5 }}>
+          <span className={`sl-mark${m.gone ? " gone" : ""}`}>{m.gone ?? `-${m.dmg}`}</span>
+        </div>
+      ))}
+
       {[...targets].map((sq) => (
-        <div key={`h${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 4 }}><span className={`sl-target${hl.pending === sq ? " on" : ""}`} /></div>
+        <div key={`h${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 4 }}>
+          <span className={`sl-target${hl.pending === sq ? " on" : ""}`} />
+          {!!hl.danger?.get(sq) && <span className="sl-risk">-{hl.danger.get(sq)}</span>}
+        </div>
       ))}
 
       {combo >= 3 && (

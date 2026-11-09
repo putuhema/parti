@@ -491,6 +491,8 @@ a { text-decoration: none; }
 .sl-hp { position: absolute; right: 2px; bottom: 2px; min-width: 20px; height: 18px; padding: 0 4px; border-radius: 9px; background: #fff; border: 2px solid #4b4b4b; font-size: 11px; font-weight: 900; color: #262626; display: flex; align-items: center; justify-content: center; }
 .sl-badge { position: absolute; left: 2px; top: 2px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; font-size: 11px; font-weight: 900; color: #fff; display: flex; align-items: center; justify-content: center; }
 .sl-dot { position: absolute; left: 32%; top: 32%; width: 36%; height: 36%; border-radius: 50%; background: rgba(88, 204, 2, .8); box-shadow: 0 0 0 3px rgba(255, 255, 255, .7); pointer-events: none; animation: dotin 200ms var(--spring) both; }
+.sl-dot.risky { background: rgba(255, 75, 75, .92); color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+.sl-risk { position: absolute; right: 2px; top: 2px; padding: 0 4px; border-radius: 8px; background: #ea2b2b; color: #fff; font-size: 11px; font-weight: 900; pointer-events: none; }
 .sl-target { position: absolute; inset: 6%; border-radius: 50%; box-shadow: inset 0 0 0 4px #ffc800; pointer-events: none; animation: dotin 200ms var(--spring) both; }
 .sl-target.on { box-shadow: inset 0 0 0 5px #ff9600, 0 0 14px rgba(255, 150, 0, .7); animation: glow2 1s ease-in-out infinite; }
 .sl-hop { position: absolute; inset: 12%; border-radius: 50%; border: 3px dashed #46a302; pointer-events: none; }
@@ -505,6 +507,15 @@ a { text-decoration: none; }
 .sl-logline.full { white-space: normal; font-size: 14px; padding: 4px 2px; border-bottom: 1px solid var(--cream-2); }
 .sl-logbtn { flex-shrink: 0; align-self: center; padding: 4px 10px; border-radius: 999px; background: var(--cream-2); color: var(--plum); font-size: 12px; font-weight: 900; }
 @keyframes lognew { from { opacity: 0; transform: translateY(6px); } }
+.sl-guard { position: absolute; left: 1px; bottom: 1px; width: 17px; height: 19px; pointer-events: none; }
+.sl-guard svg { width: 17px !important; height: 19px !important; margin: 0 !important; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .25)) !important; }
+.sl-ghost { opacity: .5; outline: 2px dashed rgba(60, 60, 60, .55); outline-offset: -4px; border-radius: 10px; }
+.sl-doomed svg { animation: sldoom .45s ease-in-out infinite; }
+@keyframes sldoom { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+.sl-mark { position: absolute; left: 50%; top: 2px; transform: translateX(-50%); padding: 1px 6px; border-radius: 8px; background: #ff9600; color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; box-shadow: 0 2px 0 rgba(0, 0, 0, .2); animation: dotin 200ms var(--spring) both; }
+.sl-mark.gone { background: #3c3c3c; color: #ffc800; }
+.sl-leave { position: absolute; inset: 0; display: block; animation: slleave 650ms cubic-bezier(.3, .6, .4, 1) forwards; }
+@keyframes slleave { 0% { transform: none; opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) rotate(220deg) scale(.45); opacity: 0; } }
 .sl-danger { position: absolute; inset: 0; background: rgba(255, 75, 75, .32); box-shadow: inset 0 0 0 3px rgba(234, 43, 43, .75); pointer-events: none; }
 .sl-danger span { position: absolute; right: 3px; top: 2px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #ea2b2b; color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
 .sl-intent { position: absolute; left: 1px; top: 1px; height: 18px; padding: 0 4px; border-radius: 9px; color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; gap: 2px; box-shadow: 0 2px 0 rgba(0, 0, 0, .2); }

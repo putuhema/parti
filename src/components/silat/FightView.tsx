@@ -7,7 +7,7 @@ import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { CARDS, canPlay, isAttack, playCard } from "@/lib/silat/cards";
-import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, step, TENAGA, type Fight } from "@/lib/silat/rules";
+import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, reactionDamage, step, TENAGA, unitName, type Fight } from "@/lib/silat/rules";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -48,6 +48,12 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const targets = card && playing && selId && canPlay(f, selId) ? card.targets(f) : [];
   const display = sel !== null && pending !== null && targets.includes(pending) ? playCard(f, sel, pending) : f;
   const steps = playing && sel === null ? freeSteps(f) : [];
+  // Where moving gets you struck by an enemy that covers the square.
+  const danger = new Map<number, number>();
+  for (const sq of card?.type === "Gerak" ? targets : steps) {
+    const d = reactionDamage(f, sq);
+    if (d > 0) danger.set(sq, d);
+  }
   const fc = f.status === "play" ? forecast(display) : null;
   const incoming = fc?.damage ?? 0;
   const warn = fc && (incoming > 0 || fc.wargaHurt > 0 || fc.wargaDead > 0);
@@ -154,16 +160,18 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
     void runEnemy(s);
   }
 
+  const pendingUnit = pending !== null ? f.units.find((u) => u.sq === pending) : undefined;
+  const guardedTarget = card?.type === "Serang" && pendingUnit && isGuarded(f, pendingUnit) ? unitName(pendingUnit) : null;
   const tip = busy
     ? null
     : card
       ? !canPlay(f, selId!)
         ? [card.name, card.cost > f.tenaga ? "Not enough Tenaga." : "Nothing to use it on right now."]
         : pending !== null
-          ? [card.name, card.self ? "Tap your king or Play to use it." : "Tap again to play. The board shows what will happen."]
+          ? [card.name, card.self ? "Tap your king or Play to use it." : guardedTarget ? `${guardedTarget} is guarded (blue shield): it only budges 1 square.` : "Tap again to play. The board shows what will happen."]
           : [card.name, "Tap a highlighted square."]
       : null;
-  const hint = f.stepUsed ? "Pick a card, or end your turn." : "Pick a card, or tap a green dot for your free step.";
+  const hint = f.stepUsed ? "Pick a card, or end your turn." : "Pick a card, or step: red dots get you struck.";
   const recent = (f.log ?? []).slice(-3);
 
   return (
@@ -195,7 +203,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
       </div>
 
       <div ref={shakeRef}>
-        <SilatBoard fight={display} preview={display !== f} hl={{ targets, pending, steps }} onTap={tap} fxKey={fxKey} combo={f.status === "play" && display === f ? f.combo : 0} />
+        <SilatBoard fight={f} preview={display !== f ? display : undefined} hl={{ targets, pending, steps, danger }} onTap={tap} fxKey={fxKey} combo={f.status === "play" && display === f ? f.combo : 0} />
       </div>
 
       {tip ? (

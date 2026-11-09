@@ -1,7 +1,7 @@
 // Run with: bun test src/lib/silat
 import { describe, expect, test } from "bun:test";
 import { CARDS, canPlay, playCard } from "./cards";
-import { clone, enemyTurn, forecast, makeFight, plan, step, unitAt, type Fight, type Setup } from "./rules";
+import { clone, enemyTurn, forecast, isGuarded, makeFight, plan, reactionDamage, step, unitAt, type Fight, type Setup } from "./rules";
 import { FLOORS, fightFor, newRun, settle, takeReward } from "./run";
 
 const sq = (c: number, r: number) => r * 6 + c;
@@ -36,8 +36,8 @@ describe("design doc example (section 4)", () => {
       { id: rook.id, type: "charge", dir: 2 },
       { id: knight.id, type: "strike", target: sq(3, 2) },
     ];
-    // Staying put would cost 5.
-    expect(forecast(s).damage).toBe(5);
+    // Staying put would cost 7 (rook 4 + knight 3).
+    expect(forecast(s).damage).toBe(7);
 
     s = step(s, sq(2, 1));
     expect(forecast(s).damage).toBe(0);
@@ -46,19 +46,33 @@ describe("design doc example (section 4)", () => {
     expect(s.ringOuts).toBe(1);
 
     const after = forecast(s).after;
-    expect(after.units.find((u) => u.id === pawn.id)).toBeUndefined(); // 3 HP pawn, rook hits for 3
+    expect(after.units.find((u) => u.id === pawn.id)).toBeUndefined(); // 3 HP pawn, rook hits for 4
     expect(after.units.find((u) => u.id === rook.id)?.sq).toBe(sq(4, 2));
     expect(after.hero.hp).toBe(20);
   });
 });
 
 describe("pushes", () => {
-  test("a piece pushed into another: both take 2", () => {
+  test("a kicked piece flies until it crashes; the crash grows with distance and knocks the next piece on", () => {
+    // Pawn right next to the knight: crash at 2, knight gets knocked one square up.
     let s = fight({ hero: sq(2, 4), units: [{ kind: "p", sq: sq(2, 3) }, { kind: "n", sq: sq(2, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["tendang"]);
     s = play(s, "tendang", sq(2, 3));
-    // Pawn: 3 - 2 (kick) - 2 (collision) = gone. Knight: 5 - 2 = 3.
-    expect(s.units.find((u) => u.kind === "p")).toBeUndefined();
-    expect(unitAt(s, sq(2, 2))?.hp).toBe(3);
+    expect(s.units.find((u) => u.kind === "p")).toBeUndefined(); // 3 - 2 kick - 2 crash
+    expect(unitAt(s, sq(2, 1))?.hp).toBe(3);
+
+    // Rook three squares away: the knight flies 2 squares first, so the crash is 4.
+    s = fight({ hero: sq(2, 5), units: [{ kind: "n", sq: sq(2, 4) }, { kind: "r", sq: sq(2, 1) }, { kind: "k", sq: sq(5, 0) }] }, ["tendang"]);
+    s = play(s, "tendang", sq(2, 4));
+    expect(s.units.find((u) => u.kind === "n")).toBeUndefined(); // 5 - 2 - 4
+    expect(s.units.find((u) => u.kind === "r")!.hp).toBe(7 - 4);
+    expect(s.units.find((u) => u.kind === "r")!.sq).toBe(sq(2, 1)); // heavy: not knocked on
+  });
+
+  test("a light piece with a clear line behind it flies off the board", () => {
+    let s = fight({ hero: sq(2, 5), units: [{ kind: "b", sq: sq(2, 4) }, { kind: "k", sq: sq(5, 0) }] }, ["tendang"]);
+    s = play(s, "tendang", sq(2, 4));
+    expect(s.units.find((u) => u.kind === "b")).toBeUndefined();
+    expect(s.ringOuts).toBe(1);
   });
 
   test("light pieces pushed off the board are knocked out, heavy ones take 5 and stay", () => {
@@ -84,12 +98,12 @@ describe("pushes", () => {
     s = play(s, "tendang", sq(2, 3)); // kick the boulder up into the crate
     expect(s.things.find((t) => t.kind === "petasan")).toBeUndefined();
     expect(s.fx.some((f) => f.t === "boom")).toBe(true);
-    // Left pawn: 3 - 2 = 1, blown up-left to a6.
-    expect(unitAt(s, sq(0, 0))?.hp).toBe(1);
+    // Left pawn: blown up-left and flies off the board.
+    expect(unitAt(s, sq(0, 0))).toBeUndefined();
     // Right pawn: blown into its own king: 3 - 2 - 2 = gone, king 16 - 2 = 14.
-    expect(s.units.filter((u) => u.kind === "p")).toHaveLength(1);
+    expect(s.units.filter((u) => u.kind === "p")).toHaveLength(0);
     expect(s.units.find((u) => u.kind === "k")!.hp).toBe(14);
-    expect(s.hero.hp).toBe(20); // you were far enough away
+    expect(s.hero.hp).toBe(30); // you were far enough away
   });
 });
 
@@ -122,8 +136,9 @@ describe("enemies", () => {
   });
 
   test("damaged pieces get angry and act past the limit", () => {
-    let s = fight({ hero: sq(2, 5), units: [{ kind: "n", sq: sq(2, 4) }, { kind: "p", sq: sq(0, 3) }, { kind: "p", sq: sq(4, 3) }, { kind: "k", sq: sq(5, 0) }], limit: 0 }, ["tendang"]);
-    s = play(s, "tendang", sq(2, 4));
+    let s = fight({ hero: sq(2, 5), units: [{ kind: "n", sq: sq(2, 4) }, { kind: "p", sq: sq(0, 3) }, { kind: "p", sq: sq(4, 3) }, { kind: "k", sq: sq(5, 0) }], limit: 0 }, ["dalam"]);
+    s.units[0].hp = 9;
+    s = play(s, "dalam", sq(2, 4));
     plan(s);
     expect(s.intents.some((i) => i.id === s.units.find((u) => u.kind === "n")!.id)).toBe(true);
     expect(s.intents.filter((i) => s.units.find((u) => u.id === i.id)?.kind === "p")).toHaveLength(0);
@@ -150,13 +165,61 @@ describe("enemies", () => {
   });
 
   test("a piece pushed out of place loses the move or strike it planned", () => {
-    let s = fight({ hero: sq(2, 4), units: [{ kind: "p", sq: sq(2, 3) }, { kind: "k", sq: sq(5, 0) }] }, ["lurus"]);
+    let s = fight({ hero: sq(2, 4), units: [{ kind: "p", sq: sq(2, 3) }, { kind: "k", sq: sq(5, 0) }], mud: [sq(2, 0)] }, ["lurus"]);
     const pawn = s.units[0];
     s.intents = [{ id: pawn.id, type: "strike", target: sq(1, 4) }]; // it planned to hit b2
-    s = play(s, "lurus", sq(2, 3)); // kicked 3 squares up to c6, far from b2
+    s = play(s, "lurus", sq(2, 3)); // kicked flying up, stuck in the mud on c6, far from b2
     const after = forecast(s).after;
     expect(after.hero.hp).toBe(20);
     expect(after.units.find((u) => u.id === pawn.id)?.sq).toBe(sq(2, 0));
+  });
+
+  test("guarded pieces only budge 1 square and can't be knocked off the board", () => {
+    // The pawn on c5 guards b4 (pawns cover the squares diagonally in front of them).
+    let s = fight({ hero: sq(1, 4), units: [{ kind: "b", sq: sq(1, 3) }, { kind: "p", sq: sq(2, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["tendang", "tendang"]);
+    const bishop = s.units[0];
+    expect(isGuarded(s, bishop)).toBe(true);
+    s = play(s, "tendang", sq(1, 3));
+    expect(s.units.find((u) => u.id === bishop.id)!.sq).toBe(sq(1, 2)); // nudged, not flying
+
+    // Unguarded, the same kick sends it off the board.
+    s = fight({ hero: sq(1, 4), units: [{ kind: "b", sq: sq(1, 3) }, { kind: "k", sq: sq(5, 0) }] }, ["tendang"]);
+    expect(isGuarded(s, s.units[0])).toBe(false);
+    s = play(s, "tendang", sq(1, 3));
+    expect(s.units.find((u) => u.kind === "b")).toBeUndefined();
+  });
+
+  test("stepping onto a square an enemy covers: it jabs you right away (half its hit), once per turn", () => {
+    // Knight on c4 covers b2 and d2 (among others). You stand on c2.
+    const base = fight({ hero: sq(2, 4), units: [{ kind: "n", sq: sq(2, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["kuda"]);
+    expect(reactionDamage(base, sq(1, 4))).toBe(2); // half a knight's hit of 3, rounded up
+    expect(reactionDamage(base, sq(2, 5))).toBe(0);
+
+    // Safe step: nothing happens.
+    expect(step(base, sq(2, 5)).hero.hp).toBe(20);
+
+    // Covered step: the knight jabs you for 2.
+    const s = step(base, sq(3, 4));
+    expect(s.hero.hp).toBe(18);
+    expect(s.log.some((l) => l.t.includes("strikes you as you arrive"))).toBe(true);
+
+    // It already reacted this turn: another square it covers (b2) is now safe until next turn.
+    expect(reactionDamage(s, sq(1, 4))).toBe(0);
+  });
+
+  test("move cards trigger reactions too", () => {
+    // Pawn on b4 covers a3 and c3. Langkah Kuda from b1 to c3 lands right in it.
+    let s = fight({ hero: sq(1, 5), units: [{ kind: "p", sq: sq(1, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["kuda"]);
+    s = play(s, "kuda", sq(2, 3));
+    expect(s.hero.hp).toBe(19); // half a pawn's hit of 2
+  });
+
+  test("every 3 turns the king calls a pawn", () => {
+    const s = fight({ hero: sq(0, 5), units: [{ kind: "k", sq: sq(3, 0) }], limit: 0 });
+    const before = s.units.length;
+    for (let i = 0; i < 3; i++) enemyTurn(s);
+    expect(s.units.filter((u) => u.kind === "p").length).toBe(1);
+    expect(s.units.length).toBe(before + 1);
   });
 
   test("knocking out the king wins", () => {
@@ -183,18 +246,10 @@ describe("villagers", () => {
     plan(s);
     const knight = s.units.find((u) => u.kind === "n")!;
     expect(s.intents.find((i) => i.id === knight.id)).toEqual({ id: knight.id, type: "strike", target: sq(4, 3) });
-    s = play(s, "tangkis", sq(0, 5));
-    // Hit for 2: the villager survives with 1.
-    let after = forecast(s).after;
-    expect(after.things.find((t) => t.kind === "warga")?.hp).toBe(1);
-    // Hit again: gone, and you lose 3 even though you have Block.
-    after.intents = [{ id: knight.id, type: "strike", target: sq(4, 3) }];
-    after.status = "enemy";
-    after.hero.block = 5;
-    const hp = after.hero.hp;
-    after = forecast(after).after;
-    expect(after.things.some((t) => t.kind === "warga")).toBe(false);
-    expect(after.hero.hp).toBe(hp - 3);
+    s = play(s, "tangkis", sq(0, 5)); // Block 3 won't help the villager
+    const after = forecast(s).after;
+    expect(after.things.some((t) => t.kind === "warga")).toBe(false); // knight hits for 3: gone
+    expect(after.hero.hp).toBe(20 - 3);
     expect(after.wargaLost).toBe(1);
   });
 

@@ -5,12 +5,12 @@
 export type Kind = "p" | "n" | "b" | "r" | "q" | "k";
 
 export const PIECE: Record<Kind, { name: string; hp: number; hit: number; heavy: boolean }> = {
-  p: { name: "Pawn", hp: 3, hit: 1, heavy: false },
-  n: { name: "Knight", hp: 5, hit: 2, heavy: false },
-  b: { name: "Bishop", hp: 5, hit: 2, heavy: false },
-  r: { name: "Rook", hp: 7, hit: 3, heavy: true },
-  q: { name: "Queen", hp: 7, hit: 3, heavy: true },
-  k: { name: "King", hp: 16, hit: 3, heavy: true },
+  p: { name: "Pawn", hp: 3, hit: 2, heavy: false },
+  n: { name: "Knight", hp: 5, hit: 3, heavy: false },
+  b: { name: "Bishop", hp: 5, hit: 3, heavy: false },
+  r: { name: "Rook", hp: 7, hit: 4, heavy: true },
+  q: { name: "Queen", hp: 7, hit: 5, heavy: true },
+  k: { name: "King", hp: 16, hit: 4, heavy: true },
 };
 
 /** Collisions and blasts deal this much to each side. */
@@ -57,14 +57,16 @@ export type Intent =
 export type Fx =
   | { t: "dmg"; sq: number; n: number; hero?: boolean }
   | { t: "block"; sq: number; n: number }
-  | { t: "ko"; sq: number }
-  | { t: "ringout"; sq: number }
+  | { t: "ko"; sq: number; id?: number }
+  | { t: "ringout"; sq: number; dir?: number; id?: number }
   | { t: "boom"; sq: number }
   | { t: "miss"; sq: number }
   | { t: "dodge"; sq: number }
   | { t: "promote"; sq: number }
   | { t: "castle"; sq: number }
-  | { t: "lost"; sq: number };
+  | { t: "lost"; sq: number }
+  | { t: "summon"; sq: number }
+  | { t: "react"; sq: number };
 
 export type LogKind = "turn" | "you" | "enemy" | "good" | "bad";
 export interface LogLine { t: string; k?: LogKind }
@@ -102,6 +104,8 @@ export interface Fight {
   wargaLost: number;
   /** What happened, oldest first. */
   log: LogLine[];
+  /** Enemies that already struck back at you this turn. */
+  reacted: number[];
 }
 
 // ---------- Geometry ----------
@@ -183,7 +187,7 @@ export function damageUnit(s: Fight, u: Unit, n: number) {
   s.combo++;
   if (u.hp <= 0) {
     s.units = s.units.filter((x) => x !== u);
-    s.fx.push({ t: "ko", sq: u.sq });
+    s.fx.push({ t: "ko", sq: u.sq, id: u.id });
     say(s, `${unitName(u)} takes ${n} and is knocked out`, "good");
   } else {
     say(s, `${unitName(u)} takes ${n} (${u.hp} left)`);
@@ -254,27 +258,47 @@ export function checkEnd(s: Fight) {
 
 // ---------- Pushes, collisions, explosions ----------
 
-/** Push whatever is on `sq` up to `n` squares in direction `dir`. */
-export function push(s: Fight, sq: number, dir: number, n: number) {
+/** Sent flying: travels until it hits something. */
+export const FLY = 99;
+/** Heavy pieces (rook, queen, king) only slide this far. */
+export const HEAVY_SLIDE = 2;
+const CRASH_MAX = 7;
+
+/** Push whatever is on `sq` in direction `dir`, up to `n` squares (FLY = until it hits something).
+ *  A crash deals 2, +1 for every square it flew, and knocks what it hit one square on. */
+export function push(s: Fight, sq: number, dir: number, n: number, crash = 0) {
   const mover = occupant(s, sq);
   if (!mover || n <= 0) return;
+  if (mover.t === "unit") {
+    if (isHeavy(mover.u)) n = Math.min(n, HEAVY_SLIDE);
+    else if (n > 1 && isGuarded(s, mover.u)) {
+      n = 1;
+      say(s, `${unitName(mover.u)} is guarded and only budges 1 square`);
+    }
+  }
   const [dx, dy] = DIRS[dir];
   let cur = sq;
-  const moved = () => { if (cur !== sq) say(s, `${occName(mover)} is pushed to ${sqName(s, cur)}`); };
-  for (let i = 0; i < n + s.powers.momentum; i++) {
+  let flew = 0;
+  const moved = () => { if (cur !== sq) say(s, `${occName(mover)} ${flew > 1 ? "flies" : "is pushed"} to ${sqName(s, cur)}`); };
+  for (let i = 0; i < n; i++) {
     const next = offset(s, cur, dx, dy);
-    if (next === null) { moved(); return ringOut(s, mover); }
+    if (next === null) { moved(); return ringOut(s, mover, dir); }
     const other = occupant(s, next);
-    if (other) { moved(); say(s, `${occName(mover)} crashes into ${occName(other) === "You" ? "you" : occName(other)}`); return collide(s, mover, other); }
+    if (other) {
+      moved();
+      const dmg = Math.min(CRASH_MAX, BUMP + flew + crash + s.powers.momentum);
+      say(s, `${occName(mover)} crashes into ${occName(other) === "You" ? "you" : occName(other)}${flew > 1 ? ` at speed (${dmg})` : ""}`);
+      return collide(s, mover, other, dir, dmg);
+    }
     moveOcc(s, mover, next);
     cur = next;
+    flew++;
     if (s.mud.includes(next)) { moved(); say(s, `${occName(mover)} sticks in the mud`); return; }
   }
   moved();
 }
 
-function collide(s: Fight, a: Occ, b: Occ) {
-  const n = BUMP + s.powers.harimau;
+function collide(s: Fight, a: Occ, b: Occ, dir: number, n: number) {
   // Hit the one standing still first, then the one that was moving.
   for (const o of [b, a]) {
     if (o.t === "thing" && o.th.kind === "batu") continue;
@@ -286,18 +310,26 @@ function collide(s: Fight, a: Occ, b: Occ) {
       hitOcc(s, o, n);
     }
   }
+  bumpOn(s, b, dir);
 }
 
-export function ringOut(s: Fight, o: Occ) {
+/** Newton's cradle: whatever got hit is knocked one square on (it can hit the next thing, and so on). */
+function bumpOn(s: Fight, o: Occ, dir: number) {
+  if (o.t === "unit" && s.units.includes(o.u) && !isHeavy(o.u)) push(s, o.u.sq, dir, 1);
+  else if (o.t === "thing" && s.things.includes(o.th) && o.th.kind !== "petasan") push(s, o.th.sq, dir, 1);
+}
+
+export function ringOut(s: Fight, o: Occ, dir?: number) {
   if (o.t === "thing") {
     if (o.th.kind === "warga") return killWarga(s, o.th);
     s.things = s.things.filter((t) => t !== o.th);
-    s.fx.push({ t: "ringout", sq: o.th.sq });
+    s.fx.push({ t: "ringout", sq: o.th.sq, dir });
     return;
   }
   if (o.t === "hero") return damageHero(s, HEAVY_RING_OUT);
   if (isHeavy(o.u)) { say(s, `${unitName(o.u)} is too heavy to fall and slams the edge`); return damageUnit(s, o.u, HEAVY_RING_OUT); }
-  s.fx.push({ t: "ringout", sq: o.u.sq });
+  if (isGuarded(s, o.u)) { say(s, `${unitName(o.u)} is held by its guard and slams the edge`); return damageUnit(s, o.u, HEAVY_RING_OUT); }
+  s.fx.push({ t: "ringout", sq: o.u.sq, dir, id: o.u.id });
   say(s, `${unitName(o.u)} flies off the board!`, "good");
   s.units = s.units.filter((x) => x !== o.u);
   s.ringOuts++;
@@ -305,7 +337,7 @@ export function ringOut(s: Fight, o: Occ) {
   checkEnd(s);
 }
 
-/** A firecracker crate goes off: 2 damage to all 8 squares around it, and they get pushed 1 outward. */
+/** A firecracker crate goes off: 2 damage to all 8 squares around it, and enemies there go flying outward. */
 export function explode(s: Fight, th: Thing) {
   if (!s.things.includes(th)) return;
   s.things = s.things.filter((t) => t !== th);
@@ -318,11 +350,11 @@ export function explode(s: Fight, th: Thing) {
     if (!o) continue;
     if (o.t === "thing") {
       if (o.th.kind === "petasan") explode(s, o.th); // boulders are too heavy to be blown away
-      else if (o.th.kind === "warga") damageWarga(s, o.th, BUMP);
+      else if (o.th.kind === "warga") { damageWarga(s, o.th, BUMP); if (s.things.includes(o.th)) push(s, sq, d, 1); }
       continue;
     }
     hitOcc(s, o, BUMP);
-    if (o.t === "unit" && s.units.includes(o.u)) push(s, o.u.sq, d, 1);
+    if (o.t === "unit" && s.units.includes(o.u)) push(s, o.u.sq, d, FLY);
   }
 }
 
@@ -342,6 +374,34 @@ export function strikeSquares(s: Fight, u: Unit): number[] {
 }
 
 const SLIDES: Partial<Record<Kind, number[]>> = { r: [0, 2, 4, 6], b: [1, 3, 5, 7], q: [0, 1, 2, 3, 4, 5, 6, 7] };
+
+// ---------- Guards (chess-style defence) ----------
+
+/** Bishops, rooks and queens guard this many squares along their lines. */
+export const GUARD_REACH = 2;
+
+/** Squares a piece covers, like a defended square in chess. */
+export function coverSquares(s: Fight, u: Unit, from = u.sq): number[] {
+  const lines = SLIDES[u.kind];
+  if (!lines) return strikeSquares(s, { ...u, sq: from });
+  const out: number[] = [];
+  for (const d of lines) {
+    let cur = from;
+    for (let i = 0; i < GUARD_REACH; i++) {
+      const next = offset(s, cur, DIRS[d][0], DIRS[d][1]);
+      if (next === null) break;
+      out.push(next);
+      if (next !== u.sq && !isEmpty(s, next)) break;
+      cur = next;
+    }
+  }
+  return out;
+}
+
+/** The enemy pieces protecting `u`. */
+export const guardians = (s: Fight, u: Unit) => s.units.filter((v) => v !== u && coverSquares(s, v).includes(u.sq));
+/** A guarded piece can't be sent flying (only nudged 1 square) and can't be knocked off the board. */
+export const isGuarded = (s: Fight, u: Unit) => !isHeavy(u) && guardians(s, u).length > 0;
 
 /** Empty squares a slider can reach this turn. */
 function slideSquares(s: Fight, u: Unit): number[] {
@@ -363,46 +423,90 @@ function lineDir(s: Fight, u: Unit, sq: number) {
   return d >= 0 && (SLIDES[u.kind] ?? []).includes(d) ? d : -1;
 }
 
+/** How exposed a piece would be on `sq`: could you kick it off the board or into its friends? */
+function exposure(s: Fight, u: Unit, sq: number): number {
+  if (isHeavy(u) || s.units.some((v) => v !== u && coverSquares(s, v).includes(sq))) return 0;
+  let risk = 0;
+  for (let d = 0; d < 8; d++) {
+    const [dx, dy] = DIRS[d];
+    const from = offset(s, sq, -dx, -dy); // where you'd stand to kick it this way
+    if (from === null || dist(s, from, s.hero.sq) > 1) continue; // only where you can reach right now
+    if (from !== s.hero.sq && !isEmpty(s, from) && from !== u.sq) continue;
+    let cur = sq;
+    for (;;) {
+      const next = offset(s, cur, dx, dy);
+      if (next === null) { risk += 3; break; } // straight off the board
+      if (next !== u.sq && !isEmpty(s, next)) {
+        const o = occupant(s, next);
+        if (o?.t === "unit") risk += 1; // into a friend
+        if (o?.t === "thing" && o.th.kind === "petasan") risk += 2;
+        break;
+      }
+      if (s.mud.includes(next)) break;
+      cur = next;
+    }
+  }
+  return risk;
+}
+
+/** How much a piece on `sq` would threaten you and your villagers. */
+function threat(s: Fight, u: Unit, sq: number): number {
+  const hero = s.hero.sq;
+  const warga = wargaSquares(s);
+  if (SLIDES[u.kind]) {
+    let t = 0;
+    const lines = SLIDES[u.kind] ?? [];
+    if (lines.includes(dirTo(s, sq, hero))) t += 5;
+    for (const w of warga) if (lines.includes(dirTo(s, sq, w))) t += 3;
+    return t;
+  }
+  const reach = new Set(strikeSquares(s, { ...u, sq }));
+  let t = reach.has(hero) ? 5 : 0;
+  for (const w of warga) if (reach.has(w)) t += 4;
+  for (const n of neighbors(s, hero)) if (reach.has(n) && isEmpty(s, n)) t += 1;
+  return t;
+}
+
+function placeScore(s: Fight, u: Unit, sq: number) {
+  const prey = [s.hero.sq, ...wargaSquares(s)];
+  const near = Math.min(...prey.map((p) => dist(s, sq, p)));
+  // Pieces like to stand where an ally guards them.
+  const guarded = s.units.some((v) => v !== u && coverSquares(s, v).includes(sq)) ? 3 : 0;
+  return threat(s, u, sq) * 2 - exposure(s, u, sq) + guarded - near;
+}
+
 function chooseIntent(s: Fight, u: Unit, covered: Set<number>): Intent | null {
   const hero = s.hero.sq;
   const warga = wargaSquares(s);
   const prey = [hero, ...warga];
+  let moves: number[];
   if (SLIDES[u.kind]) {
     // Charge at you first, else at a villager in line.
     for (const p of prey) {
       const d = lineDir(s, u, p);
       if (d >= 0) return { id: u.id, type: "charge", dir: d };
     }
-    const opts = slideSquares(s, u);
-    if (!opts.length) return null;
-    const lines = (sq: number) => (prey.some((p) => (SLIDES[u.kind] ?? []).includes(dirTo(s, sq, p))) ? 0 : 100);
-    const near = (sq: number) => Math.min(...prey.map((p) => dist(s, sq, p)));
-    const best = [...opts].sort((a, b) => lines(a) + near(a) * 2 - (lines(b) + near(b) * 2) || a - b)[0];
-    return { id: u.id, type: "move", to: best };
-  }
-  // Strikers: your square, then a villager, then the squares you'd step to (boxing you in).
-  const reach = new Set(strikeSquares(s, u));
-  if (reach.has(hero) && !covered.has(hero)) return { id: u.id, type: "strike", target: hero };
-  const victim = warga.find((sq) => reach.has(sq) && !covered.has(sq));
-  if (victim !== undefined) return { id: u.id, type: "strike", target: victim };
-  const escapes = neighbors(s, hero).filter((sq) => isEmpty(s, sq) && !covered.has(sq) && reach.has(sq));
-  if (escapes.length) return { id: u.id, type: "strike", target: escapes[0] };
-  if (reach.has(hero)) return { id: u.id, type: "strike", target: hero };
-  // Walk closer.
-  let moves: number[] = [];
-  if (u.kind === "p") {
-    const f = offset(s, u.sq, 0, 1);
-    moves = f !== null && isEmpty(s, f) ? [f] : [];
-  } else if (u.kind === "n") {
-    moves = KNIGHT.map(([dx, dy]) => offset(s, u.sq, dx, dy)).filter((x): x is number => x !== null && isEmpty(s, x));
+    moves = slideSquares(s, u);
+  } else {
+    // Strikers: your square, then a villager, then the squares you'd step to (boxing you in).
+    const reach = new Set(strikeSquares(s, u));
+    if (reach.has(hero) && !covered.has(hero)) return { id: u.id, type: "strike", target: hero };
+    const victim = warga.find((sq) => reach.has(sq) && !covered.has(sq));
+    if (victim !== undefined) return { id: u.id, type: "strike", target: victim };
+    const escapes = neighbors(s, hero).filter((sq) => isEmpty(s, sq) && !covered.has(sq) && reach.has(sq));
+    if (escapes.length) return { id: u.id, type: "strike", target: escapes[0] };
+    if (reach.has(hero)) return { id: u.id, type: "strike", target: hero };
+    if (u.kind === "p") {
+      const f = offset(s, u.sq, 0, 1);
+      return f !== null && isEmpty(s, f) ? { id: u.id, type: "move", to: f } : null;
+    }
+    moves = u.kind === "n" ? KNIGHT.map(([dx, dy]) => offset(s, u.sq, dx, dy)).filter((x): x is number => x !== null && isEmpty(s, x)) : [];
   }
   if (!moves.length) return null;
-  // Prefer squares that threaten you, a villager, or where you'd step next turn; then just get closer.
-  const zone = new Set([hero, ...neighbors(s, hero), ...warga]);
-  const threat = (sq: number) => strikeSquares(s, { ...u, sq }).filter((x) => zone.has(x)).length;
-  const near = (sq: number) => Math.min(...prey.map((p) => dist(s, sq, p)));
-  const best = [...moves].sort((a, b) => threat(b) - threat(a) || near(a) - near(b) || a - b)[0];
-  return { id: u.id, type: "move", to: best };
+  // Move somewhere that threatens you or a villager, without standing where you can kick it off the board.
+  const scored = moves.map((sq) => ({ sq, v: placeScore(s, u, sq) })).sort((a, b) => b.v - a.v || a.sq - b.sq);
+  if (scored[0].v <= placeScore(s, u, u.sq) && exposure(s, u, u.sq) === 0) return null; // already in a good spot
+  return { id: u.id, type: "move", to: scored[0].sq };
 }
 
 /** The king holds its throne behind its army and strikes if you come close.
@@ -463,6 +567,31 @@ function attackHero(s: Fight, u: Unit, n: number): boolean {
   return true;
 }
 
+// ---------- Reactions ----------
+
+/** Enemies that would strike you if you ended a move on `sq`: any piece covering that square
+ *  (the same squares it guards its allies on) that hasn't reacted yet this turn. */
+export function reactors(s: Fight, sq: number): Unit[] {
+  const done = s.reacted ?? [];
+  return s.units.filter((u) => u.locked === 0 && !done.includes(u.id) && coverSquares(s, u).includes(sq));
+}
+
+/** Total damage you'd take from reactions by moving to `sq`. */
+/** Reactions are quick jabs: half the piece's normal hit, rounded up. */
+export const reactionHit = (u: Unit) => Math.ceil(unitHit(u) / 2);
+export const reactionDamage = (s: Fight, sq: number) => reactors(s, sq).reduce((a, u) => a + reactionHit(u), 0);
+
+/** You just moved: every enemy covering your new square strikes you, once per turn each. */
+export function react(s: Fight) {
+  for (const u of reactors(s, s.hero.sq)) {
+    if (s.status === "won" || s.status === "lost") return;
+    (s.reacted ??= []).push(u.id);
+    s.fx.push({ t: "react", sq: u.sq });
+    say(s, `${unitName(u)} covers ${sqName(s, s.hero.sq)} and strikes you as you arrive`, "bad");
+    attackHero(s, u, reactionHit(u));
+  }
+}
+
 function charge(s: Fight, u: Unit, dir: number) {
   const [dx, dy] = DIRS[dir];
   for (let guard = 0; guard < s.n * 2; guard++) {
@@ -475,7 +604,8 @@ function charge(s: Fight, u: Unit, dir: number) {
         continue; // you hopped away: it keeps flying
       }
       if (o.t === "thing" && o.th.kind === "batu") return damageUnit(s, u, BUMP);
-      return hitOcc(s, o, unitHit(u));
+      hitOcc(s, o, unitHit(u));
+      return bumpOn(s, o, dir);
     }
     u.sq = next;
     if (s.mud.includes(next)) return;
@@ -579,6 +709,7 @@ export function startTurn(s: Fight, guarantee?: (id: string) => boolean) {
   s.stepUsed = false;
   s.hop = null;
   s.counter = 0;
+  s.reacted = [];
   s.combo = 0;
   s.status = "play";
   drawCards(s, HAND);
@@ -609,9 +740,25 @@ export function enemyStep(s: Fight): boolean {
   return true;
 }
 
+/** Every 3 turns the king (or boss) calls a pawn to its side. */
+export const SUMMON_EVERY = 3;
+function summon(s: Fight) {
+  const leader = s.units.find((u) => u.target);
+  if (!leader || s.units.length >= 9) return;
+  const spots = neighbors(s, leader.sq)
+    .filter((sq) => isEmpty(s, sq) && row(s, sq) < s.n - 2)
+    .sort((a, b) => dist(s, a, s.hero.sq) - dist(s, b, s.hero.sq) || a - b);
+  if (!spots.length) return;
+  const sq = spots[0];
+  s.units.push({ id: s.nextId++, kind: "p", hp: PIECE.p.hp, max: PIECE.p.hp, sq, angry: false, locked: 0 });
+  s.fx.push({ t: "summon", sq });
+  say(s, `${unitName(leader)} calls a Pawn to ${sqName(s, sq)}`, "bad");
+}
+
 export function finishEnemy(s: Fight, guarantee?: (id: string) => boolean) {
   if (s.status === "won" || s.status === "lost") return;
   march(s);
+  if (s.turn % SUMMON_EVERY === 0) summon(s);
   plan(s);
   startTurn(s, guarantee);
 }
@@ -666,6 +813,7 @@ export function step(s: Fight, sq: number) {
   f.hero.sq = sq;
   f.stepUsed = true;
   say(f, `You step to ${sqName(f, sq)}`, "you");
+  react(f);
   return f;
 }
 
@@ -726,8 +874,10 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     ringOuts: 0,
     wargaLost: 0,
     log: [],
+    reacted: [],
   };
   s.draw = shuffle(s, [...o.deck]);
+  say(s, "Blue shield = guarded by an ally: kicks only budge it 1 square. Break the guard first.");
   plan(s);
   startTurn(s, guarantee);
   return s;
