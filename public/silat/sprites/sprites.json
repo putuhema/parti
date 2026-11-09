@@ -1,8 +1,68 @@
 {
-  "_readme": "Your sprites. See README.md in this folder. Keys starting with _ are ignored: rename _example to hero to try the example.",
-  "hero": {
-    "idle": { "file": "idle.png", "frames": 4, "fps": 6 },
-    "kick": { "file": "example-kick.png", "frames": 4, "fps": 14 },
-    "hit": { "file": "example-hit.png", "frames": 3, "fps": 14 }
+  "_readme": "Your sprites. See README.md in this folder. Keys starting with _ are ignored (rename _hero to hero to use your hero). A file starting with / is a path from the site root; pixel: true keeps pixels crisp; filter is a CSS filter.",
+  "_hero": {
+    "idle": {
+      "file": "idle.png",
+      "frames": 4,
+      "fps": 6
+    },
+    "kick": {
+      "file": "example-kick.png",
+      "frames": 4,
+      "fps": 14
+    },
+    "hit": {
+      "file": "example-hit.png",
+      "frames": 3,
+      "fps": 14
+    }
+  },
+  "pawn": {
+    "idle": {
+      "file": "/silat/pixel/piece-p.png",
+      "pixel": true,
+      "filter": "grayscale(1) brightness(.75) contrast(1.15)"
+    }
+  },
+  "knight": {
+    "idle": {
+      "file": "/silat/pixel/piece-n.png",
+      "pixel": true,
+      "filter": "grayscale(1) brightness(.75) contrast(1.15)"
+    }
+  },
+  "bishop": {
+    "idle": {
+      "file": "/silat/pixel/piece-b.png",
+      "pixel": true,
+      "filter": "grayscale(1) brightness(.75) contrast(1.15)"
+    }
+  },
+  "rook": {
+    "idle": {
+      "file": "/silat/pixel/piece-r.png",
+      "pixel": true,
+      "filter": "grayscale(1) brightness(.75) contrast(1.15)"
+    }
+  },
+  "queen": {
+    "idle": {
+      "file": "/silat/pixel/piece-q.png",
+      "pixel": true,
+      "filter": "grayscale(1) brightness(.75) contrast(1.15)"
+    }
+  },
+  "king": {
+    "idle": {
+      "file": "/silat/pixel/piece-k.png",
+      "pixel": true,
+      "filter": "grayscale(1) brightness(.75) contrast(1.15)"
+    }
+  },
+  "boss": {
+    "idle": {
+      "file": "/silat/pixel/piece-boss.png",
+      "pixel": true
+    }
   }
 }
