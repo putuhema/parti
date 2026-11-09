@@ -22,7 +22,7 @@ import {
   type Lang,
   type RoomLang,
 } from "./lib/words/content";
-import { isWord, pairWords } from "./lib/words/dict";
+import { isWord, pairExamples, pairWords } from "./lib/words/dict";
 import { wordLang, wordMode } from "./schema";
 
 type PId = Id<"players">;
@@ -135,7 +135,9 @@ function setup(mode: WordMode, lang: RoomLang, players: PId[], now: number): Wor
       break;
     case "dontsay": {
       const tier = (t: number) => shuffle(CATEGORIES.map((c, i) => ({ c, i })).filter((x) => x.c.tier === t).map((x) => x.i));
-      const order = [...tier(1).slice(0, 2), ...tier(2).slice(0, 2), ...tier(3).slice(0, 2), ...tier(4), ...tier(3), ...tier(4)];
+      // The small tiers come back a second time, when your easy answers are used up.
+      const t3 = tier(3).slice(0, 3), t4 = tier(4).slice(0, 4);
+      const order = [...tier(1).slice(0, 2), ...tier(2).slice(0, 2), ...t3, ...t4, ...shuffle(t3), ...shuffle(t4)];
       g.rounds = order.length;
       g.phase = "answer";
       g.m = { order, answers: {}, hearts: Object.fromEntries(players.map((p) => [p, 3])), used: Object.fromEntries(players.map((p) => [p, []])), verdict: {}, history: [] };
@@ -538,7 +540,7 @@ function pair(g: WordGame, me: PId, action: string, x: Input, now: number) {
         m.note = `No ${g.lang === "id" ? "kata" : "words"} fit ${m.first.toUpperCase()}…${was.toUpperCase()}, so the end letter is now ${m.last.toUpperCase()}`;
         words = pairWords(m.first, m.last, g.lang);
       }
-      const pool = pairWords(m.first, m.last, g.lang, 600);
+      const pool = pairExamples(m.first, m.last, g.lang);
       const short = pool.filter((w) => w.length <= 6);
       m.examples = shuffle(short.length >= 4 ? short : pool).slice(0, 8);
       if (words.length === 0) m.examples = [];
