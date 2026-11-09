@@ -6,11 +6,11 @@ import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { NODE_INFO as JOURNEY_ICONS } from "@/lib/journey";
-import { CARDS } from "@/lib/silat/cards";
+import { CARDS, STYLES, type Style } from "@/lib/silat/cards";
 import { MAP_LANES, MAP_ROWS, NODE_INFO, nextNodes, type MapNode, type NodeKind } from "@/lib/silat/map";
 import { RELICS } from "@/lib/silat/relics";
 import {
-  EVENTS, REST_HEAL, SHOP_HEAL, buyCard, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, takeReward, takeTreasure, train, type Run,
+  EVENTS, REST_HEAL, SHOP_HEAL, STYLE_STARTER, buyCard, chooseStyle, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, takeReward, takeTreasure, train, type Run,
 } from "@/lib/silat/run";
 
 const ICON_PATH: Record<NodeKind, string> = {
@@ -359,6 +359,48 @@ export function TreasureScreen({ run, onChange }: { run: Run; onChange: (r: Run)
       </div>
       <div className="grow" />
       <button className="pill-btn" onClick={() => onChange(takeTreasure(run, null))}>Leave it</button>
+    </Screen>
+  );
+}
+
+// ---------- Pick a playstyle ----------
+
+export function StyleScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
+  const [pick, setPick] = useState<Style | null>(null);
+  return (
+    <Screen>
+      <RunHeader run={run} title="Choose your style" />
+      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>
+        Each style starts with two of its own cards, and its cards show up more as rewards.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {(Object.keys(STYLES) as Style[]).map((id) => {
+          const st = STYLES[id];
+          const on = pick === id;
+          return (
+            <button key={id} type="button" aria-pressed={on} onClick={() => { feedback.tap(); setPick(id); }}
+              style={{ textAlign: "left", padding: 14, borderRadius: 20, cursor: "pointer", background: "#fff", border: `3px solid ${on ? st.color : "transparent"}`, boxShadow: `0 4px 0 ${on ? st.edge : "var(--cream-3)"}`, display: "flex", flexDirection: "column", gap: 10 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ width: 34, height: 34, borderRadius: 12, background: st.color, boxShadow: `0 3px 0 ${st.edge}`, color: "#fff", fontWeight: 900, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>{st.name[0]}</span>
+                <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+                  <span className="display" style={{ fontSize: 20 }}>{st.name} · {st.animal}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--plum-soft)" }}>{st.text}</span>
+                </span>
+              </span>
+              {on && (
+                <span style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                  {STYLE_STARTER[id].map((cid) => <span key={cid} style={{ width: 100, height: 144, display: "block" }}><SilatCard id={cid} /></span>)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div className="grow" />
+      <button className="pill-btn primary" disabled={!pick} style={{ opacity: pick ? 1 : 0.5 }}
+        onClick={() => { if (!pick) return; feedback.correct(); onChange(chooseStyle(run, pick)); }}>
+        {pick ? `Fight as ${STYLES[pick].name}` : "Pick a style"}
+      </button>
     </Screen>
   );
 }

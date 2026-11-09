@@ -82,7 +82,8 @@ export function SilatBoard({
     const hit = u.hit ?? PIECE[u.kind].hit;
     badges.set(it.id, { ord: p.intents.indexOf(it) + 1, it, hit });
     if (it.type === "slam") {
-      for (const sq of slamArea(p, it.center)) if (sq !== u.sq) danger.set(sq, (danger.get(sq) ?? 0) + hit);
+      // Tint the whole area (that's where you'd get hit), but not squares holding its own pieces.
+      for (const sq of slamArea(p, it.center)) if (sq !== u.sq && !p.units.some((v) => v.sq === sq)) danger.set(sq, (danger.get(sq) ?? 0) + hit);
       return;
     }
     const sq = it.type === "strike" ? it.target : it.type === "charge" ? chargeEnd(p, it) : null;

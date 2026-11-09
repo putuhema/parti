@@ -1,14 +1,14 @@
 // Run with: bun test src/lib/silat
 import { describe, expect, test } from "bun:test";
-import { CARDS, canPlay, playCard } from "./cards";
+import { CARDS, canPlay, cardCost, playCard } from "./cards";
 import { clone, enemyTurn, forecast, isGuarded, makeFight, plan, reactionDamage, step, unitAt, type Fight, type Setup } from "./rules";
 import { makeMap, nextNodes, nodeById, MAP_ROWS } from "./map";
 import { ALL_RELICS } from "./relics";
-import { buyCard, chooseEvent, enter, fightFor, newRun, settle, takeReward, type Run } from "./run";
+import { BASE_DECK, buyCard, chooseEvent, chooseStyle, enter, fightFor, newRun, settle, takeReward, type Run } from "./run";
 
 /** A fresh run already standing in the Warm-up fight, with no relics (so results are predictable). */
 function startRun(seed: number): Run {
-  const run = { ...newRun(seed), relics: [] as string[] };
+  const run = { ...chooseStyle(newRun(seed), "harimau"), relics: [] as string[] };
   return enter(run, nextNodes(run.map, null)[0]);
 }
 
@@ -294,10 +294,13 @@ describe("cards", () => {
 });
 
 describe("runs", () => {
-  test("a run starts on the map with a random Pusaka, then: fight, reward, back to the map", () => {
+  test("a run starts with picking a style and a random Pusaka, then: map, fight, reward, back to the map", () => {
     let run = newRun(3);
-    expect(run.status).toBe("map");
+    expect(run.status).toBe("style");
     expect(run.relics).toHaveLength(1);
+    run = chooseStyle(run, "bangau");
+    expect(run.status).toBe("map");
+    expect(run.deck).toEqual([...BASE_DECK, "napas", "balas"]);
     run = enter(run, nextNodes(run.map, null)[0]);
     expect(run.status).toBe("fight");
     run.fight!.status = "won";
@@ -380,11 +383,13 @@ describe("slams (Hantam)", () => {
     expect(forecast(play(s, "tangkis", sq(2, 4))).damage).toBe(0);
   });
 
-  test("a slam hits the slammer's own allies around you too", () => {
-    const s = fight({ hero: sq(2, 4), units: [{ kind: "q", sq: sq(2, 2) }, { kind: "p", sq: sq(1, 3) }, { kind: "k", sq: sq(5, 0) }] });
+  test("a slam only hurts you, never the slammer's own pieces", () => {
+    const s = fight({ hero: sq(2, 4), units: [{ kind: "q", sq: sq(2, 2) }, { kind: "p", sq: sq(1, 3) }, { kind: "k", sq: sq(3, 3) }] });
     s.intents = [{ id: s.units[0].id, type: "slam", center: sq(2, 4) }];
-    const after = forecast(s).after;
-    expect(after.units.find((u) => u.kind === "p")).toBeUndefined(); // 3 HP pawn, queen hits for 5
+    const f = forecast(s);
+    expect(f.damage).toBe(5);
+    expect(f.after.units.find((u) => u.kind === "p")!.hp).toBe(3);
+    expect(f.after.units.find((u) => u.kind === "k")!.hp).toBe(16);
   });
 
   test("kick the slammer out of reach and its slam is cancelled", () => {
@@ -401,6 +406,68 @@ describe("slams (Hantam)", () => {
     s = play(s, "tendang", sq(1, 0));
     expect(s.kos).toBe(1);
     expect(s.fx.some((f) => f.t === "gold")).toBe(true);
+  });
+});
+
+describe("playstyles", () => {
+  test("Harimau: Terkam draws a card when it causes a crash; Rantai is free after a crash", () => {
+    let s = fight({ hero: sq(2, 4), units: [{ kind: "p", sq: sq(2, 3), hp: 9 }, { kind: "n", sq: sq(2, 2), hp: 9 }, { kind: "k", sq: sq(5, 0) }] }, ["terkam", "rantai"]);
+    s.draw = ["tangkis"];
+    expect(cardCost(s, "rantai")).toBe(1);
+    s = play(s, "terkam", sq(2, 3));
+    expect(s.hand).toContain("tangkis");
+    expect(cardCost(s, "rantai")).toBe(0);
+  });
+
+  test("Harimau: Amuk gives 2 Block per crash", () => {
+    let s = fight({ hero: sq(2, 4), units: [{ kind: "p", sq: sq(2, 3), hp: 9 }, { kind: "n", sq: sq(2, 2), hp: 9 }, { kind: "k", sq: sq(5, 0) }] }, ["amuk", "tendang"]);
+    s = play(s, "amuk", sq(2, 4));
+    s = play(s, "tendang", sq(2, 3));
+    expect(s.hero.block).toBe(2);
+  });
+
+  test("Bangau: Balas hits for your Block; Pantulan sends soaked damage back", () => {
+    let s = fight({ hero: sq(2, 4), units: [{ kind: "n", sq: sq(2, 3), hp: 9 }, { kind: "k", sq: sq(5, 0) }] }, ["tangkis", "balas"]);
+    s = play(s, "tangkis", sq(2, 4));
+    s = play(s, "balas", sq(2, 3));
+    expect(s.units.find((u) => u.kind === "n")!.hp).toBe(9 - 6); // Block 4 + 2
+
+    s = fight({ hero: sq(2, 4), units: [{ kind: "n", sq: sq(1, 2), hp: 9 }, { kind: "k", sq: sq(5, 0) }] }, ["pantulan", "tangkis"]);
+    s.intents = [{ id: s.units[0].id, type: "strike", target: sq(2, 4) }];
+    s = play(s, "pantulan", sq(2, 4));
+    s = play(s, "tangkis", sq(2, 4));
+    const after = forecast(s).after;
+    expect(after.hero.hp).toBe(20);
+    expect(after.units.find((u) => u.kind === "n")!.hp).toBe(9 - 3); // the knight's 3 came back
+  });
+
+  test("Bangau: Benteng Diri starts each turn with 3 Block", () => {
+    let s = fight({ hero: sq(0, 5), units: [{ kind: "k", sq: sq(5, 0) }], limit: 0 }, ["bentengdiri"]);
+    s.draw = Array(10).fill("tangkis");
+    s = play(s, "bentengdiri", sq(0, 5));
+    enemyTurn(s);
+    expect(s.hero.block).toBe(3);
+  });
+
+  test("Ular: Lincah powers up the kick after a move; Bayangan skips reactions", () => {
+    let s = fight({ hero: sq(2, 5), units: [{ kind: "n", sq: sq(3, 3), hp: 9 }, { kind: "k", sq: sq(5, 0) }] }, ["lincah", "tendang"]);
+    s = play(s, "lincah", sq(2, 5));
+    s = step(s, sq(2, 4)); // moved: next kick +2, and now next to the knight
+    s = play(s, "tendang", sq(3, 3));
+    expect(s.log.some((l) => l.t === "Knight takes 3 (6 left)")).toBe(true); // Tendang's 1 + Lincah's 2
+    expect(s.tf.rush).toBe(0); // used up
+
+    s = fight({ hero: sq(2, 4), units: [{ kind: "n", sq: sq(2, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["bayangan"]);
+    s = play(s, "bayangan", sq(2, 4));
+    expect(step(s, sq(3, 4)).hero.hp).toBe(20); // the knight covers d2, but you're a shadow
+  });
+
+  test("Ular: Lilit pulls a piece next to you and it can't act this turn", () => {
+    let s = fight({ hero: sq(2, 5), units: [{ kind: "n", sq: sq(2, 2) }, { kind: "k", sq: sq(5, 0) }] }, ["lilit"]);
+    s = play(s, "lilit", sq(2, 2));
+    const n = s.units.find((u) => u.kind === "n")!;
+    expect(n.sq).toBe(sq(2, 4));
+    expect(s.intents.some((i) => i.id === n.id)).toBe(false);
   });
 });
 

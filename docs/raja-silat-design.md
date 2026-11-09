@@ -553,7 +553,8 @@ won 100% at 24 HP. Now: **20 HP, heal 2** after each fight. Bot: ~60% runs won, 
 
 **Slams and knockout impact (player: "no reason to Block, kills don't feel satisfying").**
 - **Hantam (slam):** rooks, queens, the king and the boss slam when you're within 2 squares,
-  hitting your square and all 8 around it (their own allies included). One free step can't escape
+  hitting your square and all 8 around it. (Changed later at the player's request: slams only hurt
+  you, never the slammer's own pieces.) One free step can't escape
   it, so you Block it, knock the slammer out of reach, lock it, or use a move card. Shown as a red
   3×3 and a burst badge.
 - **Knockouts:** white flash, the piece bursts into fragments, a stamped "KO!", heavier sound and
@@ -568,6 +569,21 @@ Big attacks stay committed once wound up: a charge can't turn (the matador still
 lands on the area it was aimed at. Slams only wind up when enemies plan at the end of their turn,
 never in the middle of yours (otherwise every step near the king cost 4 HP and fights stalled).
 Knights far from you no longer idle. Bot: ~52% runs won, losses spread over floors 1–4 and the boss.
+
+**Playstyles (pick one at the start of each run).** Every run starts with a base deck (3 Tendang,
+3 Tangkis, Langkah Kuda, Pukulan Dalam) plus two cards of your style; card rewards lean 4:1 toward it.
+- **Harimau (tiger), crash and chain:** Terkam (hit 2, flies, draw 1 if it crashes), Rantai (hit 2,
+  flies, free after a crash this turn), Amuk (power: +2 Block per crash), plus Tendangan Lurus,
+  Tolak Angin, Badai, Gaya Harimau, Momentum.
+- **Bangau (crane), defend and punish:** Napas Panjang (Block 4, draw 1), Balas (0 cost: hit for
+  your Block +2), Benteng Diri (power: 3 Block each turn), Pantulan (rare power: soaked damage hits
+  back), plus Kuda-kuda, Tangkisan, Kuncian.
+- **Ular (snake), move and strike:** Liuk (0 cost: step, draw 1), Lilit (2: pull a piece next to you
+  and lock it), Sabetan (hit everything around you for 1), Lincah (power: each move makes your next
+  kick +2), Bayangan (rare power: moves never set off reactions), plus Gajah Miring, Sapu Benteng, Elakan.
+- Cards show their style as a coloured dot; Rantai's cost turns green when it's free. Undo is cleared
+  after a card draws (no peeking at your deck).
+- Bot, 450 runs: ~47% won overall; Ular 52%, Bangau 47%, Harimau 41%.
 
 ## 16. Open questions
 

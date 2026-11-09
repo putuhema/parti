@@ -72,6 +72,26 @@ export type Fx =
 export type LogKind = "turn" | "you" | "enemy" | "good" | "bad";
 export interface LogLine { t: string; k?: LogKind }
 
+/** Jurus (power) cards: how many of each you've played this fight. */
+export interface Powers {
+  harimau: number; // kicks +1
+  momentum: number; // crashes +2
+  amuk?: number; // each crash you cause: +2 Block
+  benteng?: number; // start each turn with +3 Block
+  pantulan?: number; // Block you soak is dealt back to the attacker
+  lincah?: number; // each time you move, your next kick hits +2
+  bayangan?: number; // your moves never set off reactions
+}
+
+/** Things counted per turn. */
+export interface TurnFlags {
+  crashed: boolean; // Keris Berapi used
+  ko: boolean; // Kopi Tubruk used
+  crashes?: number; // crashes you caused this turn
+  rush?: number; // Lincah: bonus on your next kick
+}
+const freshTurn = (): TurnFlags => ({ crashed: false, ko: false, crashes: 0, rush: 0 });
+
 export interface Fight {
   n: number;
   turn: number;
@@ -84,12 +104,13 @@ export interface Fight {
   /** Pusaka (relics) you carry: ids from relics.ts. */
   relics: string[];
   /** Things that happen once per turn (relic triggers). */
-  tf: { crashed: boolean; ko: boolean };
+  tf: TurnFlags;
   /** Elakan: the square you hop to when the first hit comes. */
   hop: number | null;
   /** Tangkisan: attackers that hit you get pushed back this far. */
   counter: number;
-  powers: { harimau: number; momentum: number };
+  /** Jurus (power) cards in play this fight. */
+  powers: Powers;
   units: Unit[];
   things: Thing[];
   mud: number[];
@@ -189,7 +210,7 @@ function onKnockout(s: Fight, sq: number) {
   s.kos = (s.kos ?? 0) + 1;
   s.fx.push({ t: "gold", sq, n: KO_GOLD });
   if (!yours(s) || !has(s, "kopi") || s.tf?.ko) return;
-  s.tf = { ...(s.tf ?? { crashed: false, ko: false }), ko: true };
+  s.tf = { ...freshTurn(), ...s.tf, ko: true };
   s.tenaga++;
   say(s, "Kopi Tubruk: +1 Tenaga", "good");
 }
@@ -298,8 +319,16 @@ export function push(s: Fight, sq: number, dir: number, n: number, crash = 0) {
     if (other) {
       moved();
       let dmg = Math.min(CRASH_MAX, BUMP + flew + crash + s.powers.momentum);
+      if (yours(s)) {
+        s.tf = { ...freshTurn(), ...s.tf, crashes: (s.tf?.crashes ?? 0) + 1 };
+        const amuk = s.powers.amuk ?? 0;
+        if (amuk) {
+          s.hero.block += 2 * amuk;
+          say(s, `Amuk: +${2 * amuk} Block`, "good");
+        }
+      }
       if (yours(s) && has(s, "keris_api") && !s.tf?.crashed) {
-        s.tf = { ...(s.tf ?? { crashed: false, ko: false }), crashed: true };
+        s.tf = { ...freshTurn(), ...s.tf, crashed: true };
         dmg *= 2;
         say(s, "Keris Berapi: double crash!", "good");
       }
@@ -616,7 +645,14 @@ function attackHero(s: Fight, u: Unit, n: number): boolean {
     s.hop = null;
     return false;
   }
+  const soaked = Math.min(s.hero.block, n);
   damageHero(s, n);
+  // Pantulan: what your Block soaked goes straight back at the attacker.
+  const pantulan = s.powers.pantulan ?? 0;
+  if (pantulan && soaked > 0 && s.units.includes(u)) {
+    say(s, `Pantulan: the ${unitName(u)} takes ${soaked * pantulan} back`, "good");
+    damageUnit(s, u, soaked * pantulan);
+  }
   if (s.counter > 0 && s.units.includes(u)) {
     const d = dirTo(s, s.hero.sq, u.sq);
     // Only attackers right next to you can be kicked back.
@@ -639,8 +675,17 @@ export function reactors(s: Fight, sq: number): Unit[] {
 export const reactionHit = (u: Unit) => Math.ceil(unitHit(u) / 2);
 export const reactionDamage = (s: Fight, sq: number) => reactors(s, sq).reduce((a, u) => a + reactionHit(u), 0);
 
+/** You moved (step or a move card): Lincah builds up a bonus for your next kick. */
+export function heroMoved(s: Fight) {
+  const lincah = s.powers.lincah ?? 0;
+  if (!lincah) return;
+  s.tf = { ...freshTurn(), ...s.tf, rush: (s.tf?.rush ?? 0) + 2 * lincah };
+  say(s, `Lincah: your next kick hits +${s.tf.rush}`, "good");
+}
+
 /** You just moved: every enemy covering your new square strikes you, once per turn each. */
 export function react(s: Fight) {
+  if (s.powers.bayangan) return; // Bayangan: you move like a shadow
   for (const u of reactors(s, s.hero.sq)) {
     if (s.status === "won" || s.status === "lost") return;
     (s.reacted ??= []).push(u.id);
@@ -654,7 +699,7 @@ export function react(s: Fight) {
   }
 }
 
-/** The squares a slam hits. */
+/** The squares a slam covers (it only hurts you, never the slammer's allies). */
 export const slamArea = (s: Fight, center: number) => [center, ...neighbors(s, center)];
 
 function slam(s: Fight, u: Unit, center: number) {
@@ -669,14 +714,7 @@ function slam(s: Fight, u: Unit, center: number) {
     attackHero(s, u, hit);
     if (s.hop === null && hop !== null && area.has(hop)) s.hop = hop;
   }
-  // Everything else in the area, its own allies included.
-  for (const sq of area) {
-    if (sq === s.hero.sq || sq === u.sq) continue;
-    const o = occupant(s, sq);
-    if (!o || o.t === "hero") continue;
-    if (o.t === "unit") damageUnit(s, o.u, hit);
-    else if (o.th.kind === "petasan") explode(s, o.th);
-  }
+  // Slams only hurt you: the enemy's own pieces in the area are spared.
 }
 
 function charge(s: Fight, u: Unit, dir: number) {
@@ -797,11 +835,11 @@ export const TENAGA = 3;
 export function startTurn(s: Fight, guarantee?: (id: string) => boolean) {
   s.turn++;
   say(s, `Turn ${s.turn}`, "turn");
-  s.hero.block = has(s, "gelang") ? Math.min(s.hero.block, 5) : 0;
+  s.hero.block = (has(s, "gelang") ? Math.min(s.hero.block, 5) : 0) + 3 * (s.powers.benteng ?? 0);
   s.tenaga = TENAGA + (s.turn === 1 && has(s, "kendang") ? 1 : 0);
   s.stepUsed = false;
   s.extraSteps = has(s, "sandal") ? 1 : 0;
-  s.tf = { crashed: false, ko: false };
+  s.tf = freshTurn();
   s.hop = null;
   s.counter = 0;
   s.reacted = [];
@@ -909,6 +947,7 @@ export function step(s: Fight, sq: number) {
   if (f.extraSteps > 0) f.extraSteps--;
   else f.stepUsed = true;
   say(f, `You step to ${sqName(f, sq)}`, "you");
+  heroMoved(f);
   react(f);
   retarget(f);
   return f;
@@ -943,7 +982,7 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     stepUsed: false,
     extraSteps: 0,
     relics: o.relics ?? [],
-    tf: { crashed: false, ko: false },
+    tf: freshTurn(),
     hop: null,
     counter: 0,
     powers: { harimau: (o.relics ?? []).includes("keris") ? 1 : 0, momentum: 0 },

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SilatKing } from "@/components/shell";
 import { FightView } from "@/components/silat/FightView";
-import { CampScreen, EventScreen, MapScreen, RewardScreen, ShopScreen, TreasureScreen } from "@/components/silat/RunScreens";
+import { CampScreen, EventScreen, MapScreen, RewardScreen, ShopScreen, StyleScreen, TreasureScreen } from "@/components/silat/RunScreens";
 import { Confetti, Mascot } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { nodeById } from "@/lib/silat/map";
@@ -64,6 +64,7 @@ export default function SilatPlay() {
     );
   }
 
+  if (run.status === "style") return <StyleScreen run={run} onChange={update} />;
   if (run.status === "map") return <MapScreen run={run} onChange={update} />;
   if (run.status === "reward" && run.reward) return <RewardScreen run={run} onChange={update} />;
   if (run.status === "camp") return <CampScreen run={run} onChange={update} />;

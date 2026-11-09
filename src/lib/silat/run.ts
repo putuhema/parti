@@ -1,7 +1,7 @@
 // Raja Silat: a run is a path through a map of fights, elites, campfires, shops, mystery
 // events and treasure, ending with a boss. You collect cards, gold and Pusaka (relics).
 // Saved on the device.
-import { CARDS, POOL, STARTER, isAttack } from "./cards";
+import { CARDS, POOL, STARTER, isAttack, type Style } from "./cards";
 import { MAP_ROWS, makeMap, nextNodes, nodeById, type MapNode, type RunMap } from "./map";
 import { ALL_RELICS, RELICS } from "./relics";
 import { KO_GOLD, makeFight, type Fight, type Kind, type Setup } from "./rules";
@@ -12,7 +12,7 @@ export const START_HP = 16;
 const KEY = "pums:silat-run";
 const BEST_KEY = "pums:silat-best";
 
-export type RunStatus = "map" | "fight" | "reward" | "camp" | "shop" | "event" | "treasure" | "won" | "lost";
+export type RunStatus = "style" | "map" | "fight" | "reward" | "camp" | "shop" | "event" | "treasure" | "won" | "lost";
 
 export interface Reward { gold: number; cards: string[]; relics: string[] }
 export interface ShopItem { id: string; price: number; sold: boolean }
@@ -28,6 +28,8 @@ export interface Run {
   gold: number;
   deck: string[];
   relics: string[];
+  /** Your playstyle, picked at the start. Card rewards lean toward it. */
+  style?: Style;
   map: RunMap;
   at: string | null;
   path: string[];
@@ -199,13 +201,27 @@ export function fightFor(run: Run, node: MapNode): Fight {
   return makeFight(fightSetup(run, node), isAttack);
 }
 
+/** Everyone starts with these, plus two cards of their style. */
+export const BASE_DECK = ["tendang", "tendang", "tendang", "tangkis", "tangkis", "tangkis", "kuda", "dalam"];
+export const STYLE_STARTER: Record<Style, string[]> = {
+  harimau: ["terkam", "rantai"],
+  bangau: ["napas", "balas"],
+  ular: ["liuk", "lilit"],
+};
+
+/** Pick your playstyle: sets your starting deck, then you're on the map. */
+export function chooseStyle(run: Run, style: Style): Run {
+  if (run.status !== "style") return run;
+  return { ...run, style, deck: [...BASE_DECK, ...STYLE_STARTER[style]], status: "map" };
+}
+
 export function newRun(seed = Math.floor(Math.random() * 2 ** 31)): Run {
   const r = rng(seed * 13 + 5);
   // Every run starts with a random common Pusaka, so runs differ from the first fight.
   const starter = pickOne(r, ALL_RELICS.filter((x) => !x.rare)).id;
   return {
     v: 2, seed, floor: 0, hp: START_HP, max: START_HP, gold: 20, deck: [...STARTER], relics: [starter],
-    map: makeMap(seed), at: null, path: [], status: "map",
+    map: makeMap(seed), at: null, path: [], status: "style",
     fight: null, reward: null, shop: null, event: null, treasure: null, ringOuts: 0, bestCombo: 0,
   };
 }
@@ -244,8 +260,15 @@ function cardChoices(run: Run, r: () => number, n = 3): string[] {
   // The first reward always has something flashy.
   if (run.floor === 0) out.push(pickOne(r, ["badai", "tolak", "benteng"]));
   const pool = POOL.filter((id) => !out.includes(id));
+  // Your style's cards show up far more often; other styles' cards less.
+  const weight = (id: string) => {
+    const c = CARDS[id];
+    const base = c.rare ? 1 : 3;
+    if (!run.style || !c.style) return base * 2;
+    return c.style === run.style ? base * 4 : base;
+  };
   while (out.length < n && pool.length) {
-    const weighted = pool.flatMap((id) => (CARDS[id].rare ? [id] : [id, id, id]));
+    const weighted = pool.flatMap((id) => Array(weight(id)).fill(id) as string[]);
     const id = pickOne(r, weighted);
     out.push(id);
     pool.splice(pool.indexOf(id), 1);

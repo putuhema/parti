@@ -6,7 +6,7 @@ import { SilatBoard } from "@/components/silat/SilatBoard";
 import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { CARDS, canPlay, isAttack, playCard } from "@/lib/silat/cards";
+import { CARDS, canPlay, cardCost, isAttack, playCard } from "@/lib/silat/cards";
 import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, reactionDamage, step, TENAGA, unitName, type Fight } from "@/lib/silat/rules";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -64,7 +64,8 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const warnText = !fc ? "" : incoming > 0 ? `You'll take ${incoming} damage` : "Nobody gets hurt";
 
   function commit(next: Fight) {
-    setHistory((h) => [...h, f]);
+    // Drawing a card reveals your deck, so you can't undo past it.
+    setHistory((h) => (next.draw.length < f.draw.length || next.discard.length < f.discard.length - 1 ? [] : [...h, f]));
     setFxKey((k) => k + 1);
     sound(next);
     onChange(next);
@@ -162,7 +163,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
     ? null
     : card
       ? !canPlay(f, selId!)
-        ? [card.name, card.cost > f.tenaga ? "Not enough Tenaga." : "Nothing to use it on right now."]
+        ? [card.name, cardCost(f, selId!) > f.tenaga ? "Not enough Tenaga." : "Nothing to use it on right now."]
         : pending !== null
           ? [card.name, card.self ? "Tap your king or Play to use it." : guardedTarget ? `${guardedTarget} is guarded (blue shield): it only budges 1 square.` : "Tap again to play. The board shows what will happen."]
           : [card.name, "Tap a highlighted square."]
@@ -274,7 +275,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
             >
               <span className="deal" style={{ animationDelay: `${i * 70}ms` }}>
                 <span className="bob" style={{ animationDelay: `${-i * 0.6}s`, animationPlayState: on ? "paused" : undefined }}>
-                  <SilatCard id={id} on={on} off={!canPlay(f, id)} />
+                  <SilatCard id={id} on={on} off={!canPlay(f, id)} cost={cardCost(f, id)} />
                 </span>
               </span>
             </button>
