@@ -519,6 +519,26 @@ Full-damage reactions made the bot refuse to approach anything (0% wins, fights 
 turns); half damage keeps fights moving. To pay for it you start with **30 HP** and heal **6**
 after each fight. Bot: ~63% runs won, ~8.5 HP lost per fight (was ~4), ~4.7 turns per fight.
 
+**Gameplay pass (player request: improve what's there, no new systems).**
+- **Boulders and firecracker crates removed** from fights. The first fight ("Warm-up") now teaches
+  the crash: kick the pawn in front of you into the pawn behind it, while the knight threatens a villager.
+- **Enemy AI:** bishops, rooks and queens only charge down a clear line (never through their own
+  ally). Strikers pick the hit that hurts you most: you, or a villager they can finish off. When you
+  get within 2 of the king, pieces close ranks around it, and the king steps back into the formation.
+- **Cards:** Tendang hit 1 (damage comes from the crash), Pukulan Dalam hit 4 no push (for guarded or
+  heavy pieces), Bantingan throws a piece over you and sends it flying, Tendangan Sabit costs 1,
+  Tarik also hits 1, Tangkis Block 4, Tangkisan Block 3. Starter: 3 Tendang, Pukulan Dalam,
+  3 Tangkis, Langkah Kuda, Tarik, Bantingan.
+- **Fight variety:** formations Pawn Wall, Cavalry, Snipers, Siege, Escort (3 villagers) and Hold
+  Out (survive 5 turns, or beat the king). The header shows the formation and the turns left.
+- **Feel:** your king lunges toward what it hits; enemy turns are faster.
+- **Balance:** 24 HP, heal 4 after each fight. Bot: ~55% runs won, ~6.6 HP lost per fight.
+
+**Villagers removed (player request).** No more villagers in any fight; the Escort formation is gone.
+Enemies only target you. Losing villagers was most of the unavoidable damage, so without them the bot
+won 100% at 24 HP. Now: **20 HP, heal 2** after each fight. Bot: ~60% runs won, ~4 HP lost per fight
+(a fifth of your health), runs end at ~9 HP, losses on floors 4–6.
+
 ## 16. Open questions
 
 1. **Tab name**: "Silat" (short, fits the tab bar) or "Raja Silat"?

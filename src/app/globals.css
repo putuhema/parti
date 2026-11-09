@@ -520,6 +520,8 @@ a { text-decoration: none; }
 .sl-mark.gone { background: #3c3c3c; color: #ffc800; }
 .sl-leave { position: absolute; inset: 0; display: block; animation: slleave 650ms cubic-bezier(.3, .6, .4, 1) forwards; }
 @keyframes slleave { 0% { transform: none; opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) rotate(220deg) scale(.45); opacity: 0; } }
+.sl-lunge { animation: sllunge 260ms cubic-bezier(.2, .9, .3, 1); }
+@keyframes sllunge { 0% { transform: none; } 35% { transform: translate(var(--lx), var(--ly)) scale(1.12) rotate(-6deg); } 100% { transform: none; } }
 .sl-danger { position: absolute; inset: 0; background: rgba(255, 75, 75, .32); box-shadow: inset 0 0 0 3px rgba(234, 43, 43, .75); pointer-events: none; }
 .sl-danger span { position: absolute; right: 3px; top: 2px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #ea2b2b; color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
 .sl-intent { position: absolute; left: 1px; top: 1px; height: 18px; padding: 0 4px; border-radius: 9px; color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; gap: 2px; box-shadow: 0 2px 0 rgba(0, 0, 0, .2); }

@@ -4,9 +4,7 @@ import { CARDS, POOL, STARTER, isAttack } from "./cards";
 import { makeFight, type Fight, type Kind, type Setup } from "./rules";
 
 export const FLOORS = 7; // floor 6 is the boss
-export const HEAL_AFTER_FIGHT = 6;
-/** Extra heal when every villager survived the fight. */
-export const SAVED_ALL_HEAL = 3;
+export const HEAL_AFTER_FIGHT = 2;
 const KEY = "pums:silat-run";
 const BEST_KEY = "pums:silat-best";
 
@@ -22,7 +20,6 @@ export interface Run {
   status: "fight" | "reward" | "won" | "lost";
   ringOuts: number;
   bestCombo: number;
-  wargaLost?: number;
 }
 
 export interface Best { floor: number; wins: number; runs: number }
@@ -40,7 +37,7 @@ function rng(seed: number) {
 
 export const floorName = (floor: number) => (floor === FLOORS - 1 ? "Boss: Mandor Benteng" : `Fight ${floor + 1}`);
 
-/** The first fight is handmade: kick the boulder into the firecracker crate. */
+/** The first fight is handmade: kick the pawn in front of you into the pawn behind it. */
 function firstFight(hp: number, max: number, deck: string[], seed: number): Setup {
   const sq = (c: number, r: number) => r * 6 + c;
   return {
@@ -49,55 +46,121 @@ function firstFight(hp: number, max: number, deck: string[], seed: number): Setu
     heroMax: max,
     units: [
       { kind: "k", sq: sq(4, 0) },
-      { kind: "p", sq: sq(1, 1) },
-      { kind: "p", sq: sq(3, 1) },
+      { kind: "p", sq: sq(2, 3) },
+      { kind: "p", sq: sq(2, 1) },
       { kind: "n", sq: sq(5, 1) },
-    ],
-    things: [
-      { kind: "batu", sq: sq(2, 3) },
-      { kind: "petasan", sq: sq(2, 2) },
-      { kind: "warga", sq: sq(4, 3) },
     ],
     mud: [sq(0, 5), sq(1, 5)],
     deck,
     seed,
+    name: "Warm-up",
   };
 }
 
-const ARMIES: Kind[][] = [
+/** Enemy formations. Each picks squares for its army. */
+type PickSq = (rows: number[], cols?: number[]) => number;
+interface Layout {
+  name: string;
+  /** Win by surviving this many turns (knocking out the king still wins too). */
+  survive?: number;
+  army: (pick: PickSq, floor: number) => Setup["units"];
+}
+
+const LAYOUTS: Record<string, Layout> = {
+  barisan: {
+    name: "Pawn Wall",
+    army: (pick, floor) => {
+      // A staggered line: each back pawn guards the two front pawns beside it.
+      const king = pick([0], [1, 2, 3]);
+      const c = Math.min(2, Math.max(0, (king % 6) - 1)); // the wall spans columns c..c+3, in front of the king
+      const units: Setup["units"] = [{ kind: "k", sq: king }];
+      for (let i = 0; i < 4; i++) units.push({ kind: "p", sq: pick([i % 2 ? 1 : 2], [c + i]) });
+      if (floor >= 2) units.push({ kind: "n", sq: pick([1, 2]) });
+      return units;
+    },
+  },
+  kuda: {
+    name: "Cavalry",
+    army: (pick, floor) => [
+      { kind: "k", sq: pick([0]) },
+      { kind: "n", sq: pick([1, 2]) },
+      { kind: "n", sq: pick([1, 2]) },
+      ...(floor >= 3 ? [{ kind: "n" as Kind, sq: pick([2]) }] : []),
+      { kind: "p", sq: pick([2]) },
+    ],
+  },
+  pemanah: {
+    name: "Snipers",
+    army: (pick, floor) => [
+      { kind: "k", sq: pick([0], [2, 3]) },
+      { kind: "b", sq: pick([0, 1], [0, 1]) },
+      { kind: floor >= 3 ? "q" : "r", sq: pick([0, 1], [4, 5]) },
+      { kind: "p", sq: pick([2]) },
+      { kind: "p", sq: pick([2]) },
+    ],
+  },
+  kepung: {
+    name: "Siege",
+    army: (pick, floor) => [
+      { kind: "k", sq: pick([0]) },
+      { kind: "p", sq: pick([3, 4], [0]) },
+      { kind: "p", sq: pick([3, 4], [5]) },
+      { kind: "n", sq: pick([2, 3], [0, 1]) },
+      { kind: "n", sq: pick([2, 3], [4, 5]) },
+      ...(floor >= 4 ? [{ kind: "b" as Kind, sq: pick([1]) }] : []),
+    ],
+  },
+  bertahan: {
+    name: "Hold Out",
+    survive: 5,
+    army: (pick, floor) => [
+      { kind: "k", sq: pick([0]) },
+      ...(["p", "p", "p", "n", "n", floor >= 3 ? "r" : "b"] as Kind[]).map((kind) => ({ kind, sq: pick([1, 2]) })),
+    ],
+  },
+};
+
+/** Which formations can show up on each floor (floor 0 is the handmade first fight, the last is the boss). */
+const FLOOR_LAYOUTS: string[][] = [
   [],
-  ["p", "p", "p", "n"],
-  ["p", "p", "b", "n", "p"],
-  ["p", "p", "n", "r", "b"],
-  ["p", "p", "n", "b", "r", "p"],
-  ["p", "p", "n", "n", "q", "b"],
+  ["barisan", "kuda"],
+  ["pemanah", "barisan", "kuda"],
+  ["kepung", "bertahan", "kuda"],
+  ["pemanah", "kepung", "bertahan"],
+  ["barisan", "kuda", "pemanah", "kepung", "bertahan"],
 ];
 
 function randomFight(floor: number, hp: number, max: number, deck: string[], seed: number): Setup {
   const r = rng(seed * 7919 + floor);
   const n = 6;
   const taken = new Set<number>();
-  const pick = (rows: number[]) => {
+  const pick: PickSq = (rows, cols) => {
     for (let i = 0; i < 200; i++) {
-      const sq = rows[Math.floor(r() * rows.length)] * n + Math.floor(r() * n);
+      const c = cols ? cols[Math.floor(r() * cols.length)] : Math.floor(r() * n);
+      const sq = rows[Math.floor(r() * rows.length)] * n + Math.min(n - 1, Math.max(0, c));
       if (!taken.has(sq)) { taken.add(sq); return sq; }
     }
+    // Fall back to any free square in those rows.
+    for (const row of rows) for (let c = 0; c < n; c++) if (!taken.has(row * n + c)) { taken.add(row * n + c); return row * n + c; }
     throw new Error("board full");
   };
   const hero = 5 * n + 2 + Math.floor(r() * 2);
   taken.add(hero);
   const boss = floor === FLOORS - 1;
+  const options = FLOOR_LAYOUTS[Math.min(floor, FLOOR_LAYOUTS.length - 1)];
+  const layout = boss ? null : LAYOUTS[options[Math.floor(r() * options.length)]];
   const units: Setup["units"] = boss
     ? [{ kind: "r", sq: pick([0]), target: true, boss: "Mandor Benteng", hp: 24, heavy: true, hit: 4 }, ...(["p", "p", "n", "b", "p"] as Kind[]).map((kind) => ({ kind, sq: pick([1, 2, 3]) }))]
-    : [{ kind: "k" as Kind, sq: pick([0]) }, ...ARMIES[Math.min(floor, ARMIES.length - 1)].map((kind) => ({ kind, sq: pick([1, 2, 3]) }))];
+    : layout!.army(pick, floor);
   const things: Setup["things"] = [];
-  const crates = 1 + Math.floor(r() * 2);
-  for (let i = 0; i < crates; i++) things.push({ kind: "petasan", sq: pick([2, 3, 4]) });
-  if (r() < 0.7) things.push({ kind: "batu", sq: pick([3, 4]) });
-  for (let i = 0; i < 2; i++) things.push({ kind: "warga", sq: pick([3, 4]) });
   const mud: number[] = [];
   for (let i = 0; i < 2; i++) mud.push(pick([4, 5]));
-  return { hero, heroHp: hp, heroMax: max, units, things, mud, deck, seed: seed + floor * 101, limit: floor >= 4 ? 99 : floor >= 2 ? 4 : floor >= 1 ? 3 : 2 };
+  return {
+    hero, heroHp: hp, heroMax: max, units, things, mud, deck, seed: seed + floor * 101,
+    limit: floor >= 4 ? 99 : floor >= 2 ? 4 : floor >= 1 ? 3 : 2,
+    name: boss ? "Mandor Benteng" : layout!.name,
+    survive: layout?.survive,
+  };
 }
 
 export function fightFor(run: Pick<Run, "floor" | "hp" | "max" | "deck" | "seed">): Fight {
@@ -106,7 +169,7 @@ export function fightFor(run: Pick<Run, "floor" | "hp" | "max" | "deck" | "seed"
 }
 
 export function newRun(seed = Math.floor(Math.random() * 2 ** 31)): Run {
-  const base = { v: 1 as const, seed, floor: 0, hp: 30, max: 30, deck: [...STARTER] };
+  const base = { v: 1 as const, seed, floor: 0, hp: 20, max: 20, deck: [...STARTER] };
   return { ...base, fight: fightFor(base), reward: null, status: "fight", ringOuts: 0, bestCombo: 0 };
 }
 
@@ -131,9 +194,9 @@ export function settle(run: Run): Run {
   const f = run.fight;
   if (!f || run.status !== "fight") return run;
   if (f.status !== "won" && f.status !== "lost") return run;
-  const stats = { ringOuts: run.ringOuts + f.ringOuts, bestCombo: Math.max(run.bestCombo, f.bestCombo), wargaLost: (run.wargaLost ?? 0) + f.wargaLost };
+  const stats = { ringOuts: run.ringOuts + f.ringOuts, bestCombo: Math.max(run.bestCombo, f.bestCombo) };
   if (f.status === "lost") return { ...run, ...stats, hp: 0, status: "lost" };
-  const done = { ...run, ...stats, hp: Math.min(run.max, f.hero.hp + HEAL_AFTER_FIGHT + (f.wargaLost === 0 ? SAVED_ALL_HEAL : 0)) };
+  const done = { ...run, ...stats, hp: Math.min(run.max, f.hero.hp + HEAL_AFTER_FIGHT) };
   if (run.floor >= FLOORS - 1) return { ...done, status: "won", fight: null };
   return { ...done, status: "reward", reward: rewardsFor(run), fight: null };
 }

@@ -82,7 +82,7 @@ describe("pushes", () => {
     s = play(s, "tendang", sq(0, 1));
     const rook = s.units.find((u) => u.kind === "r")!;
     expect(rook.sq).toBe(sq(0, 1));
-    expect(rook.hp).toBe(10 - 2 - 5);
+    expect(rook.hp).toBe(10 - 1 - 5);
   });
 
   test("mud stops a push early", () => {
@@ -91,19 +91,16 @@ describe("pushes", () => {
     expect(s.units.find((u) => u.kind === "n")!.sq).toBe(sq(2, 3));
   });
 
-  test("the first fight's showcase: boulder into the firecracker crate", () => {
+  test("the first fight's showcase: kick the front pawn into the one behind it", () => {
     const run = newRun(5);
     let s = run.fight!;
+    expect(s.things).toHaveLength(0); // no boulders, crates or villagers
     s.hand = ["tendang"];
-    s = play(s, "tendang", sq(2, 3)); // kick the boulder up into the crate
-    expect(s.things.find((t) => t.kind === "petasan")).toBeUndefined();
-    expect(s.fx.some((f) => f.t === "boom")).toBe(true);
-    // Left pawn: blown up-left and flies off the board.
-    expect(unitAt(s, sq(0, 0))).toBeUndefined();
-    // Right pawn: blown into its own king: 3 - 2 - 2 = gone, king 16 - 2 = 14.
+    s = play(s, "tendang", sq(2, 3));
+    // Front pawn: 3 - 2 kick - 3 crash (it flew 1 square). Back pawn: 3 - 3 crash. Both gone.
     expect(s.units.filter((u) => u.kind === "p")).toHaveLength(0);
-    expect(s.units.find((u) => u.kind === "k")!.hp).toBe(14);
-    expect(s.hero.hp).toBe(30); // you were far enough away
+    expect(s.combo).toBeGreaterThanOrEqual(3);
+    expect(s.hero.hp).toBe(s.hero.max); // untouched
   });
 });
 
@@ -115,6 +112,13 @@ describe("enemies", () => {
     expect(s.intents.find((i) => i.id === near.id)).toEqual({ id: near.id, type: "strike", target: sq(2, 3) });
     // The far pawn can't reach you: it steps forward to threaten you next turn instead of striking c4.
     expect(s.intents.find((i) => i.id === far.id)).toEqual({ id: far.id, type: "move", to: sq(3, 2) });
+  });
+
+  test("a rook won't charge you through its own ally", () => {
+    const s = fight({ hero: sq(5, 3), units: [{ kind: "r", sq: sq(0, 3) }, { kind: "p", sq: sq(2, 3) }, { kind: "k", sq: sq(5, 0) }], limit: 5 });
+    plan(s);
+    const rook = s.units[0];
+    expect(s.intents.find((i) => i.id === rook.id)?.type).not.toBe("charge");
   });
 
   test("player's position: the pawn on c3 advances to c2 instead of striking the empty d2", () => {
@@ -249,44 +253,6 @@ describe("enemies", () => {
   });
 });
 
-describe("villagers", () => {
-  test("enemies go after villagers, and losing one costs you 3 HP that Block can't stop", () => {
-    let s = fight({
-      hero: sq(0, 5),
-      units: [{ kind: "n", sq: sq(3, 1) }, { kind: "k", sq: sq(5, 0) }],
-      things: [{ kind: "warga", sq: sq(4, 3) }],
-    }, ["tangkis"]);
-    plan(s);
-    const knight = s.units.find((u) => u.kind === "n")!;
-    expect(s.intents.find((i) => i.id === knight.id)).toEqual({ id: knight.id, type: "strike", target: sq(4, 3) });
-    s = play(s, "tangkis", sq(0, 5)); // Block 3 won't help the villager
-    const after = forecast(s).after;
-    expect(after.things.some((t) => t.kind === "warga")).toBe(false); // knight hits for 3: gone
-    expect(after.hero.hp).toBe(20 - 3);
-    expect(after.wargaLost).toBe(1);
-  });
-
-  test("you can shove a villager out of the way: Tendang moves it without hurting it", () => {
-    let s = fight({ hero: sq(2, 4), units: [{ kind: "k", sq: sq(5, 0) }], things: [{ kind: "warga", sq: sq(2, 3) }] }, ["tendang"]);
-    s = play(s, "tendang", sq(2, 3));
-    const w = s.things.find((t) => t.kind === "warga")!;
-    expect(w.sq).toBe(sq(2, 2));
-    expect(w.hp).toBe(3);
-  });
-
-  test("a charge stops at the first thing in its way: block it with a villager... or with an enemy", () => {
-    const s = fight({
-      hero: sq(5, 2),
-      units: [{ kind: "r", sq: sq(0, 2) }, { kind: "p", sq: sq(3, 2) }, { kind: "k", sq: sq(5, 0) }],
-      things: [{ kind: "warga", sq: sq(4, 4) }],
-    });
-    s.intents = [{ id: s.units[0].id, type: "charge", dir: 2 }];
-    const after = forecast(s).after;
-    expect(after.hero.hp).toBe(20);
-    expect(after.units.find((u) => u.kind === "p")).toBeUndefined(); // the pawn in the way took the hit
-  });
-});
-
 describe("cards", () => {
   test("can't play what you can't afford", () => {
     const s = fight({ hero: sq(2, 3), units: [{ kind: "k", sq: sq(5, 0) }] }, ["kudakuda", "kudakuda"]);
@@ -318,12 +284,23 @@ describe("runs", () => {
     expect(run.fight?.status).toBe("play");
   });
 
+  test("Hold Out fights are won by surviving", () => {
+    const s = fight({ hero: sq(0, 5), units: [{ kind: "k", sq: sq(5, 0) }], survive: 2, limit: 0 });
+    enemyTurn(s);
+    expect(s.status).toBe("play");
+    enemyTurn(s);
+    expect(s.status).toBe("won");
+  });
+
   test("every floor can be set up, including the boss", () => {
     for (let floor = 0; floor < FLOORS; floor++) {
       for (let seed = 1; seed < 30; seed++) {
         const f = fightFor({ floor, hp: 20, max: 20, deck: newRun(seed).deck, seed });
         expect(f.units.some((u) => u.target)).toBe(true);
         expect(f.hand.length).toBe(5);
+        expect(f.things).toHaveLength(0);
+        const spots = [f.hero.sq, ...f.units.map((u) => u.sq), ...f.things.map((t) => t.sq)];
+        expect(new Set(spots).size).toBe(spots.length);
       }
     }
   });

@@ -30,7 +30,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
 
   // Shake the board on big hits.
   useEffect(() => {
-    const big = fight.fx.some((x) => x.t === "boom" || x.t === "ringout" || x.t === "lost" || (x.t === "dmg" && x.hero)) || fight.combo >= 3;
+    const big = fight.fx.some((x) => x.t === "boom" || x.t === "ringout" || (x.t === "dmg" && x.hero)) || fight.combo >= 3;
     if (!big || !shakeRef.current?.animate) return;
     try {
       shakeRef.current.animate(
@@ -56,16 +56,8 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   }
   const fc = f.status === "play" ? forecast(display) : null;
   const incoming = fc?.damage ?? 0;
-  const warn = fc && (incoming > 0 || fc.wargaHurt > 0 || fc.wargaDead > 0);
-  const warnText = !fc
-    ? ""
-    : fc.wargaDead > 0
-      ? `A villager dies: you lose ${incoming}`
-      : incoming > 0
-        ? `You'll take ${incoming} damage${fc.wargaHurt ? `, a villager ${fc.wargaHurt}` : ""}`
-        : fc.wargaHurt > 0
-          ? `A villager takes ${fc.wargaHurt} damage`
-          : "Nobody gets hurt";
+  const warn = incoming > 0;
+  const warnText = !fc ? "" : incoming > 0 ? `You'll take ${incoming} damage` : "Nobody gets hurt";
 
   function commit(next: Fight) {
     setHistory((h) => [...h, f]);
@@ -116,7 +108,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
     const id = ++loop.current;
     let s = start;
     for (;;) {
-      await sleep(430);
+      await sleep(340);
       if (loop.current !== id) return;
       const next = clone(s);
       next.fx = [];
@@ -127,7 +119,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
       onChange(s);
       if (s.status !== "enemy") break;
     }
-    await sleep(300);
+    await sleep(220);
     if (loop.current !== id) return;
     if (s.status === "enemy") {
       s = clone(s);
@@ -188,7 +180,14 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
         <Link href="/silat" className="icon-btn" aria-label="Leave fight (your run is saved)" style={{ background: "#fff", boxShadow: "0 3px 0 var(--cream-3)" }}><Icon.Close /></Link>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.15 }}>
           <span className="display" style={{ fontSize: 18 }}>{floorLabel}</span>
-          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--plum-soft)" }}>Turn {f.turn} · deck {f.draw.length} · discard {f.discard.length}</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--plum-soft)" }}>
+            {[f.name, `Turn ${f.turn}`, `deck ${f.draw.length}`].filter(Boolean).join(" · ")}
+          </span>
+          {f.survive && f.status !== "won" && (
+            <span style={{ marginTop: 2, padding: "1px 8px", borderRadius: 999, background: "#FFF4CC", color: "#8A6400", fontSize: 12, fontWeight: 900 }}>
+              Survive {Math.max(1, f.survive - f.turn + 1)} more {f.survive - f.turn + 1 === 1 ? "turn" : "turns"} (or beat the King)
+            </span>
+          )}
         </div>
         <span style={{ width: 44 }} />
       </header>

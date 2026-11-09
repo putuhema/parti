@@ -25,18 +25,6 @@ function Crate() {
     </svg>
   );
 }
-/** Placeholder villager: a person in a peci and sarong. */
-function Warga() {
-  return (
-    <svg viewBox="0 0 40 40" aria-hidden="true">
-      <path d="M11 37 L13 22 a7 7 0 0 1 14 0 L29 37z" fill="#2BB673" stroke="#1E7A4C" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M13.5 28 h13 M13 32.5 h14" stroke="#FFC800" strokeWidth="2" />
-      <circle cx="20" cy="13" r="6.5" fill="#C98B5B" stroke="#7A4E2D" strokeWidth="2" />
-      <path d="M13.8 10.5 a6.2 4 0 0 1 12.4 0 v-2 a6.2 3 0 0 0 -12.4 0z" fill="#262626" />
-      <circle cx="17.6" cy="13.6" r="1" fill="#3C2414" /><circle cx="22.4" cy="13.6" r="1" fill="#3C2414" />
-    </svg>
-  );
-}
 function Boulder() {
   return (
     <svg viewBox="0 0 40 40" aria-hidden="true">
@@ -56,7 +44,6 @@ const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   dodge: () => ["dodge", "#46A302"],
   promote: () => ["QUEEN!", "#CE82FF"],
   castle: () => ["CASTLES!", "#FFC800"],
-  lost: () => ["VILLAGER LOST", "#FF4B4B"],
   summon: () => ["+PAWN", "#CE82FF"],
   react: () => ["STRIKES!", "#FF4B4B"],
 };
@@ -97,7 +84,7 @@ export function SilatBoard({
   });
 
   // Preview: ghosts where things will end up, and what happens to each piece, on top of the real board.
-  type Ghost = { key: string; sq: number; draw: "unit" | "hero" | "warga" | "batu"; code?: Kind };
+  type Ghost = { key: string; sq: number; draw: "unit" | "hero" | "batu"; code?: Kind };
   const ghosts: Ghost[] = [];
   const marks = new Map<number, { dmg: number; gone?: "OFF" | "KO" | "BOOM" }>();
   if (preview) {
@@ -113,9 +100,8 @@ export function SilatBoard({
     }
     for (const t of s.things) {
       const v = preview.things.find((x) => x.id === t.id);
-      if (!v) { marks.set(t.sq, { dmg: 0, gone: t.kind === "petasan" ? "BOOM" : t.kind === "warga" ? "KO" : "OFF" }); continue; }
-      if (v.sq !== t.sq && t.kind !== "petasan") ghosts.push({ key: `t${t.id}`, sq: v.sq, draw: t.kind });
-      if ((v.hp ?? 0) < (t.hp ?? 0)) marks.set(t.sq, { dmg: (t.hp ?? 0) - (v.hp ?? 0) });
+      if (!v) { marks.set(t.sq, { dmg: 0, gone: t.kind === "petasan" ? "BOOM" : "OFF" }); continue; }
+      if (v.sq !== t.sq && t.kind === "batu") ghosts.push({ key: `t${t.id}`, sq: v.sq, draw: "batu" });
     }
     if (preview.hero.sq !== s.hero.sq) ghosts.push({ key: "hero", sq: preview.hero.sq, draw: "hero" });
     const hurt = s.hero.hp - preview.hero.hp;
@@ -169,8 +155,7 @@ export function SilatBoard({
 
       {s.things.map((t) => (
         <div key={`t${t.id}`} className="sl-tok" style={at(t.sq)}>
-          {t.kind === "petasan" ? <Crate /> : t.kind === "warga" ? <Warga /> : <Boulder />}
-          {t.kind === "warga" && <span className="sl-hp" style={{ borderColor: "#1E7A4C", color: "#1E7A4C" }}>{t.hp}</span>}
+          {t.kind === "petasan" ? <Crate /> : <Boulder />}
         </div>
       ))}
       {s.units.map((u) => {
@@ -203,7 +188,15 @@ export function SilatBoard({
         );
       })}
       <div className="sl-tok" style={{ ...at(s.hero.sq), zIndex: 2 }}>
-        <SilatKing />
+        {(() => {
+          const l = s.fx.find((x): x is Extract<Fx, { t: "lunge" }> => x.t === "lunge");
+          const [dx, dy] = l ? DIRS[l.dir] : [0, 0];
+          return (
+            <span key={l ? `l${fxKey}` : "still"} className={l ? "sl-lunge" : undefined} style={{ display: "block", width: "100%", height: "100%", ["--lx" as string]: `${dx * 34}%`, ["--ly" as string]: `${dy * 34}%` }}>
+              <SilatKing />
+            </span>
+          );
+        })()}
         {s.hero.block > 0 && (
           <span className="sl-hp" style={{ borderColor: "#46A302", color: "#2F6E00", gap: 2 }} aria-label={`Block ${s.hero.block}`}>
             <svg width="9" height="10" viewBox="0 0 24 26" aria-hidden="true" style={{ width: 9, height: 10, margin: 0, filter: "none" }}><path d="M12 1 L22 5 V12 C22 19 17 23 12 25 C7 23 2 19 2 12 V5z" fill="#46A302" /></svg>
@@ -220,7 +213,7 @@ export function SilatBoard({
 
       {ghosts.map((g) => (
         <div key={`g-${g.key}`} className="sl-tok sl-ghost" style={{ ...at(g.sq), zIndex: 3 }}>
-          {g.draw === "unit" ? <Piece code={g.code!} /> : g.draw === "hero" ? <SilatKing /> : g.draw === "warga" ? <Warga /> : <Boulder />}
+          {g.draw === "unit" ? <Piece code={g.code!} /> : g.draw === "hero" ? <SilatKing /> : <Boulder />}
         </div>
       ))}
       {[...marks].map(([sq, m]) => (

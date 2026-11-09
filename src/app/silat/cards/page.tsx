@@ -12,7 +12,7 @@ export default function SilatCards() {
     <main className="screen" style={{ gap: 18 }}>
       <TopBar back="/silat" title="Card Collection" />
       <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>
-        {ALL_CARDS.length} cards. Your starter deck has {STARTER.length}: Tendang, Tangkis, Langkah Kuda and Tarik.
+        {ALL_CARDS.length} cards. Your starter deck has {STARTER.length}: Tendang, Pukulan Dalam, Tangkis, Langkah Kuda, Tarik and Bantingan.
       </p>
       {GROUPS.map((g) => (
         <section key={g} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
