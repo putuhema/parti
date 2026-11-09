@@ -66,6 +66,9 @@ export type Fx =
   | { t: "castle"; sq: number }
   | { t: "lost"; sq: number };
 
+export type LogKind = "turn" | "you" | "enemy" | "good" | "bad";
+export interface LogLine { t: string; k?: LogKind }
+
 export interface Fight {
   n: number;
   turn: number;
@@ -97,6 +100,8 @@ export interface Fight {
   bestCombo: number;
   ringOuts: number;
   wargaLost: number;
+  /** What happened, oldest first. */
+  log: LogLine[];
 }
 
 // ---------- Geometry ----------
@@ -154,6 +159,21 @@ function moveOcc(s: Fight, o: Occ, sq: number) {
   else o.th.sq = sq;
 }
 
+// ---------- Battle log ----------
+
+const DIR_NAMES = ["up", "up-right", "right", "down-right", "down", "down-left", "left", "up-left"];
+export const sqName = (s: { n: number }, sq: number) => "abcdefgh"[col(s, sq)] + (s.n - row(s, sq));
+export const unitName = (u: Unit) => u.boss ?? PIECE[u.kind].name;
+export function occName(o: Occ) {
+  if (o.t === "hero") return "You";
+  if (o.t === "unit") return unitName(o.u);
+  return o.th.kind === "warga" ? "Villager" : o.th.kind === "petasan" ? "Firecracker crate" : "Boulder";
+}
+export function say(s: Fight, t: string, k?: LogKind) {
+  (s.log ??= []).push({ t, k });
+  if (s.log.length > 80) s.log.splice(0, s.log.length - 80);
+}
+
 // ---------- Damage ----------
 
 export function damageUnit(s: Fight, u: Unit, n: number) {
@@ -164,7 +184,9 @@ export function damageUnit(s: Fight, u: Unit, n: number) {
   if (u.hp <= 0) {
     s.units = s.units.filter((x) => x !== u);
     s.fx.push({ t: "ko", sq: u.sq });
+    say(s, `${unitName(u)} takes ${n} and is knocked out`, "good");
   } else {
+    say(s, `${unitName(u)} takes ${n} (${u.hp} left)`);
     u.angry = true;
     castle(s, u);
   }
@@ -180,16 +202,18 @@ function castle(s: Fight, k: Unit) {
   const ally = allies[0];
   [k.sq, ally.sq] = [ally.sq, k.sq];
   s.fx.push({ t: "castle", sq: k.sq });
+  say(s, `The King castles away to ${sqName(s, k.sq)}!`, "bad");
 }
 
 export function damageHero(s: Fight, n: number) {
   const blocked = Math.min(s.hero.block, n);
   s.hero.block -= blocked;
-  if (blocked) s.fx.push({ t: "block", sq: s.hero.sq, n: blocked });
+  if (blocked) { s.fx.push({ t: "block", sq: s.hero.sq, n: blocked }); say(s, `Your Block stops ${blocked}`, "good"); }
   const rest = n - blocked;
   if (rest > 0) {
     s.hero.hp = Math.max(0, s.hero.hp - rest);
     s.fx.push({ t: "dmg", sq: s.hero.sq, n: rest, hero: true });
+    say(s, `You take ${rest} damage`, "bad");
   }
   checkEnd(s);
 }
@@ -207,12 +231,14 @@ export function damageWarga(s: Fight, th: Thing, n: number) {
   th.hp = (th.hp ?? WARGA_HP) - n;
   s.fx.push({ t: "dmg", sq: th.sq, n });
   if (th.hp <= 0) killWarga(s, th);
+  else say(s, `Villager takes ${n} (${th.hp} left)`, "bad");
 }
 
 function killWarga(s: Fight, th: Thing) {
   s.things = s.things.filter((t) => t !== th);
   s.wargaLost++;
   s.fx.push({ t: "lost", sq: th.sq });
+  say(s, `A villager is lost! You lose ${WARGA_LOSS} HP`, "bad");
   s.hero.hp = Math.max(0, s.hero.hp - WARGA_LOSS);
   s.fx.push({ t: "dmg", sq: s.hero.sq, n: WARGA_LOSS, hero: true });
   checkEnd(s);
@@ -222,8 +248,8 @@ export const wargaSquares = (s: Fight) => s.things.filter((t) => t.kind === "war
 
 export function checkEnd(s: Fight) {
   if (s.status === "won" || s.status === "lost") return;
-  if (s.hero.hp <= 0) s.status = "lost";
-  else if (!s.units.some((u) => u.target)) s.status = "won";
+  if (s.hero.hp <= 0) { s.status = "lost"; say(s, "You are knocked down.", "bad"); }
+  else if (!s.units.some((u) => u.target)) { s.status = "won"; say(s, "The enemy kneels. You win!", "good"); }
 }
 
 // ---------- Pushes, collisions, explosions ----------
@@ -234,15 +260,17 @@ export function push(s: Fight, sq: number, dir: number, n: number) {
   if (!mover || n <= 0) return;
   const [dx, dy] = DIRS[dir];
   let cur = sq;
+  const moved = () => { if (cur !== sq) say(s, `${occName(mover)} is pushed to ${sqName(s, cur)}`); };
   for (let i = 0; i < n + s.powers.momentum; i++) {
     const next = offset(s, cur, dx, dy);
-    if (next === null) return ringOut(s, mover);
+    if (next === null) { moved(); return ringOut(s, mover); }
     const other = occupant(s, next);
-    if (other) return collide(s, mover, other);
+    if (other) { moved(); say(s, `${occName(mover)} crashes into ${occName(other) === "You" ? "you" : occName(other)}`); return collide(s, mover, other); }
     moveOcc(s, mover, next);
     cur = next;
-    if (s.mud.includes(next)) return;
+    if (s.mud.includes(next)) { moved(); say(s, `${occName(mover)} sticks in the mud`); return; }
   }
+  moved();
 }
 
 function collide(s: Fight, a: Occ, b: Occ) {
@@ -268,8 +296,9 @@ export function ringOut(s: Fight, o: Occ) {
     return;
   }
   if (o.t === "hero") return damageHero(s, HEAVY_RING_OUT);
-  if (isHeavy(o.u)) return damageUnit(s, o.u, HEAVY_RING_OUT);
+  if (isHeavy(o.u)) { say(s, `${unitName(o.u)} is too heavy to fall and slams the edge`); return damageUnit(s, o.u, HEAVY_RING_OUT); }
   s.fx.push({ t: "ringout", sq: o.u.sq });
+  say(s, `${unitName(o.u)} flies off the board!`, "good");
   s.units = s.units.filter((x) => x !== o.u);
   s.ringOuts++;
   s.combo++;
@@ -281,6 +310,7 @@ export function explode(s: Fight, th: Thing) {
   if (!s.things.includes(th)) return;
   s.things = s.things.filter((t) => t !== th);
   s.fx.push({ t: "boom", sq: th.sq });
+  say(s, `The firecracker crate on ${sqName(s, th.sq)} explodes!`, "good");
   for (let d = 0; d < 8; d++) {
     const sq = offset(s, th.sq, DIRS[d][0], DIRS[d][1]);
     if (sq === null) continue;
@@ -419,6 +449,7 @@ export function plan(s: Fight) {
 function attackHero(s: Fight, u: Unit, n: number): boolean {
   if (s.hop !== null && isEmpty(s, s.hop)) {
     s.fx.push({ t: "dodge", sq: s.hero.sq });
+    say(s, `You dodge to ${sqName(s, s.hop)}!`, "good");
     s.hero.sq = s.hop;
     s.hop = null;
     return false;
@@ -436,7 +467,7 @@ function charge(s: Fight, u: Unit, dir: number) {
   const [dx, dy] = DIRS[dir];
   for (let guard = 0; guard < s.n * 2; guard++) {
     const next = offset(s, u.sq, dx, dy);
-    if (next === null) { s.fx.push({ t: "miss", sq: u.sq }); return; }
+    if (next === null) { s.fx.push({ t: "miss", sq: u.sq }); say(s, `${unitName(u)} hits nothing and stops at ${sqName(s, u.sq)}`); return; }
     const o = occupant(s, next);
     if (o) {
       if (o.t === "hero") {
@@ -457,6 +488,7 @@ function promote(s: Fight, u: Unit) {
     u.max = PIECE.q.hp;
     u.hp = PIECE.q.hp;
     s.fx.push({ t: "promote", sq: u.sq });
+    say(s, `A Pawn reaches your side and becomes a Queen!`, "bad");
   }
 }
 
@@ -483,14 +515,16 @@ export function resolveIntent(s: Fight, it: Intent) {
   if (s.status === "won" || s.status === "lost") return;
   const u = s.units.find((x) => x.id === it.id);
   if (!u) return;
-  if (!intentValid(s, it)) { s.fx.push({ t: "miss", sq: u.sq }); return; }
+  if (!intentValid(s, it)) { s.fx.push({ t: "miss", sq: u.sq }); say(s, `${unitName(u)} was knocked out of position and can't act`); return; }
   if (it.type === "move") {
-    if (isEmpty(s, it.to)) { u.sq = it.to; promote(s, u); }
+    if (isEmpty(s, it.to)) { u.sq = it.to; say(s, `${unitName(u)} moves to ${sqName(s, it.to)}`, "enemy"); promote(s, u); }
+    else say(s, `${unitName(u)} is blocked and stays put`, "enemy");
     return;
   }
-  if (it.type === "charge") return charge(s, u, it.dir);
+  if (it.type === "charge") { say(s, `${unitName(u)} charges ${DIR_NAMES[it.dir]}`, "enemy"); return charge(s, u, it.dir); }
+  say(s, `${unitName(u)} strikes ${sqName(s, it.target)}`, "enemy");
   const o = occupant(s, it.target);
-  if (!o || (o.t === "thing" && o.th.kind === "batu")) { s.fx.push({ t: "miss", sq: it.target }); return; }
+  if (!o || (o.t === "thing" && o.th.kind === "batu")) { s.fx.push({ t: "miss", sq: it.target }); say(s, "…and misses"); return; }
   if (o.t === "hero") { attackHero(s, u, unitHit(u)); return; }
   hitOcc(s, o, unitHit(u));
 }
@@ -501,7 +535,7 @@ export function march(s: Fight) {
   for (const u of [...s.units].sort((a, b) => b.sq - a.sq)) {
     if (u.kind !== "p" || acted.has(u.id) || u.locked > 0) continue;
     const f = offset(s, u.sq, 0, 1);
-    if (f !== null && isEmpty(s, f)) { u.sq = f; promote(s, u); }
+    if (f !== null && isEmpty(s, f)) { u.sq = f; say(s, `Pawn marches to ${sqName(s, f)}`, "enemy"); promote(s, u); }
   }
 }
 
@@ -539,6 +573,7 @@ export const TENAGA = 3;
 
 export function startTurn(s: Fight, guarantee?: (id: string) => boolean) {
   s.turn++;
+  say(s, `Turn ${s.turn}`, "turn");
   s.hero.block = 0;
   s.tenaga = TENAGA;
   s.stepUsed = false;
@@ -630,6 +665,7 @@ export function step(s: Fight, sq: number) {
   f.fx = [];
   f.hero.sq = sq;
   f.stepUsed = true;
+  say(f, `You step to ${sqName(f, sq)}`, "you");
   return f;
 }
 
@@ -689,6 +725,7 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     bestCombo: 0,
     ringOuts: 0,
     wargaLost: 0,
+    log: [],
   };
   s.draw = shuffle(s, [...o.deck]);
   plan(s);

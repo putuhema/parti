@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react";
 import { Piece } from "@/components/chess/Board";
 import { SilatKing } from "@/components/shell";
-import { DIRS, PIECE, chargeEnd, col, intentValid, row, type Fight, type Fx } from "@/lib/silat/rules";
+import { PIECE, chargeEnd, col, intentValid, occupant, row, type Fight, type Fx, type Intent } from "@/lib/silat/rules";
 
 const FILES = "abcdefgh";
 
@@ -45,7 +45,7 @@ function Boulder() {
 }
 
 const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
-  dmg: (f) => [`-${"n" in f ? f.n : ""}`, "hero" in f && f.hero ? "#FF4B4B" : "#FFFFFF"],
+  dmg: (f) => [`-${"n" in f ? f.n : ""}`, "hero" in f && f.hero ? "#FF4B4B" : "#FF9600"],
   block: (f) => [`${"n" in f ? f.n : ""} blocked`, "#2F6E00"],
   ko: () => ["KO", "#FFC800"],
   ringout: () => ["RING OUT", "#FFC800"],
@@ -77,8 +77,22 @@ export function SilatBoard({
   const at = (sq: number): CSSProperties => ({ width: `${cell}%`, height: `${cell}%`, transform: `translate(${col(s, sq) * 100}%, ${row(s, sq) * 100}%)` });
   const targets = new Set(hl.targets ?? []);
   const steps = new Set(hl.steps ?? []);
-  const order = new Map(s.intents.filter((it) => intentValid(s, it)).map((it, i) => [it.id, i + 1]));
-  const c = (sq: number) => ({ x: col(s, sq) + 0.5, y: row(s, sq) + 0.5 });
+  // Intents: a badge on each acting enemy, and a red tint on the square it will hit. No paths.
+  const live = s.status === "play" || s.status === "enemy" ? s.intents.filter((it, i) => intentValid(s, it) && (s.status !== "enemy" || i >= s.enemyStep)) : [];
+  const badges = new Map<number, { ord: number; it: Intent; hit: number }>();
+  const danger = new Map<number, number>();
+  live.forEach((it) => {
+    const u = s.units.find((x) => x.id === it.id)!;
+    const hit = u.hit ?? PIECE[u.kind].hit;
+    badges.set(it.id, { ord: s.intents.indexOf(it) + 1, it, hit });
+    const sq = it.type === "strike" ? it.target : it.type === "charge" ? chargeEnd(s, it) : null;
+    if (sq !== null && sq !== undefined && (it.type === "strike" || occupant(s, sq))) danger.set(sq, (danger.get(sq) ?? 0) + hit);
+  });
+  const arrowAngle = (u: { sq: number }, it: Intent) => {
+    if (it.type === "charge") return it.dir * 45;
+    const to = it.type === "move" ? it.to : it.target;
+    return Math.round((Math.atan2(row(s, to) - row(s, u.sq), col(s, to) - col(s, u.sq)) * 180) / Math.PI) + 90;
+  };
 
   return (
     <div className={`sl-board${preview ? " preview" : ""}`}>
@@ -90,9 +104,12 @@ export function SilatBoard({
           const bg = mud ? (light ? "#C9A27A" : "#B48A60") : light ? "#F1F9E6" : "#94CF63";
           const label = `${FILES[cc]}${n - r}`;
           return (
-            <button key={sq} type="button" className="sl-sq" style={{ background: bg }} aria-label={label} onClick={() => onTap?.(sq)}>
+            <button key={sq} type="button" className="sl-sq" style={{ background: bg }} aria-label={danger.has(sq) ? `${label}, will be hit for ${danger.get(sq)}` : label} onClick={() => onTap?.(sq)}>
               {cc === 0 && <span className="coord" style={{ left: 3, top: 1, color: light ? "#4F8A22" : "#F1F9E6" }}>{n - r}</span>}
               {r === n - 1 && <span className="coord" style={{ right: 3, bottom: 0, color: light ? "#4F8A22" : "#F1F9E6" }}>{FILES[cc]}</span>}
+              {danger.has(sq) && (
+                <span className="sl-danger" aria-hidden="true"><span>{danger.get(sq)}</span></span>
+              )}
               {steps.has(sq) && <span className="sl-dot" />}
               {s.hop === sq && <span className="sl-hop" />}
             </button>
@@ -107,13 +124,26 @@ export function SilatBoard({
         </div>
       ))}
       {s.units.map((u) => {
-        const ord = order.get(u.id);
+        const b = badges.get(u.id);
+        const attack = b && b.it.type !== "move";
         return (
           <div key={`u${u.id}`} className="sl-tok" style={at(u.sq)}>
             <Piece code={u.kind} />
             <span className="sl-hp" style={u.boss ? { borderColor: "#B81F1F" } : undefined}>{u.hp}</span>
-            {ord && <span className="sl-badge" style={{ background: "#FF4B4B" }}>{ord}</span>}
-            {u.target && !ord && <span className="sl-badge" style={{ background: "#FFC800", color: "#5C4200" }}>★</span>}
+            {b && (
+              <span className="sl-intent" style={{ background: attack ? "#FF4B4B" : "#8C8C8C" }} aria-label={`acts ${b.ord}${attack ? `, hits for ${b.hit}` : ", moves"}`}>
+                {b.ord}
+                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style={{ transform: `rotate(${arrowAngle(u, b.it)}deg)` }}>
+                  {b.it.type === "strike" ? (
+                    <path d="M5 1 V9 M1 5 H9" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                  ) : (
+                    <path d="M5 9 V2 M2 4.5 L5 1.5 L8 4.5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                </svg>
+                {attack && b.hit}
+              </span>
+            )}
+            {u.target && !b && <span className="sl-badge" style={{ background: "#FFC800", color: "#5C4200" }}>★</span>}
           </div>
         );
       })}
@@ -127,37 +157,6 @@ export function SilatBoard({
         )}
       </div>
 
-      <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible", zIndex: 3 }} viewBox={`0 0 ${n} ${n}`} aria-hidden="true">
-        <defs>
-          <marker id="sl-head" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#EA2B2B" /></marker>
-          <marker id="sl-head-g" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#8C8C8C" /></marker>
-        </defs>
-        {s.status !== "won" && s.status !== "lost" && s.intents.map((it) => {
-          const u = s.units.find((x) => x.id === it.id);
-          if (!u || !intentValid(s, it)) return null;
-          const a = c(u.sq);
-          if (it.type === "move") {
-            const b = c(it.to);
-            return <path key={`i${it.id}`} d={`M${a.x} ${a.y} L${b.x} ${b.y}`} stroke="#8C8C8C" strokeWidth=".06" strokeDasharray=".12 .1" fill="none" markerEnd="url(#sl-head-g)" opacity=".8" />;
-          }
-          if (it.type === "charge") {
-            const end = chargeEnd(s, it) ?? u.sq;
-            const [dx, dy] = DIRS[it.dir];
-            const stop = c(end);
-            const tip = { x: stop.x - dx * 0.3, y: stop.y - dy * 0.3 };
-            return <path key={`i${it.id}`} d={`M${a.x + dx * 0.3} ${a.y + dy * 0.3} L${tip.x} ${tip.y}`} stroke="#EA2B2B" strokeWidth=".09" strokeDasharray=".2 .12" fill="none" markerEnd="url(#sl-head)" />;
-          }
-          const b = c(it.target);
-          return (
-            <g key={`i${it.id}`}>
-              <path d={`M${a.x} ${a.y} L${b.x} ${b.y}`} stroke="#EA2B2B" strokeWidth=".06" strokeDasharray=".14 .1" fill="none" opacity=".75" />
-              <path d={`M${b.x - 0.2} ${b.y - 0.2} L${b.x + 0.2} ${b.y + 0.2} M${b.x + 0.2} ${b.y - 0.2} L${b.x - 0.2} ${b.y + 0.2}`} stroke="#EA2B2B" strokeWidth=".09" strokeLinecap="round" />
-              <text x={b.x + 0.28} y={b.y - 0.22} fontSize=".26" fontWeight="900" fill="#B81F1F">{u.hit ?? PIECE[u.kind].hit}</text>
-            </g>
-          );
-        })}
-      </svg>
-
       {[...targets].map((sq) => (
         <div key={`h${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 4 }}><span className={`sl-target${hl.pending === sq ? " on" : ""}`} /></div>
       ))}
@@ -166,15 +165,20 @@ export function SilatBoard({
         <div key={`c${fxKey}`} className="sl-combo">COMBO ×{combo}!</div>
       )}
 
-      {s.fx.map((f, i) => {
-        const txt = FX_TEXT[f.t]?.(f);
-        if (!txt) return null;
-        return (
-          <div key={`${fxKey}-${i}`} className="sl-float" style={{ ...at(f.sq), color: txt[1], animationDelay: `${Math.min(i, 6) * 70}ms` }}>
-            {txt[0]}
-          </div>
-        );
-      })}
+      {(() => {
+        const seen = new Map<number, number>();
+        return s.fx.map((f, i) => {
+          const txt = FX_TEXT[f.t]?.(f);
+          if (!txt) return null;
+          const k = seen.get(f.sq) ?? 0;
+          seen.set(f.sq, k + 1);
+          return (
+            <div key={`${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 6 }}>
+              <span className="sl-float" style={{ color: txt[1], top: `${-k * 34}%`, animationDelay: `${Math.min(i, 6) * 90}ms` }}>{txt[0]}</span>
+            </div>
+          );
+        });
+      })()}
     </div>
   );
 }

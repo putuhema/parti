@@ -1,6 +1,6 @@
 // Raja Silat cards: what each one targets and what it does.
 import {
-  DIRS, KNIGHT, checkEnd, clone, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
+  DIRS, KNIGHT, checkEnd, clone, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
   unitAt, type Fight,
 } from "./rules";
 
@@ -265,8 +265,10 @@ export function playCard(s: Fight, idx: number, sq: number): Fight {
   f.tenaga -= c.cost;
   f.hand.splice(idx, 1);
   (c.exhaust ? f.exhausted : f.discard).push(id);
+  say(f, c.self ? `You play ${c.name}` : `You play ${c.name} on ${sqName(f, sq)}`, "you");
   c.play(f, sq);
   f.bestCombo = Math.max(f.bestCombo, f.combo);
+  if (f.combo >= 3) say(f, `Combo ×${f.combo}!`, "good");
   checkEnd(f);
   return f;
 }

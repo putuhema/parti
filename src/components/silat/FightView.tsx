@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SilatBoard } from "@/components/silat/SilatBoard";
 import { SilatCard } from "@/components/silat/SilatCard";
-import { Icon } from "@/components/ui";
+import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { CARDS, canPlay, isAttack, playCard } from "@/lib/silat/cards";
 import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, step, TENAGA, type Fight } from "@/lib/silat/rules";
@@ -23,6 +23,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const [sel, setSel] = useState<number | null>(null);
   const [pending, setPending] = useState<number | null>(null);
   const [history, setHistory] = useState<Fight[]>([]);
+  const [logOpen, setLogOpen] = useState(false);
   const [fxKey, setFxKey] = useState(0);
   const loop = useRef(0);
   const shakeRef = useRef<HTMLDivElement>(null);
@@ -154,16 +155,16 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   }
 
   const tip = busy
-    ? ["Enemy turn", "Watch what happens…"]
+    ? null
     : card
       ? !canPlay(f, selId!)
         ? [card.name, card.cost > f.tenaga ? "Not enough Tenaga." : "Nothing to use it on right now."]
         : pending !== null
           ? [card.name, card.self ? "Tap your king or Play to use it." : "Tap again to play. The board shows what will happen."]
           : [card.name, "Tap a highlighted square."]
-      : f.stepUsed
-        ? ["Pick a card", "Or end your turn."]
-        : ["Pick a card", "Tap a green dot for your free step."];
+      : null;
+  const hint = f.stepUsed ? "Pick a card, or end your turn." : "Pick a card, or tap a green dot for your free step.";
+  const recent = (f.log ?? []).slice(-3);
 
   return (
     <main className="screen" style={{ gap: 10, paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}>
@@ -197,15 +198,36 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
         <SilatBoard fight={display} preview={display !== f} hl={{ targets, pending, steps }} onTap={tap} fxKey={fxKey} combo={f.status === "play" && display === f ? f.combo : 0} />
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 14, background: "#fff", boxShadow: "0 2px 0 var(--cream-3)", minHeight: 52 }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 900, color: "var(--plum)" }}>{tip[0]}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--plum-soft)" }}>{tip[1]}</span>
+      {tip ? (
+        <div className="sl-info">
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 900, color: "var(--plum)" }}>{tip[0]}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--plum-soft)" }}>{tip[1]}</span>
+          </div>
+          {pending !== null && sel !== null && (
+            <button className="btn btn-sm btn-green" style={{ flexShrink: 0 }} onClick={() => tap(pending)}>Play</button>
+          )}
         </div>
-        {pending !== null && sel !== null && (
-          <button className="btn btn-sm btn-green" style={{ flexShrink: 0 }} onClick={() => tap(pending)}>Play</button>
-        )}
-      </div>
+      ) : (
+        <button type="button" className="sl-info sl-log" onClick={() => { feedback.tap(); setLogOpen(true); }} aria-label="Battle log. Tap to see everything that happened.">
+          <span style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }} aria-live="polite">
+            {recent.map((l, i) => (
+              <span key={(f.log?.length ?? 0) - recent.length + i} className={`sl-logline ${l.k ?? ""}${i === recent.length - 1 ? " new" : ""}`}>{l.t}</span>
+            ))}
+            {!busy && <span className="sl-logline hint">{hint}</span>}
+          </span>
+          <span className="sl-logbtn">Log</span>
+        </button>
+      )}
+
+      <Sheet open={logOpen} onClose={() => setLogOpen(false)} label="Battle log">
+        <h2 className="display" style={{ margin: 0, fontSize: 24, textAlign: "center" }}>Battle log</h2>
+        <div style={{ maxHeight: "55dvh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+          {[...(f.log ?? [])].reverse().map((l, i) => (
+            <span key={i} className={`sl-logline full ${l.k ?? ""}`}>{l.t}</span>
+          ))}
+        </div>
+      </Sheet>
 
       <div className="sl-hand">
         {f.hand.map((id, i) => {
