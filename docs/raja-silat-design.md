@@ -459,9 +459,37 @@ solo works.
 | 2026-11-06 | **Its own section in Parti**: a fourth "Silat" tab, not part of Chess. |
 | 2026-11-06 | **Design review** (section 10): box-in Strikes, pawn march clock, heavy pieces, angry pieces, king escape, styles, objects, bonus goals, full previews and undo. |
 
-## 15. Open questions
+## 15. Built so far (first playable, 2026-11-09)
+
+Code: `src/lib/silat/` (rules, cards, run, tests), `src/components/silat/`, `src/app/silat/`.
+Run the rule tests with `bun test src`.
+
+- One 6×6 act: 6 fights + boss **Mandor Benteng** (rook, 24 HP, hits 4). Fight 1 is the handmade
+  boulder-into-firecracker showcase. Card reward after each fight, run saved on the device.
+- 18 cards (no styles, upgrades, shop, Pusaka or taboos yet). Placeholder art throughout.
+- Tap a card, tap a target to preview, tap again to play. Free step, undo, incoming-damage forecast.
+
+Rule changes found while building and playtesting:
+- **The king holds its throne** and strikes if you're next to it. Fleeing every turn made fights a
+  long chase. King: 16 HP, hits 3. Its castling escape (once, below half HP) is in.
+- **A pushed piece loses a plan it can no longer do** from its new square (it would otherwise teleport).
+- **Stuck pieces don't use up the action limit**; the slots go to pieces that can act.
+- **Boulders don't move in explosions** (a blast bounced the boulder back into you).
+- Heal after a fight is 2 HP.
+
+**Villagers (Warga), added after the first playtest felt boring and easy.** A bot that uses the
+forecast won ~100% of runs and lost ~1 HP per fight: seeing every attack plus a free step made
+dodging trivial. Now each fight has villagers (3 HP) that enemies also attack. A villager who dies
+costs you 3 HP that Block can't stop; saving them all heals 3 extra after the fight. Tendang on a
+villager shoves it without hurting it. Enemies act in order of how close they are to their prey
+(you or a villager), and from floor 3, 3 of them act each turn (4 from floor 6).
+After this change the same bot wins ~70% of runs, loses ~3.7 HP and ~0.9 villagers per fight,
+and fights last ~5 turns. Losses cluster on floors 5–7.
+
+## 16. Open questions
 
 1. **Tab name**: "Silat" (short, fits the tab bar) or "Raja Silat"?
 2. **Language**: English UI with Indonesian card names (as above), or full Bahasa Indonesia?
 3. **HP**: is 20 right for a whole run? Decide after playtesting milestone 1.
 4. **Box-in Strikes**: they may make Act I too hard. If so, Act I Strikes aim only at your square.
+5. **More pressure later, if needed**: enemies that strike a whole line or area, or a turn limit.

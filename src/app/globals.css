@@ -479,3 +479,44 @@ a { text-decoration: none; }
 @keyframes mappulse { 0%,100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(88,204,2,0)); } 50% { transform: scale(1.1); filter: drop-shadow(0 0 8px rgba(88,204,2,.55)); } }
 @keyframes march { to { stroke-dashoffset: -22; } }
 @media (prefers-reduced-motion: reduce) { .mapnode.can > span, .march { animation: none; } }
+
+/* ---------- Raja Silat ---------- */
+.sl-board { position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: 16px; overflow: hidden; box-shadow: 0 6px 0 #6fb33a; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.sl-board.preview { box-shadow: 0 6px 0 #6fb33a, 0 0 0 3px #ffc800; }
+.sl-grid { position: absolute; inset: 0; display: grid; }
+.sl-sq { position: relative; border: 0; padding: 0; margin: 0; cursor: pointer; }
+.sl-sq .coord { position: absolute; font-size: 10px; font-weight: 900; pointer-events: none; }
+.sl-tok { position: absolute; left: 0; top: 0; pointer-events: none; transition: transform 260ms cubic-bezier(.2, .8, .25, 1.1); }
+.sl-tok svg { width: 88%; height: 88%; margin: 6%; display: block; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .15)); }
+.sl-hp { position: absolute; right: 2px; bottom: 2px; min-width: 20px; height: 18px; padding: 0 4px; border-radius: 9px; background: #fff; border: 2px solid #4b4b4b; font-size: 11px; font-weight: 900; color: #262626; display: flex; align-items: center; justify-content: center; }
+.sl-badge { position: absolute; left: 2px; top: 2px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; font-size: 11px; font-weight: 900; color: #fff; display: flex; align-items: center; justify-content: center; }
+.sl-dot { position: absolute; left: 32%; top: 32%; width: 36%; height: 36%; border-radius: 50%; background: rgba(88, 204, 2, .8); box-shadow: 0 0 0 3px rgba(255, 255, 255, .7); pointer-events: none; animation: dotin 200ms var(--spring) both; }
+.sl-target { position: absolute; inset: 6%; border-radius: 50%; box-shadow: inset 0 0 0 4px #ffc800; pointer-events: none; animation: dotin 200ms var(--spring) both; }
+.sl-target.on { box-shadow: inset 0 0 0 5px #ff9600, 0 0 14px rgba(255, 150, 0, .7); animation: glow2 1s ease-in-out infinite; }
+.sl-hop { position: absolute; inset: 12%; border-radius: 50%; border: 3px dashed #46a302; pointer-events: none; }
+.sl-float { position: absolute; pointer-events: none; font-size: 18px; font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, .25); animation: slfloat 1100ms ease-out both; z-index: 6; display: flex; justify-content: center; }
+@keyframes slfloat { 0% { opacity: 0; transform: translateY(6px) scale(.6); } 15% { opacity: 1; transform: translateY(0) scale(1.2); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-34px) scale(1); } }
+@keyframes glow2 { 50% { box-shadow: inset 0 0 0 5px #ff9600, 0 0 22px rgba(255, 150, 0, .9); } }
+.sl-hand { position: relative; height: 200px; }
+.sl-cw { position: absolute; bottom: 22px; width: 100px; height: 144px; border: 0; padding: 0; background: none; cursor: pointer; transition: transform 300ms cubic-bezier(.34, 1.56, .64, 1); }
+.sl-cw:disabled { cursor: default; }
+.sl-cw .deal { display: block; width: 100%; height: 100%; animation: sldeal 500ms cubic-bezier(.2, .9, .3, 1.2) both; }
+.sl-cw .bob { display: block; width: 100%; height: 100%; animation: slbob 3.2s ease-in-out infinite; }
+@keyframes sldeal { from { transform: translate(-170px, 120px) rotate(-35deg) scale(.5); opacity: 0; } }
+@keyframes slbob { 50% { transform: translateY(-5px); } }
+.sl-card { position: relative; width: 100%; height: 100%; border-radius: 14px; background: #fffdf7; border: 3px solid; display: flex; flex-direction: column; align-items: center; padding: 6px 6px 8px; gap: 4px; text-align: center; }
+.sl-card.on { outline: 3px solid #ffc800; outline-offset: 2px; }
+.sl-card.off { filter: grayscale(.7); opacity: .6; }
+.sl-card .gem { position: absolute; top: -9px; left: -9px; width: 28px; height: 28px; border-radius: 50%; background: #ff9600; color: #fff; font-weight: 900; font-size: 15px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 #e08600; border: 2px solid #fff; }
+.sl-card .band { font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; margin-top: 2px; }
+.sl-card .art { width: 100%; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 6px 0; }
+.sl-card .pat { display: grid; grid-template-columns: repeat(5, 9px); gap: 2px; }
+.sl-card .pat i { display: block; width: 9px; height: 9px; border-radius: 2px; background: #e4ecd8; }
+.sl-card .pat i.you { background: #1cb0f6; } .sl-card .pat i.go { background: #58cc02; } .sl-card .pat i.hit { background: #ff4b4b; } .sl-card .pat i.push { background: #ffb3b3; } .sl-card .pat i.guard { background: #a8e06a; }
+.sl-card .nm { font-size: 12px; font-weight: 900; line-height: 1.1; color: #3c3c3c; }
+.sl-card .tx { font-size: 11px; font-weight: 700; line-height: 1.2; color: #6f6f6f; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sl-gem { width: 20px; height: 20px; transform: rotate(45deg); border-radius: 5px; background: #ff9600; box-shadow: 0 3px 0 #e08600; }
+.sl-gem.empty { background: var(--cream-3); box-shadow: none; }
+.sl-combo { position: absolute; left: 50%; top: 42%; z-index: 7; pointer-events: none; padding: 6px 16px; border-radius: 14px; background: #3c3c3c; color: #ffc800; font-family: var(--font-display), "Fredoka", sans-serif; font-size: 26px; font-weight: 700; white-space: nowrap; box-shadow: 0 4px 0 #1a1a1a; animation: slcombo 1300ms var(--spring) both; }
+@keyframes slcombo { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.5) rotate(-6deg); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.15) rotate(-4deg); } 30% { transform: translate(-50%, 0) scale(1) rotate(-4deg); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -16px) rotate(-4deg); } }
+@media (prefers-reduced-motion: reduce) { .sl-combo { animation: none; opacity: 0; } .sl-tok, .sl-cw { transition: none; } .sl-cw .deal, .sl-cw .bob, .sl-float { animation: none; } }
