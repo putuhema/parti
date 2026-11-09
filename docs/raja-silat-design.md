@@ -561,6 +561,14 @@ won 100% at 24 HP. Now: **20 HP, heal 2** after each fight. Bot: ~60% runs won, 
   The end-of-fight screen waits ~1 second so the final blow lands.
 - Bot (random paths): ~48% runs won (was ~70%); losses spread over floors 2–4 and the boss.
 
+**Intents re-aim after your moves (player: "make it feel like they're attacking").** This replaces
+"intents are locked". After every action you take, enemies re-plan: strikes follow you if you're
+still in reach, moves head for your new square, and the badge pops when an intent changes.
+Big attacks stay committed once wound up: a charge can't turn (the matador still works) and a slam
+lands on the area it was aimed at. Slams only wind up when enemies plan at the end of their turn,
+never in the middle of yours (otherwise every step near the king cost 4 HP and fights stalled).
+Knights far from you no longer idle. Bot: ~52% runs won, losses spread over floors 1–4 and the boss.
+
 ## 16. Open questions
 
 1. **Tab name**: "Silat" (short, fits the tab bar) or "Raja Silat"?

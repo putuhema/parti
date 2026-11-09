@@ -189,14 +189,29 @@ describe("enemies", () => {
     expect(after.units.find((u) => u.kind === "p")!.sq).toBe(sq(0, 1));
   });
 
-  test("a piece pushed out of place loses the move or strike it planned", () => {
+  test("a piece knocked away re-aims from where it lands", () => {
     let s = fight({ hero: sq(2, 4), units: [{ kind: "p", sq: sq(2, 3) }, { kind: "k", sq: sq(5, 0) }], mud: [sq(2, 0)] }, ["lurus"]);
     const pawn = s.units[0];
     s.intents = [{ id: pawn.id, type: "strike", target: sq(1, 4) }]; // it planned to hit b2
-    s = play(s, "lurus", sq(2, 3)); // kicked flying up, stuck in the mud on c6, far from b2
-    const after = forecast(s).after;
-    expect(after.hero.hp).toBe(20);
-    expect(after.units.find((u) => u.id === pawn.id)?.sq).toBe(sq(2, 0));
+    s = play(s, "lurus", sq(2, 3)); // kicked flying up, stuck in the mud on c6
+    expect(s.units.find((u) => u.id === pawn.id)?.sq).toBe(sq(2, 0));
+    // From c6 it can't reach you, so it marches forward instead of striking.
+    expect(s.intents.find((i) => i.id === pawn.id)).toEqual({ id: pawn.id, type: "move", to: sq(2, 1) });
+    expect(forecast(s).damage).toBe(0);
+  });
+
+  test("enemies re-aim after you move, but a committed charge can't turn", () => {
+    // Knight on b4 strikes you on c2. Step to d3: still a knight jump away, so the strike follows you.
+    let s = fight({ hero: sq(2, 4), units: [{ kind: "n", sq: sq(1, 2) }, { kind: "k", sq: sq(5, 0) }] });
+    plan(s);
+    expect(s.intents.find((i) => i.id === s.units[0].id)).toEqual({ id: s.units[0].id, type: "strike", target: sq(2, 4) });
+    s = step(s, sq(3, 3));
+    expect(s.intents.find((i) => i.id === s.units[0].id)).toEqual({ id: s.units[0].id, type: "strike", target: sq(3, 3) });
+    // A rook already charging right along rank 4 keeps charging right after you step off the line.
+    s = fight({ hero: sq(3, 2), units: [{ kind: "r", sq: sq(0, 2) }, { kind: "p", sq: sq(5, 2) }, { kind: "k", sq: sq(5, 5) }] });
+    s.intents = [{ id: s.units[0].id, type: "charge", dir: 2 }];
+    s = step(s, sq(3, 1));
+    expect(s.intents.find((i) => i.id === s.units[0].id)).toEqual({ id: s.units[0].id, type: "charge", dir: 2 });
   });
 
   test("guarded pieces only budge 1 square and can't be knocked off the board", () => {
@@ -356,8 +371,11 @@ describe("slams (Hantam)", () => {
     plan(s);
     const rook = s.units[0];
     expect(s.intents.find((i) => i.id === rook.id)).toEqual({ id: rook.id, type: "slam", center: sq(2, 4) });
-    // Step one square: still inside the 3x3.
+    // Step one square: still inside the 3x3 it's committed to.
     expect(forecast(step(s, sq(1, 5))).damage).toBe(4);
+    // A move card that gets you out of the area escapes it.
+    s.hand = ["kuda", "tangkis"];
+    expect(forecast(play(s, "kuda", sq(0, 3))).damage).toBe(0);
     // Block 4 soaks it.
     expect(forecast(play(s, "tangkis", sq(2, 4))).damage).toBe(0);
   });

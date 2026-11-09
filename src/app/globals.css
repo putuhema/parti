@@ -573,3 +573,7 @@ a { text-decoration: none; }
 /* Let the final blow land before the end screen shows. */
 .sl-endpause { animation: fade 300ms 900ms both; }
 @media (prefers-reduced-motion: reduce) { .sl-endpause { animation-delay: 0ms; } }
+/* An enemy re-aims: its badge pops. */
+.sl-intent { animation: slreaim 360ms cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes slreaim { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .sl-intent { animation: none; } }

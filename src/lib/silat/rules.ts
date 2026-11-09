@@ -504,12 +504,12 @@ function placeScore(s: Fight, u: Unit, sq: number) {
   return threat(s, u, sq) * 2 - exposure(s, u, sq) + guarded + guard - near;
 }
 
-function chooseIntent(s: Fight, u: Unit): Intent | null {
+function chooseIntent(s: Fight, u: Unit, allowSlam = true): Intent | null {
   const hero = s.hero.sq;
   let moves: number[];
   if (SLIDES[u.kind]) {
     // Heavy pieces close to you slam: you can't just step out of it.
-    if (isHeavy(u) && dist(s, u.sq, hero) <= SLAM_REACH) return { id: u.id, type: "slam", center: hero };
+    if (allowSlam && isHeavy(u) && dist(s, u.sq, hero) <= SLAM_REACH) return { id: u.id, type: "slam", center: hero };
     // Charge only down a clear line at you. Never into its own ally.
     const d = lineDir(s, u, hero);
     if (d >= 0 && firstInLine(s, u.sq, d) === hero) return { id: u.id, type: "charge", dir: d };
@@ -537,14 +537,16 @@ function chooseIntent(s: Fight, u: Unit): Intent | null {
   if (!moves.length) return null;
   // Move somewhere that threatens you, without standing where you can kick it off the board.
   const scored = moves.map((sq) => ({ sq, v: placeScore(s, u, sq) })).sort((a, b) => b.v - a.v || a.sq - b.sq);
-  if (scored[0].v <= placeScore(s, u, u.sq) && exposure(s, u, u.sq) === 0) return null; // already in a good spot
+  // Stay put only if already close to you, safe, and no square is better. Far away pieces keep coming.
+  if (scored[0].v <= placeScore(s, u, u.sq) && exposure(s, u, u.sq) === 0 && dist(s, u.sq, hero) <= 2) return null;
   return { id: u.id, type: "move", to: scored[0].sq };
 }
 
 /** The king holds its throne behind its army and strikes if you come close.
  *  (Running away every turn made fights a long chase.) */
-function kingIntent(s: Fight, k: Unit): Intent | null {
-  if (dist(s, k.sq, s.hero.sq) <= SLAM_REACH) return { id: k.id, type: "slam", center: s.hero.sq };
+function kingIntent(s: Fight, k: Unit, allowSlam = true): Intent | null {
+  if (allowSlam && dist(s, k.sq, s.hero.sq) <= SLAM_REACH) return { id: k.id, type: "slam", center: s.hero.sq };
+  if (strikeSquares(s, k).includes(s.hero.sq)) return { id: k.id, type: "strike", target: s.hero.sq };
   // You're two squares away: step back into the formation if there's a safer spot (more allies around,
   // further from you, not on the edge). Otherwise hold the throne.
   if (dist(s, k.sq, s.hero.sq) !== 2) return null;
@@ -558,33 +560,51 @@ function kingIntent(s: Fight, k: Unit): Intent | null {
 }
 
 /** Enemies lock in what they'll do next turn. */
-export function plan(s: Fight) {
-  s.intents = [];
+/** Work out what every enemy will do, given the board right now. No side effects.
+ *  `keep`: intents that stay as they are (committed charges). */
+function buildIntents(s: Fight, keep: Intent[] = [], allowSlam = true): Intent[] {
+  const out: Intent[] = [...keep];
+  const kept = new Set(keep.map((i) => i.id));
   // Closest to you acts first.
   const near = (u: Unit) => dist(s, u.sq, s.hero.sq);
   const byDist = (a: Unit, b: Unit) => near(a) - near(b) || a.id - b.id;
-  const ready = s.units.filter((u) => {
-    if (u.locked > 0) { u.locked--; return false; }
-    return true;
-  });
+  const ready = s.units.filter((u) => u.locked === 0);
   const king = ready.find((u) => u.kind === "k" && u.target && !u.boss);
   const rest = ready.filter((u) => u !== king).sort(byDist);
   // Closest first. Angry pieces and bosses always act; the rest fill the limit,
   // skipping pieces that are stuck so the slots go to someone who can do something.
-  let regular = 0;
+  let regular = keep.filter((i) => { const u = s.units.find((x) => x.id === i.id); return u && !u.angry && !u.boss; }).length;
   for (const u of rest) {
+    if (kept.has(u.id)) continue;
     const always = u.angry || !!u.boss;
     if (!always && regular >= s.limit) continue;
-    const it = chooseIntent(s, u);
+    const it = chooseIntent(s, u, allowSlam);
     if (!it) continue;
-    s.intents.push(it);
+    out.push(it);
     if (!always) regular++;
   }
-  if (king) {
-    const it = kingIntent(s, king);
-    if (it) s.intents.push(it);
+  if (king && !kept.has(king.id)) {
+    const it = kingIntent(s, king, allowSlam);
+    if (it) out.push(it);
   }
+  return out;
+}
+
+/** Enemies lock in what they'll do next turn (at the end of the enemy turn). */
+export function plan(s: Fight) {
+  for (const u of s.units) if (u.locked > 0) u.locked--;
+  s.intents = buildIntents(s);
   for (const u of s.units) u.angry = false;
+}
+
+/** After each of your actions, quick attacks (strikes) and moves re-aim at where you are now.
+ *  Big attacks are committed once wound up: a charge can't turn (so you can sidestep it into its own
+ *  pieces) and a slam lands on the area it was aimed at (so you can get out of it, or Block). */
+export function retarget(s: Fight) {
+  if (s.status !== "play") return;
+  const committed = s.intents.filter((i) => (i.type === "charge" || i.type === "slam") && intentValid(s, i));
+  // Slams only wind up when enemies plan (end of their turn), never in the middle of yours.
+  s.intents = buildIntents(s, committed, false);
 }
 
 /** An attack reaches the hero: Elakan hops away, Tangkisan kicks back. Returns true if it landed. */
@@ -890,6 +910,7 @@ export function step(s: Fight, sq: number) {
   else f.stepUsed = true;
   say(f, `You step to ${sqName(f, sq)}`, "you");
   react(f);
+  retarget(f);
   return f;
 }
 

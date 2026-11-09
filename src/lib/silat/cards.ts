@@ -1,6 +1,6 @@
 // Raja Silat cards: what each one targets and what it does.
 import {
-  DIRS, FLY, KNIGHT, checkEnd, clone, has, react, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
+  DIRS, FLY, KNIGHT, checkEnd, clone, has, react, retarget, say, sqName, damageUnit, dirTo, explode, hitOcc, isEmpty, isOrth, neighbors, occupant, offset, push, ringOut,
   unitAt, unitName, type Fight,
 } from "./rules";
 
@@ -212,6 +212,7 @@ const list: CardDef[] = [
       const u = unitAt(s, sq);
       if (!u) return;
       if (u.boss) return damageUnit(s, u, 4); // bosses shrug it off, but it hurts
+      u.locked = 1; // no action this turn, even after enemies re-aim
       s.intents = s.intents.filter((i) => i.id !== u.id);
     },
   },
@@ -260,5 +261,6 @@ export function playCard(s: Fight, idx: number, sq: number): Fight {
   f.bestCombo = Math.max(f.bestCombo, f.combo);
   if (f.combo >= 3) say(f, `Combo ×${f.combo}!`, "good");
   checkEnd(f);
+  retarget(f); // enemies react to what you just did
   return f;
 }
