@@ -10,7 +10,7 @@ import { CARDS, STYLES, type Style } from "@/lib/silat/cards";
 import { MAP_LANES, MAP_ROWS, NODE_INFO, nextNodes, type MapNode, type NodeKind } from "@/lib/silat/map";
 import { RELICS } from "@/lib/silat/relics";
 import {
-  EVENTS, REST_HEAL, SHOP_HEAL, STYLE_STARTER, buyCard, chooseStyle, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, takeReward, takeTreasure, train, type Run,
+  EVENTS, REST_HEAL, SHOP_HEAL, STYLE_STARTER, buyCard, checkBonus, chooseStyle, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, rollEvent, takeReward, takeTreasure, train, type RollResult, type Run,
 } from "@/lib/silat/run";
 
 const ICON_PATH: Record<NodeKind, string> = {
@@ -132,8 +132,8 @@ export function MapScreen({ run, onChange }: { run: Run; onChange: (r: Run) => v
   const [peek, setPeek] = useState<MapNode | null>(null);
   return (
     <Screen>
-      <RunHeader run={run} title="Sawah" />
-      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>Choose your path. The boss waits at the top.</p>
+      <RunHeader run={run} title="Escape" />
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>Choose your path out. Raja Hitam guards the gate at the top.</p>
       <div style={{ position: "relative", height, borderRadius: 24, background: "#EAF3DE", border: "2px solid #D2E6BC" }} aria-label="Run map">
         <svg width="100%" height={height} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
           {run.map.edges.map(([f, t]) => {
@@ -314,6 +314,27 @@ export function ShopScreen({ run, onChange }: { run: Run; onChange: (r: Run) => 
 export function EventScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
   const ev = EVENTS[run.event!];
   const [picking, setPicking] = useState<string | null>(null);
+  const [rolled, setRolled] = useState<RollResult | null>(null);
+  if (rolled) {
+    const total = rolled.die + rolled.bonus;
+    return (
+      <Screen>
+        <RunHeader run={run} title="Mystery" />
+        <div className="grow" />
+        <h1 className="display" style={{ margin: 0, fontSize: 30, textAlign: "center" }}>{ev.title}</h1>
+        <div className="sl-d20" style={{ background: rolled.ok ? "#58CC02" : "#FF4B4B", boxShadow: `0 6px 0 ${rolled.ok ? "#3A8700" : "#B81F1F"}` }}>
+          <span>{rolled.die}</span>
+        </div>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: "var(--plum)", textAlign: "center" }}>
+          d20: {rolled.die}{rolled.bonus ? ` + ${rolled.bonus} (Pusaka) = ${total}` : ""} vs {rolled.dc}
+          {rolled.die === 20 ? " · Natural 20!" : rolled.die === 1 ? " · Natural 1" : ""} · {rolled.ok ? "Success" : "Failed"}
+        </p>
+        <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center", lineHeight: 1.45 }}>{rolled.text}</p>
+        <div className="grow" />
+        <button className="pill-btn primary" onClick={() => { feedback.tap(); onChange(rolled.next); }}>Continue</button>
+      </Screen>
+    );
+  }
   return (
     <Screen>
       <RunHeader run={run} title="Mystery" />
@@ -325,9 +346,20 @@ export function EventScreen({ run, onChange }: { run: Run; onChange: (r: Run) =>
           const broke = c.cost !== undefined && run.gold < c.cost;
           return (
             <button key={c.id} type="button" className="pill-btn" disabled={broke} style={{ flexDirection: "column", gap: 2, minHeight: 64, fontSize: 18, opacity: broke ? 0.5 : 1 }}
-              onClick={() => { feedback.tap(); if (c.needsCard) setPicking(c.id); else onChange(chooseEvent(run, c.id)); }}>
+              onClick={() => {
+                feedback.tap();
+                if (c.needsCard) return setPicking(c.id);
+                const r = c.check ? rollEvent(run, c.id) : null;
+                if (r) { setRolled(r); if (r.ok) feedback.correct(); else feedback.wrong(); return; }
+                onChange(chooseEvent(run, c.id));
+              }}>
               <span>{c.label}</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: "var(--plum-soft)" }}>{c.detail}</span>
+              {c.check && (
+                <span style={{ fontSize: 12, fontWeight: 900, color: "#8A6400" }}>
+                  Needs {c.check.dc}+ on a d20{checkBonus(run, c.check) ? ` · your Pusaka add +${checkBonus(run, c.check)}` : ""} · {Math.round(Math.min(19, Math.max(1, 21 - c.check.dc + checkBonus(run, c.check))) * 5)}%
+                </span>
+              )}
             </button>
           );
         })}

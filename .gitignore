@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Rive CLI build output (the shipped files are copied to public/silat/rive)
+rive/*/build

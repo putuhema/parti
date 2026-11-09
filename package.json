@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "bun test src"
+    "test": "bun test src",
+    "rive:build": "python3 rive/gen.py && rive rive/hero --publish && rive rive/dice --publish && mkdir -p public/silat/rive && cp rive/hero/build/hero.riv rive/dice/build/dice.riv public/silat/rive/"
   },
   "dependencies": {
+    "@rive-app/react-canvas": "^4.38.1",
     "convex": "^1.49.0",
     "next": "16.4.5",
     "react": "19.3.0",

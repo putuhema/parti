@@ -4,7 +4,7 @@
 import { CARDS, POOL, STARTER, isAttack, type Style } from "./cards";
 import { MAP_ROWS, makeMap, nextNodes, nodeById, type MapNode, type RunMap } from "./map";
 import { ALL_RELICS, RELICS } from "./relics";
-import { KO_GOLD, makeFight, type Fight, type Kind, type Setup } from "./rules";
+import { KO_GOLD, makeFight, type Fight, type Kind, type Scene, type Setup } from "./rules";
 
 export const FLOORS = MAP_ROWS; // the last row is the boss
 export const HEAL_AFTER_FIGHT = 1;
@@ -57,7 +57,16 @@ function rng(seed: number) {
 }
 const pickOne = <T,>(r: () => number, list: T[]) => list[Math.floor(r() * list.length)];
 
-export const floorName = (floor: number) => (floor >= FLOORS - 1 ? "Boss: Raja Hitam" : `Floor ${floor + 1}`);
+/** The escape route: each floor of the map is a part of Raja Hitam's prison. */
+export const AREAS: Record<Scene, string> = { cell: "The Cells", corridor: "Cell Block", yard: "Prison Yard", wall: "The Wall", gate: "The Gate" };
+export function sceneFor(floor: number): Scene {
+  if (floor >= FLOORS - 1) return "gate";
+  if (floor <= 0) return "cell";
+  if (floor <= 2) return "corridor";
+  if (floor <= 4) return "yard";
+  return "wall";
+}
+export const floorName = (floor: number) => (floor >= FLOORS - 1 ? "Boss: Raja Hitam at the Gate" : `${AREAS[sceneFor(floor)]} · Floor ${floor + 1}`);
 
 /** The first fight is handmade: kick the pawn in front of you into the pawn behind it. */
 function firstFight(hp: number, max: number, deck: string[], seed: number): Setup {
@@ -199,7 +208,7 @@ function fightSetup(run: Run, node: MapNode): Setup {
     base.units = base.units.map((u) => ({ ...u, hp: (u.hp ?? { p: 3, n: 5, b: 5, r: 7, q: 7, k: 16 }[u.kind]) + 2 }));
     base.name = `Elite · ${base.name}`;
   }
-  return { ...base, relics: run.relics };
+  return { ...base, relics: run.relics, scene: sceneFor(node.kind === "boss" ? FLOORS - 1 : node.row) };
 }
 
 export function fightFor(run: Run, node: MapNode): Fight {
@@ -357,7 +366,9 @@ export const leave = (run: Run): Run => backToMap(run);
 
 // ---------- Mystery events ----------
 
-export interface EventChoice { id: string; label: string; detail: string; needsCard?: boolean; cost?: number }
+/** A d20 check (Baldur's Gate style): roll, add bonuses from your Pusaka, meet the number. */
+export interface Check { dc: number; bonus?: Record<string, number>; win: string; lose: string }
+export interface EventChoice { id: string; label: string; detail: string; needsCard?: boolean; cost?: number; check?: Check }
 export interface GameEvent { title: string; text: string; choices: EventChoice[] }
 
 export const EVENTS: Record<string, GameEvent> = {
@@ -385,6 +396,33 @@ export const EVENTS: Record<string, GameEvent> = {
       { id: "toughen", label: "Toughen up", detail: "+3 max HP." },
     ],
   },
+  guard: {
+    title: "The Sleeping Guard",
+    text: "A guard dozes on a stool by the cell block door. A ring of keys hangs from his belt.",
+    choices: [
+      { id: "keys", label: "Lift the keys", detail: "d20 12+. Win: a random Pusaka. Lose: he wakes, lose 5 HP.",
+        check: { dc: 12, bonus: { sandal: 3, peci: 2 }, win: "The keys slide off without a sound. Behind the door: a Pusaka.", lose: "He snorts awake and swings his baton. You take 5." } },
+      { id: "leave", label: "Sneak past", detail: "Nothing happens." },
+    ],
+  },
+  brawl: {
+    title: "Yard Brawl",
+    text: "Two gangs square off in the prison yard. Whoever wins takes the other side's stash.",
+    choices: [
+      { id: "fight", label: "Jump in", detail: "d20 10+. Win: a rare card and 20 gold. Lose: 7 HP.",
+        check: { dc: 10, bonus: { keris: 3, gelang: 2, keris_api: 2 }, win: "You drop three of them before the guards arrive. The stash is yours.", lose: "Someone hits you with a tray. Then everyone does. You take 7." } },
+      { id: "leave", label: "Stay out of it", detail: "Nothing happens." },
+    ],
+  },
+  dadu: {
+    title: "Prisoners' Dice",
+    text: "In a corner of the cell block, prisoners are throwing dice for gold. \"One game?\"",
+    choices: [
+      { id: "bet", label: "Bet 15 gold", detail: "d20 11+. Win: +30 gold. Lose: the 15 is gone.", cost: 15,
+        check: { dc: 11, bonus: { akik: 2, tasbih: 2 }, win: "The dice love you tonight. +30 gold.", lose: "Snake eyes, more or less. Your 15 gold is gone." } },
+      { id: "leave", label: "Walk on", detail: "Nothing happens." },
+    ],
+  },
   shrine: {
     title: "Mossy Shrine",
     text: "Something glints between the offerings at an old shrine.",
@@ -395,7 +433,35 @@ export const EVENTS: Record<string, GameEvent> = {
   },
 };
 
+/** Your bonus on a check: the Pusaka you carry that help. */
+export const checkBonus = (run: Run, c: Check) => Object.entries(c.bonus ?? {}).reduce((a, [id, n]) => a + (run.relics.includes(id) ? n : 0), 0);
+
+export interface RollResult { die: number; bonus: number; dc: number; ok: boolean; text: string; next: Run }
+
+/** Roll a check. Seeded by the run, so leaving and coming back rolls the same number. */
+export function rollEvent(run: Run, choice: string): RollResult | null {
+  const c = run.event ? EVENTS[run.event]?.choices.find((x) => x.id === choice) : undefined;
+  if (!c?.check || (c.cost !== undefined && run.gold < c.cost)) return null;
+  const r = rng(run.seed * 13 + run.path.length * 101 + 7);
+  const die = 1 + Math.floor(r() * 20);
+  const bonus = checkBonus(run, c.check);
+  const ok = die === 20 || (die !== 1 && die + bonus >= c.check.dc);
+  let next: Run = run;
+  if (run.event === "guard") {
+    const relic = relicChoices(run, r, 1)[0];
+    next = ok ? { ...run, relics: relic ? [...run.relics, relic] : run.relics } : { ...run, hp: Math.max(1, run.hp - 5) };
+  } else if (run.event === "brawl") {
+    const rares = POOL.filter((id) => CARDS[id].rare);
+    next = ok ? { ...run, deck: [...run.deck, pickOne(r, rares)], gold: run.gold + 20 } : { ...run, hp: Math.max(1, run.hp - 7) };
+  } else if (run.event === "dadu") {
+    next = { ...run, gold: run.gold - 15 + (ok ? 30 : 0) };
+  }
+  return { die, bonus, dc: c.check.dc, ok, text: ok ? c.check.win : c.check.lose, next: backToMap(next) };
+}
+
 export function chooseEvent(run: Run, choice: string, cardIndex?: number): Run {
+  const checked = rollEvent(run, choice);
+  if (checked) return checked.next;
   const ev = run.event;
   const r = rng(run.seed + run.path.length * 17);
   let next = run;

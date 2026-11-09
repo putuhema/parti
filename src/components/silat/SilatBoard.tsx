@@ -3,9 +3,37 @@
 import { useState, type CSSProperties } from "react";
 import { Piece } from "@/components/chess/Board";
 import { SilatKing } from "@/components/shell";
-import { DIRS, PIECE, chargeEnd, col, intentValid, isGuarded, occupant, row, slamArea, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
+import { RIVE_ON, RiveDice, RiveHero } from "@/components/silat/RiveSprites";
+import { Sprite, spriteFor } from "@/components/silat/Sprite";
+import { DIRS, PIECE, type Scene, chargeEnd, col, intentValid, isGuarded, occupant, row, slamArea, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
 
 const FILES = "abcdefgh";
+
+/** Each part of the prison is a real place with a subtle grid on top, not a plain checkerboard.
+ *  A faint alternating tint keeps the chess colours readable. */
+const SCENES: Record<Scene, { ground: string; edge: string; line: string; tint: string; ink: string; inkAlt: string }> = {
+  cell: {
+    ground: "radial-gradient(circle at 18% 72%, rgba(0,0,0,.10) 0 7%, transparent 8%), radial-gradient(circle at 76% 22%, rgba(255,255,255,.10) 0 6%, transparent 7%), radial-gradient(ellipse at 50% 0%, rgba(255,240,200,.25), transparent 60%), repeating-linear-gradient(0deg, transparent 0 23px, rgba(40,42,48,.10) 23px 24px), #9CA1A8",
+    edge: "#5F646B", line: "rgba(40,42,48,.30)", tint: "rgba(255,255,255,.14)", ink: "rgba(255,255,255,.75)", inkAlt: "rgba(30,32,36,.55)",
+  },
+  corridor: {
+    ground: "radial-gradient(circle at 12% 50%, rgba(255,170,60,.28), transparent 32%), radial-gradient(circle at 88% 50%, rgba(255,170,60,.22), transparent 30%), radial-gradient(circle at 40% 80%, rgba(0,0,0,.10) 0 5%, transparent 6%), #8A8279",
+    edge: "#5A534B", line: "rgba(35,28,20,.30)", tint: "rgba(255,255,255,.12)", ink: "rgba(255,245,230,.8)", inkAlt: "rgba(40,30,20,.55)",
+  },
+  yard: {
+    ground: "radial-gradient(ellipse at 15% 20%, rgba(110,160,70,.55) 0 12%, transparent 22%), radial-gradient(ellipse at 85% 75%, rgba(110,160,70,.5) 0 10%, transparent 20%), radial-gradient(circle at 60% 40%, rgba(90,60,30,.15) 0 4%, transparent 5%), radial-gradient(circle at 30% 65%, rgba(255,255,255,.12) 0 3%, transparent 4%), #C9A87C",
+    edge: "#94754F", line: "rgba(90,60,30,.25)", tint: "rgba(255,255,255,.16)", ink: "rgba(90,60,30,.7)", inkAlt: "rgba(255,250,240,.85)",
+  },
+  wall: {
+    ground: "repeating-linear-gradient(0deg, transparent 0 15px, rgba(60,50,40,.16) 15px 17px), repeating-linear-gradient(90deg, transparent 0 31px, rgba(60,50,40,.12) 31px 33px), radial-gradient(ellipse at 70% 30%, rgba(120,170,90,.35) 0 8%, transparent 14%), #A59B8E",
+    edge: "#6E655A", line: "rgba(50,40,30,.28)", tint: "rgba(255,255,255,.14)", ink: "rgba(255,250,240,.8)", inkAlt: "rgba(50,40,30,.6)",
+  },
+  gate: {
+    ground: "radial-gradient(ellipse at 25% 15%, rgba(255,255,255,.25) 0 10%, transparent 24%), radial-gradient(circle at 70% 60%, rgba(255,220,90,.7) 0 1.2%, transparent 1.6%), radial-gradient(circle at 20% 80%, rgba(255,255,255,.8) 0 1%, transparent 1.4%), radial-gradient(circle at 85% 25%, rgba(255,140,170,.8) 0 1.1%, transparent 1.5%), radial-gradient(ellipse at 60% 90%, rgba(70,130,40,.35) 0 20%, transparent 40%), #8CC75F",
+    edge: "#5E9A38", line: "rgba(40,80,20,.22)", tint: "rgba(255,255,255,.18)", ink: "rgba(40,80,20,.7)", inkAlt: "rgba(255,255,240,.9)",
+  },
+};
+const OLD = { ground: "#94CF63", edge: "#6fb33a", line: "transparent", tint: "#F1F9E6", ink: "#4F8A22", inkAlt: "#F1F9E6" };
 
 export interface Highlights {
   targets?: number[];
@@ -13,6 +41,10 @@ export interface Highlights {
   steps?: number[];
   /** Squares where moving would get you struck, and for how much. */
   danger?: Map<number, number>;
+  /** The chance one enemy jab hits you (shown on danger squares). */
+  jab?: number;
+  /** Enemy squares the selected move card can capture on (with an attack that knocks it out). */
+  captures?: number[];
   /** The combo you're building: numbered markers on each step's square. */
   combo?: { sq: number; n: number }[];
 }
@@ -52,6 +84,10 @@ const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   gold: (f) => [`+${"n" in f ? f.n : ""} gold`, "#FFC800"],
   roll: (f) => (f.t === "roll" ? [`d20: ${f.n}${f.ok ? " ✓" : " ✗"}`, f.ok === !!f.hero ? "#58CC02" : "#FF4B4B"] : ["", ""]),
   fury: () => ["MURKA!", "#FF4B4B"],
+  capture: () => ["CAPTURE!", "#1CB0F6"],
+  parry: () => ["SIAP!", "#58CC02"],
+  crit: () => ["SEMPURNA!", "#FFC800"],
+  stumble: () => ["TERJATUH!", "#58CC02"],
 };
 
 export function SilatBoard({
@@ -72,6 +108,7 @@ export function SilatBoard({
 }) {
   const n = s.n;
   const cell = 100 / n;
+  const look = s.scene ? SCENES[s.scene] : OLD;
   const at = (sq: number): CSSProperties => ({ width: `${cell}%`, height: `${cell}%`, transform: `translate(${col(s, sq) * 100}%, ${row(s, sq) * 100}%)` });
   const targets = new Set(hl.targets ?? []);
   const steps = new Set(hl.steps ?? []);
@@ -141,23 +178,27 @@ export function SilatBoard({
   };
 
   return (
-    <div className={`sl-board${preview ? " preview" : ""}`}>
+    <div className={`sl-board${preview ? " preview" : ""}`} style={{ background: look.ground, boxShadow: `0 6px 0 ${look.edge}${preview ? ", 0 0 0 3px #ffc800" : ""}` }}>
+      {s.scene === "cell" && <div className="sl-bars" aria-hidden="true" />}
       <div className="sl-grid" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
         {Array.from({ length: n * n }, (_, sq) => {
           const r = row(s, sq), cc = col(s, sq);
           const light = (r + cc) % 2 === 0;
           const mud = s.mud.includes(sq);
-          const bg = mud ? (light ? "#C9A27A" : "#B48A60") : light ? "#F1F9E6" : "#94CF63";
+          const bg = mud ? (light ? "#C9A27A" : "#B48A60") : light ? look.tint : "transparent";
           const label = `${FILES[cc]}${n - r}`;
           return (
-            <button key={sq} type="button" className="sl-sq" style={{ background: bg }} aria-label={danger.has(sq) ? `${label}, will be hit for ${danger.get(sq)}` : label} onClick={() => onTap?.(sq)}>
-              {cc === 0 && <span className="coord" style={{ left: 3, top: 1, color: light ? "#4F8A22" : "#F1F9E6" }}>{n - r}</span>}
-              {r === n - 1 && <span className="coord" style={{ right: 3, bottom: 0, color: light ? "#4F8A22" : "#F1F9E6" }}>{FILES[cc]}</span>}
+            <button key={sq} type="button" className="sl-sq" style={{ background: bg, boxShadow: `inset 0 0 0 0.5px ${look.line}` }} aria-label={danger.has(sq) ? `${label}, will be hit for ${danger.get(sq)}` : label} onClick={() => onTap?.(sq)}>
+              {cc === 0 && <span className="coord" style={{ left: 3, top: 1, color: light ? look.ink : look.inkAlt }}>{n - r}</span>}
+              {r === n - 1 && <span className="coord" style={{ right: 3, bottom: 0, color: light ? look.ink : look.inkAlt }}>{FILES[cc]}</span>}
               {danger.has(sq) && (
                 <span className="sl-danger" aria-hidden="true"><span>{danger.get(sq)}</span></span>
               )}
               {steps.has(sq) && (
-                <span className={`sl-dot${hl.danger?.get(sq) ? " risky" : ""}`}>{hl.danger?.get(sq) ? hl.danger.get(sq) : ""}</span>
+                <>
+                  <span className={`sl-dot${hl.danger?.get(sq) ? " risky" : ""}`}>{hl.danger?.get(sq) ? hl.danger.get(sq) : ""}</span>
+                  {!!hl.danger?.get(sq) && hl.jab !== undefined && <span className="sl-odds">{Math.round(hl.jab * 100)}%</span>}
+                </>
               )}
               {s.hop === sq && <span className="sl-hop" />}
             </button>
@@ -175,7 +216,12 @@ export function SilatBoard({
         const attack = b && b.it.type !== "move";
         return (
           <div key={`u${u.id}`} className={`sl-tok${marks.get(u.sq)?.gone ? " sl-doomed" : ""}`} style={at(u.sq)}>
-            <Piece code={u.kind} />
+            <Sprite
+              id={spriteFor(u.kind, u.boss)}
+              play="hit"
+              nonce={s.fx.some((x) => x.t === "dmg" && !x.hero && x.sq === u.sq) ? fxKey : 0}
+              fallback={<Piece code={u.kind} />}
+            />
             <span className="sl-hp" style={u.boss ? { borderColor: "#B81F1F" } : undefined}>{u.hp}</span>
             {b && (
               <span key={JSON.stringify(b.it)} className="sl-intent" style={{ background: attack ? "#FF4B4B" : "#8C8C8C" }} aria-label={`acts ${b.ord}${attack ? `, hits for ${b.hit}` : ", moves"}`}>
@@ -202,12 +248,25 @@ export function SilatBoard({
         );
       })}
       <div className="sl-tok" style={{ ...at(s.hero.sq), zIndex: 2 }}>
-        {(() => {
+        {RIVE_ON ? (
+          // One Rive instance for the whole fight: reloading it would replay the file's splash screen.
+          <RiveHero
+            kick={s.fx.some((x) => x.t === "lunge" || x.t === "capture") ? fxKey : 0}
+            hit={s.fx.some((x) => x.t === "dmg" && x.hero) ? fxKey : 0}
+            fallback={<SilatKing prisoner />}
+          />
+        ) : (() => {
           const l = s.fx.find((x): x is Extract<Fx, { t: "lunge" }> => x.t === "lunge");
           const [dx, dy] = l ? DIRS[l.dir] : [0, 0];
+          const hurt = s.fx.some((x) => x.t === "dmg" && x.hero);
           return (
             <span key={l ? `l${fxKey}` : "still"} className={l ? "sl-lunge" : undefined} style={{ display: "block", width: "100%", height: "100%", ["--lx" as string]: `${dx * 34}%`, ["--ly" as string]: `${dy * 34}%` }}>
-              <SilatKing />
+              <Sprite
+                id="hero"
+                play={hurt ? "hit" : "kick"}
+                nonce={hurt || l || s.fx.some((x) => x.t === "capture") ? fxKey : 0}
+                fallback={<SilatKing prisoner />}
+              />
             </span>
           );
         })()}
@@ -221,13 +280,13 @@ export function SilatBoard({
 
       {snap.leaving.map((g) => (
         <div key={`x${snap.key}-${g.id}`} className="sl-tok" style={{ ...at(g.from), zIndex: 5 }}>
-          <span className="sl-leave" style={{ ["--tx" as string]: `${g.tx}%`, ["--ty" as string]: `${g.ty}%` }}><Piece code={g.kind} /></span>
+          <span className="sl-leave" style={{ ["--tx" as string]: `${g.tx}%`, ["--ty" as string]: `${g.ty}%` }}><Sprite id={spriteFor(g.kind)} fallback={<Piece code={g.kind} />} /></span>
         </div>
       ))}
 
       {ghosts.map((g) => (
         <div key={`g-${g.key}`} className="sl-tok sl-ghost" style={{ ...at(g.sq), zIndex: 3 }}>
-          {g.draw === "unit" ? <Piece code={g.code!} /> : g.draw === "hero" ? <SilatKing /> : <Boulder />}
+          {g.draw === "unit" ? <Sprite id={spriteFor(g.code!)} fallback={<Piece code={g.code!} />} /> : g.draw === "hero" ? <Sprite id="hero" fallback={<SilatKing prisoner />} /> : <Boulder />}
         </div>
       ))}
       {[...marks].map(([sq, m]) => (
@@ -247,10 +306,22 @@ export function SilatBoard({
         ));
       })()}
 
+      {(hl.captures ?? []).map((sq) => (
+        <div key={`cap${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 4 }}>
+          <span className="sl-capture" aria-label="capture">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4 L14 14 M14 14 l-2.5 1 l1 -2.5 M20 4 L10 14 M10 14 l2.5 1 l-1 -2.5 M6 18 l2 -2 M18 18 l-2 -2" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+          </span>
+        </div>
+      ))}
+      {hl.pending !== null && hl.pending !== undefined && !targets.has(hl.pending) && (
+        <div className="sl-tok" style={{ ...at(hl.pending), zIndex: 4 }}><span className="sl-target on" /></div>
+      )}
+
       {[...targets].map((sq) => (
         <div key={`h${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 4 }}>
           <span className={`sl-target${hl.pending === sq ? " on" : ""}`} />
           {!!hl.danger?.get(sq) && <span className="sl-risk">-{hl.danger.get(sq)}</span>}
+          {!!hl.danger?.get(sq) && hl.jab !== undefined && <span className="sl-odds">{Math.round(hl.jab * 100)}%</span>}
         </div>
       ))}
 
@@ -261,6 +332,8 @@ export function SilatBoard({
           </span>
           <span className="sl-ring" />
         </div>
+      ) : f.t === "roll" && RIVE_ON ? (
+        <div key={`d${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 8 }}><RiveDice n={f.n} ok={f.ok === !!f.hero} /></div>
       ) : f.t === "slam" ? (
         <div key={`s${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 5 }} aria-hidden="true"><span className="sl-quake" /></div>
       ) : null)}
@@ -279,7 +352,7 @@ export function SilatBoard({
           seen.set(f.sq, k + 1);
           return (
             <div key={`${fxKey}-${i}`} className="sl-tok" style={{ ...at(f.sq), zIndex: 6 }}>
-              <span className={`sl-float${f.t === "ko" || f.t === "ringout" || f.t === "fury" ? " big" : ""}${f.t === "roll" ? " roll" : ""}`} style={{ color: txt[1], top: `${-k * 34}%`, animationDelay: `${f.t === "gold" ? 280 : Math.min(i, 6) * 90}ms` }}>{txt[0]}</span>
+              <span className={`sl-float${f.t === "ko" || f.t === "ringout" || f.t === "fury" || f.t === "crit" ? " big" : ""}${f.t === "roll" ? " roll" : ""}`} style={{ color: txt[1], top: `${-k * 34}%`, animationDelay: `${f.t === "gold" ? 280 : Math.min(i, 6) * 90}ms` }}>{txt[0]}</span>
             </div>
           );
         });

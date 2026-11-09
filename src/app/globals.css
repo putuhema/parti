@@ -626,3 +626,31 @@ a { text-decoration: none; }
 @keyframes slrangkai { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3) rotate(-14deg); } 18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(3deg); } 30% { transform: translate(-50%, -50%) scale(1) rotate(-2deg); } 80% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-2deg); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(.9) rotate(-2deg); } }
 @media (prefers-reduced-motion: reduce) { .sl-logfloat, .sl-chip.named { animation: none; } .sl-glow { animation: none !important; outline: 3px solid #ffc800; border-radius: 14px; } .sl-rangkai { animation: slfade 1700ms linear both; transform: translate(-50%, -50%); } }
 @keyframes slfade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+.sl-capture { position: absolute; right: 4%; bottom: 4%; width: 42%; height: 42%; border-radius: 50%; background: #1899d6; box-shadow: 0 0 0 3px rgba(255, 255, 255, .85), 0 2px 0 #1478a8; display: flex; align-items: center; justify-content: center; animation: dotin 200ms var(--spring) both; pointer-events: none; }
+.sl-capture svg { width: 72%; height: 72%; margin: 0; filter: none; }
+/* The cell: bars along the top edge of the board. */
+.sl-bars { position: absolute; left: 0; right: 0; top: 0; height: 7%; z-index: 1; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0 14px, rgba(50,52,58,.55) 14px 18px), linear-gradient(rgba(50,52,58,.45), rgba(50,52,58,.45)) bottom / 100% 3px no-repeat; }
+/* Rive d20: tumbles in over the square, then the number pops on top. */
+.sl-dice { position: absolute; left: -30%; top: -60%; width: 160%; height: 160%; pointer-events: none; animation: sldice 1700ms ease-out both; }
+.sl-dice canvas { width: 100%; height: 100%; }
+.sl-dice b { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 15px; font-weight: 900; opacity: 0; animation: sldicen 1700ms ease-out both; text-shadow: 0 1px 0 #fff; }
+@keyframes sldice { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes sldicen { 0%, 40% { opacity: 0; transform: scale(.4); } 50% { opacity: 1; transform: scale(1.3); } 60%, 100% { opacity: 1; transform: scale(1); } }
+/* Your own sprites (public/silat/sprites): a horizontal strip of frames, stepped through. */
+.sl-sprite { display: block; width: 88%; height: 88%; margin: 6%; background-repeat: no-repeat; background-position: 0% 0; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .15)); }
+@keyframes slsheet { from { background-position-x: 0%; } to { background-position-x: 100%; } }
+@media (prefers-reduced-motion: reduce) { .sl-sprite { animation: none !important; } }
+/* Siap: the ready slot next to End Turn, and jab odds on danger squares. */
+.sl-siap { width: 88px; flex-shrink: 0; min-height: 58px; border: 2px dashed var(--line-2); border-radius: 16px; background: #fff; color: var(--plum); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px; cursor: pointer; line-height: 1.1; }
+.sl-siap .k { font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.sl-siap .v { font-size: 10px; font-weight: 800; color: var(--plum-soft); text-align: center; }
+.sl-siap.on { border-color: #58cc02; background: #eaffd8; }
+.sl-siap.set { border: 2px solid #46a302; background: #d7ffb8; box-shadow: 0 3px 0 #46a302; }
+.sl-siap.set .v { color: #2f6e00; }
+.sl-siap:disabled:not(.set) { opacity: .5; cursor: default; }
+.sl-odds { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center; font-size: 9px; font-weight: 900; color: #b81f1f; text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; }
+/* Event check: the rolled d20. */
+.sl-d20 { align-self: center; width: 96px; height: 96px; clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); display: flex; align-items: center; justify-content: center; animation: sld20 700ms cubic-bezier(.34, 1.56, .64, 1) both; }
+.sl-d20 span { color: #fff; font-family: var(--font-display), "Fredoka", sans-serif; font-size: 40px; font-weight: 700; }
+@keyframes sld20 { from { transform: rotate(-540deg) scale(.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sl-d20 { animation: none; } }

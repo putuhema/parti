@@ -37,7 +37,7 @@ export default function SilatHome() {
           <span style={{ paddingLeft: "0.9em" }}>Silat</span>
         </h1>
         <p style={{ margin: "8px 0 0", fontSize: 15, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>
-          Kick chess pieces into each other. Build your deck.
+          Locked in the Black King’s prison. Kick your way out.
         </p>
         {best && best.runs > 0 && (
           <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--plum-soft)" }}>

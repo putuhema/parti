@@ -1,0 +1,8 @@
+{
+  "_readme": "Your sprites. See README.md in this folder. Keys starting with _ are ignored: rename _example to hero to try the example.",
+  "hero": {
+    "idle": { "file": "idle.png", "frames": 4, "fps": 6 },
+    "kick": { "file": "example-kick.png", "frames": 4, "fps": 14 },
+    "hit": { "file": "example-hit.png", "frames": 3, "fps": 14 }
+  }
+}

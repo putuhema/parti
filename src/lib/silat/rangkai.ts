@@ -23,52 +23,52 @@ const surge = (n: number) => (s: Fight) => { s.surge = (s.surge ?? 0) + n; };
 
 export const RANGKAI: Rangkai[] = [
   {
-    id: "terkam2", name: "Terkam Ganda", text: "Terkam, then Terkam: the second one hits +3 and gives 3 Block",
-    seq: ["terkam", "terkam"], color: "#FF9600", before: surge(3), after: (s) => { s.hero.block += 3; },
+    id: "terkam2", name: "Terkam Ganda", text: "Terkam, then Terkam: the second one hits +2 and gives 2 Block",
+    seq: ["terkam", "terkam"], color: "#FF9600", before: surge(2), after: (s) => { s.hero.block += 2; },
   },
   {
-    id: "jebakan", name: "Jebakan Passant", text: "En Passant, then any attack: it hits +3 and refunds 1 Tenaga",
-    seq: ["passant", "type:Serang"], color: "#FF4B4B", before: surge(3), after: (s) => { s.tenaga++; },
+    id: "jebakan", name: "Jebakan Passant", text: "En Passant, then any attack: it hits +2 and refunds 1 Tenaga",
+    seq: ["passant", "type:Serang"], color: "#FF4B4B", before: surge(2), after: (s) => { s.tenaga++; },
   },
   {
-    id: "tendang3", name: "Tendangan Beruntun", text: "Tendang three times in a row: the third hits +4",
-    seq: ["tendang", "tendang", "tendang"], color: "#FF4B4B", before: surge(4),
+    id: "tendang3", name: "Tendangan Beruntun", text: "Tendang three times in a row: the third hits +3",
+    seq: ["tendang", "tendang", "tendang"], color: "#FF4B4B", before: surge(3),
   },
   {
-    id: "kuda", name: "Serbuan Kuda", text: "Langkah Kuda, then any attack: it hits +2",
-    seq: ["kuda", "type:Serang"], color: "#1CB0F6", before: surge(2),
+    id: "kuda", name: "Serbuan Kuda", text: "Langkah Kuda, then any attack: it hits +1",
+    seq: ["kuda", "type:Serang"], color: "#1CB0F6", before: surge(1),
   },
   {
-    id: "banting", name: "Tarik Banting", text: "Tarik, then Bantingan: the throw hits +3",
-    seq: ["tarik", "bantingan"], color: "#FF9600", before: surge(3),
+    id: "banting", name: "Tarik Banting", text: "Tarik, then Bantingan: the throw hits +2",
+    seq: ["tarik", "bantingan"], color: "#FF9600", before: surge(2),
   },
   {
-    id: "sate", name: "Paku Sate", text: "Paku, then Tusuk Sate: the skewer hits +4",
-    seq: ["paku", "tusuk"], color: "#D9489F", before: surge(4),
+    id: "sate", name: "Paku Sate", text: "Paku, then Tusuk Sate: the skewer hits +3",
+    seq: ["paku", "tusuk"], color: "#D9489F", before: surge(3),
   },
   {
-    id: "skakmat", name: "Skakmat Silat", text: "Skak!, then any attack: it hits +4",
-    seq: ["skak", "type:Serang"], color: "#3C3C3C", before: surge(4),
+    id: "skakmat", name: "Skakmat Silat", text: "Skak!, then any attack: it hits +3",
+    seq: ["skak", "type:Serang"], color: "#3C3C3C", before: surge(3),
   },
   {
-    id: "rokade", name: "Rokade Kilat", text: "Rokade, then any attack: it hits +2 and you draw 1",
-    seq: ["rokade", "type:Serang"], color: "#1CB0F6", before: surge(2), after: (s) => drawCards(s, 1),
+    id: "rokade", name: "Rokade Kilat", text: "Rokade, then any attack: it hits +1 and you draw 1",
+    seq: ["rokade", "type:Serang"], color: "#1CB0F6", before: surge(1), after: (s) => drawCards(s, 1),
   },
   {
     id: "bangau", name: "Bayang Bangau", text: "Elakan, then Tangkisan: your dodge and kick-back can't fail. +2 Block",
     seq: ["elakan", "tangkisan"], color: "#58CC02", after: (s) => { s.luck = { ...s.luck!, sure: true }; s.hero.block += 2; },
   },
   {
-    id: "benteng", name: "Benteng Tiga Lapis", text: "Tangkis three times in a row: +6 more Block",
-    seq: ["tangkis", "tangkis", "tangkis"], color: "#58CC02", after: (s) => { s.hero.block += 6; },
+    id: "benteng", name: "Benteng Tiga Lapis", text: "Tangkis three times in a row: +4 more Block",
+    seq: ["tangkis", "tangkis", "tangkis"], color: "#58CC02", after: (s) => { s.hero.block += 4; },
   },
   {
-    id: "asap", name: "Serangan Bayangan", text: "Bom Asap, then Kerambit: the knife hits +4",
-    seq: ["asap", "kerambit"], color: "#6F6F6F", before: surge(4),
+    id: "asap", name: "Serangan Bayangan", text: "Bom Asap, then Kerambit: the knife hits +3",
+    seq: ["asap", "kerambit"], color: "#6F6F6F", before: surge(3),
   },
   {
-    id: "langkah", name: "Langkah Harimau", text: "Your free step, then Terkam: it hits +2",
-    seq: ["step", "terkam"], color: "#FF9600", before: surge(2),
+    id: "langkah", name: "Langkah Harimau", text: "Your free step, then Terkam: it hits +1",
+    seq: ["step", "terkam"], color: "#FF9600", before: surge(1),
   },
 ];
 

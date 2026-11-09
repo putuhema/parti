@@ -4,6 +4,9 @@
 
 export type Kind = "p" | "n" | "b" | "r" | "q" | "k";
 
+/** Where a fight happens. You start locked in a cell and fight your way out to the gate. */
+export type Scene = "cell" | "corridor" | "yard" | "wall" | "gate";
+
 export const PIECE: Record<Kind, { name: string; hp: number; hit: number; heavy: boolean }> = {
   p: { name: "Pawn", hp: 3, hit: 2, heavy: false },
   n: { name: "Knight", hp: 5, hit: 3, heavy: false },
@@ -17,6 +20,7 @@ export const PIECE: Record<Kind, { name: string; hp: number; hit: number; heavy:
 export const BUMP = 2;
 /** Heavy pieces pushed off the board take this instead of being knocked out. */
 export const HEAVY_RING_OUT = 5;
+
 
 export interface Unit {
   id: number;
@@ -72,7 +76,15 @@ export type Fx =
   | { t: "lunge"; sq: number; dir: number }
   /** A d20 was rolled here: `n` is the die, `ok` whether it worked for whoever rolled. */
   | { t: "roll"; sq: number; n: number; ok: boolean; hero?: boolean }
-  | { t: "fury"; sq: number };
+  | { t: "fury"; sq: number }
+  /** You took a piece's square by knocking it out (a chess capture). */
+  | { t: "capture"; sq: number }
+  /** Siap: your readied card went off. */
+  | { t: "parry"; sq: number }
+  /** A natural 20 on your roll. */
+  | { t: "crit"; sq: number }
+  /** A natural 1 on an enemy's jab: it stumbles. */
+  | { t: "stumble"; sq: number };
 
 /** Dice modifiers that last until your next turn starts (so they cover the enemy turn too). */
 export interface Luck {
@@ -161,6 +173,15 @@ export interface Fight {
   survive?: number;
   /** Dice: their own random stream, so rolling never changes your card draws. */
   dice?: number;
+  /** Siap: a Tangkis card readied for the enemy turn. It goes off on the first attack against you;
+   *  if nothing attacks, it comes back to your hand. */
+  ready?: string | null;
+  /** Kaki Kuda: your free step moves like a knight this turn. */
+  knightStep?: boolean;
+  /** Atur Napas: extra Tenaga at the start of your next turn. */
+  nextTenaga?: number;
+  /** Where in the prison this fight is (only changes the look of the board). */
+  scene?: Scene;
   /** Dice modifiers until your next turn. */
   luck?: Luck;
   /** A preview copy: rolls assume the worst for you and never touch the dice. */
@@ -282,11 +303,12 @@ function d20(s: Fight): number {
 }
 
 /** You roll (dodging, kicking back). A 20 always works, a 1 always fails.
+ *  Returns 0 (failed), 1 (worked) or 2 (a natural 20: Sempurna!, a bigger effect).
  *  Previews assume you fail, so they never give a roll away. */
-export function heroRoll(s: Fight, what: string, dc: number): boolean {
+export function heroRoll(s: Fight, what: string, dc: number): 0 | 1 | 2 {
   const luck = s.luck ?? freshLuck();
-  if (luck.sure) { say(s, `${what}: no roll needed, it works!`, "good"); return true; }
-  if (s.sim) return false;
+  if (luck.sure) { say(s, `${what}: no roll needed, it works!`, "good"); return 1; }
+  if (s.sim) return 0;
   const a = d20(s);
   const b = luck.adv ? d20(s) : 0;
   const die = Math.max(a, b);
@@ -295,7 +317,14 @@ export function heroRoll(s: Fight, what: string, dc: number): boolean {
   s.fx.push({ t: "roll", sq: s.hero.sq, n: die, ok, hero: true });
   const extra = [b ? `best of ${a} and ${b}` : "", luck.bonus ? `+${luck.bonus}` : ""].filter(Boolean).join(", ");
   say(s, `d20 ${what}: ${die}${extra ? ` (${extra})` : ""} vs ${dc}, ${ok ? "it works!" : "it fails"}`, ok ? "good" : "bad");
-  return ok;
+  if (die === 20) { s.fx.push({ t: "crit", sq: s.hero.sq }); say(s, "Natural 20: Sempurna!", "good"); return 2; }
+  return ok ? 1 : 0;
+}
+
+/** The chance an enemy's jab hits you right now (taunted enemies roll twice and keep the worst). */
+export function jabChance(s: Fight): number {
+  const p = (21 - DC.react) / 20;
+  return s.luck?.taunt ? p * p : p;
 }
 
 /** An enemy rolls to hit you with a reaction. Previews assume it hits. */
@@ -308,6 +337,16 @@ export function enemyRoll(s: Fight, u: Unit, dc: number): boolean {
   const ok = die === 20 || (die !== 1 && die >= dc);
   s.fx.push({ t: "roll", sq: u.sq, n: die, ok });
   say(s, `d20 ${unitName(u)} jabs: ${die}${b ? ` (worst of ${a} and ${b}, taunted)` : ""} vs ${dc}, ${ok ? "hits" : "misses"}`, ok ? "bad" : "good");
+  if (die === 1) {
+    // A natural 1: it overreaches and stumbles. Bosses keep their feet.
+    s.fx.push({ t: "stumble", sq: u.sq });
+    if (u.boss) say(s, `Natural 1: ${unitName(u)} stumbles but keeps its feet`, "good");
+    else {
+      say(s, `Natural 1: the ${unitName(u)} stumbles and loses its next action!`, "good");
+      u.locked = Math.max(u.locked, 1);
+      s.intents = s.intents.filter((i) => i.id !== u.id);
+    }
+  }
   return ok;
 }
 
@@ -402,10 +441,11 @@ export function checkEnd(s: Fight) {
 export const FLY = 99;
 /** Heavy pieces (rook, queen, king) only slide this far. */
 export const HEAVY_SLIDE = 2;
-const CRASH_MAX = 7;
+/** Crashes are capped so one kick can't wipe a whole row. */
+const CRASH_MAX = 5;
 
 /** Push whatever is on `sq` in direction `dir`, up to `n` squares (FLY = until it hits something).
- *  A crash deals 2, +1 for every square it flew, and knocks what it hit one square on. */
+ *  A crash deals 2, +1 for every 2 squares it flew, rounded up (max 5), and knocks what it hit one square on. */
 export function push(s: Fight, sq: number, dir: number, n: number, crash = 0) {
   const mover = occupant(s, sq);
   if (!mover || n <= 0) return;
@@ -426,7 +466,7 @@ export function push(s: Fight, sq: number, dir: number, n: number, crash = 0) {
     const other = occupant(s, next);
     if (other) {
       moved();
-      let dmg = Math.min(CRASH_MAX, BUMP + flew + crash + s.powers.momentum);
+      let dmg = Math.min(CRASH_MAX, BUMP + Math.ceil(flew / 2) + crash + s.powers.momentum);
       if (yours(s)) {
         s.tf = { ...freshTurn(), ...s.tf, crashes: (s.tf?.crashes ?? 0) + 1 };
         const amuk = s.powers.amuk ?? 0;
@@ -755,14 +795,28 @@ export function retarget(s: Fight) {
 }
 
 /** An attack reaches the hero: Elakan hops away, Tangkisan kicks back. Returns true if it landed. */
+/** Plays a readied card's effect (set by cards.ts, which knows the cards). */
+let readyHook: ((s: Fight, id: string) => string) | null = null;
+export function setReadyHook(fn: (s: Fight, id: string) => string) { readyHook = fn; }
+
 function attackHero(s: Fight, u: Unit, n: number): boolean {
+  // Siap: your readied card goes off before the hit lands, then you riposte.
+  const parried = s.ready && s.status === "enemy" && readyHook ? s.ready : null;
+  if (parried) {
+    s.ready = null;
+    s.fx.push({ t: "parry", sq: s.hero.sq });
+    say(s, `Siap! Your ${readyHook!(s, parried)} goes off as the ${unitName(u)} attacks`, "good");
+    s.discard.push(parried);
+  }
   if (s.hop !== null && isEmpty(s, s.hop)) {
     // Elakan: one dodge attempt. Roll for it; win or lose, it's used up.
     const hop = s.hop;
     s.hop = null;
-    if (heroRoll(s, "dodge", DC.dodge)) {
+    const r = heroRoll(s, "dodge", DC.dodge);
+    if (r) {
       s.fx.push({ t: "dodge", sq: s.hero.sq });
       say(s, `You dodge to ${sqName(s, hop)}!`, "good");
+      if (r === 2 && s.units.includes(u)) { say(s, `Sempurna: you strike the ${unitName(u)} as you slip past`, "good"); damageUnit(s, u, 2); }
       s.hero.sq = hop;
       return false;
     }
@@ -778,7 +832,16 @@ function attackHero(s: Fight, u: Unit, n: number): boolean {
   if (s.counter > 0 && s.units.includes(u)) {
     const d = dirTo(s, s.hero.sq, u.sq);
     // Only attackers right next to you can be kicked back, and only if your roll lands.
-    if (d >= 0 && dist(s, s.hero.sq, u.sq) === 1 && heroRoll(s, "kick-back", DC.counter)) push(s, u.sq, d, s.counter);
+    const r = d >= 0 && dist(s, s.hero.sq, u.sq) === 1 ? heroRoll(s, "kick-back", DC.counter) : 0;
+    if (r === 2) { damageUnit(s, u, 1); if (s.units.includes(u)) push(s, u.sq, d, s.counter * 2); }
+    else if (r) push(s, u.sq, d, s.counter);
+  }
+  // Riposte: after a Siap parry, an attacker next to you is kicked back 1 for 1.
+  if (parried && s.units.includes(u) && dist(s, s.hero.sq, u.sq) === 1) {
+    const d = dirTo(s, s.hero.sq, u.sq);
+    say(s, `Riposte! The ${unitName(u)} is kicked back`, "good");
+    damageUnit(s, u, 1);
+    if (d >= 0 && s.units.includes(u)) push(s, u.sq, d, 1);
   }
   return true;
 }
@@ -971,7 +1034,15 @@ export function startTurn(s: Fight, guarantee?: (id: string) => boolean) {
   s.turn++;
   say(s, `Turn ${s.turn}`, "turn");
   s.hero.block = (has(s, "gelang") ? Math.min(s.hero.block, 5) : 0) + 3 * (s.powers.benteng ?? 0);
-  s.tenaga = TENAGA + (s.turn === 1 && has(s, "kendang") ? 1 : 0);
+  s.tenaga = TENAGA + (s.turn === 1 && has(s, "kendang") ? 1 : 0) + (s.nextTenaga ?? 0);
+  s.nextTenaga = 0;
+  s.knightStep = false;
+  if (s.ready) {
+    // Nothing attacked you: the readied card comes back, ready to use again.
+    say(s, "Siap: nobody attacked, your readied card returns to your hand", "good");
+    s.hand.push(s.ready);
+    s.ready = null;
+  }
   s.stepUsed = false;
   s.extraSteps = has(s, "sandal") ? 1 : 0;
   s.tf = freshTurn();
@@ -1080,8 +1151,11 @@ export function chargeEnd(s: Fight, it: Extract<Intent, { type: "charge" }>) {
 }
 
 export function freeSteps(s: Fight) {
-  if (s.stepUsed || s.status !== "play") return [];
-  return neighbors(s, s.hero.sq).filter((sq) => isEmpty(s, sq));
+  if ((s.stepUsed && !(s.extraSteps > 0)) || s.status !== "play") return [];
+  const around = s.knightStep
+    ? KNIGHT.map(([dx, dy]) => offset(s, s.hero.sq, dx, dy)).filter((x): x is number => x !== null)
+    : neighbors(s, s.hero.sq);
+  return around.filter((sq) => isEmpty(s, sq));
 }
 
 export function step(s: Fight, sq: number) {
@@ -1118,6 +1192,7 @@ export interface Setup {
   name?: string;
   survive?: number;
   relics?: string[];
+  scene?: Scene;
 }
 
 export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight {
@@ -1169,6 +1244,7 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     name: o.name,
     survive: o.survive,
     dice: (o.seed * 2654435761) >>> 0,
+    scene: o.scene,
     luck: freshLuck(),
     movedLast: [],
   };
