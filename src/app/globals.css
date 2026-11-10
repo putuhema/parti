@@ -600,6 +600,31 @@ a { text-decoration: none; }
 .sl-logtoggle { background: #fff; box-shadow: 0 3px 0 var(--cream-3); color: var(--plum); border: 0; cursor: pointer; }
 .sl-logtoggle.on { background: var(--plum); color: #fff; box-shadow: 0 3px 0 #2b2333; }
 .sl-logfloat { position: absolute; left: 8px; right: 8px; top: 8px; max-height: 64%; z-index: 20; display: flex; flex-direction: column; border-radius: 14px; background: rgba(36, 26, 44, .86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 8px 24px rgba(0, 0, 0, .25); color: #fff; animation: sllog 200ms ease-out both; overflow: hidden; }
+/* Details panel: a card, or an enemy and what it's about to do. */
+.sl-inspect { position: absolute; left: 8px; right: 8px; z-index: 19; max-height: calc(50% - 10px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border-radius: 14px; background: rgba(36, 26, 44, .92); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 8px 24px rgba(0, 0, 0, .25); color: rgba(255, 255, 255, .88); font-size: 12px; font-weight: 700; line-height: 1.35; text-align: left; pointer-events: none; animation: sllog 160ms ease-out both; }
+.sl-inspect.top { top: 8px; } .sl-inspect.bottom { bottom: 8px; }
+.sl-inspect p { margin: 0; } .sl-inspect > * { flex-shrink: 0; }
+.sl-inspect b { color: #fff; font-weight: 900; }
+.sl-inspect .head { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.sl-inspect .name { font-size: 15px; margin-right: 2px; }
+.sl-inspect .tag { padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 900; white-space: nowrap; }
+.sl-inspect .gem { width: 22px; height: 22px; border-radius: 50%; background: #1cb0f6; color: #fff; font-size: 13px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sl-inspect .main { font-size: 14px; font-weight: 800; color: #fff; }
+.sl-inspect .warn { color: #ffb3b3; }
+.sl-inspect .stats { display: flex; flex-wrap: wrap; gap: 3px 12px; }
+.sl-inspect .now { padding: 5px 8px; border-left: 4px solid; border-radius: 6px; background: rgba(255, 255, 255, .1); color: #fff; }
+.sl-inspect .now b { display: block; }
+.sl-inspect .sub { margin-top: 2px; font-size: 11px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; color: #ffc800; }
+.sl-inspect .dim { opacity: .7; }
+.sl-inspect .row { display: flex; gap: 10px; align-items: flex-start; }
+.sl-inspect .col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sl-inspect .pat { display: grid; grid-template-columns: repeat(5, 9px); gap: 2px; flex-shrink: 0; padding: 5px; border-radius: 8px; background: rgba(255, 255, 255, .1); }
+.sl-inspect .pat i { display: block; width: 9px; height: 9px; border-radius: 2px; background: rgba(255, 255, 255, .16); }
+.sl-inspect .legend { display: flex; flex-wrap: wrap; gap: 2px 9px; font-size: 11px; }
+.sl-inspect .legend span { display: flex; align-items: center; gap: 4px; }
+.sl-inspect .legend i { width: 9px; height: 9px; border-radius: 2px; }
+.sl-inspected { position: absolute; inset: 3%; border-radius: 22%; border: 3px solid #ffc800; box-shadow: 0 0 0 2px rgba(0, 0, 0, .25); }
+.sl-cover { position: absolute; inset: 8%; border-radius: 18%; border: 2px dashed rgba(255, 150, 0, .85); background: rgba(255, 150, 0, .14); }
 @keyframes sllog { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
 .sl-logfloat-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 4px; font-size: 13px; font-weight: 900; letter-spacing: .04em; }
 .sl-logfloat-head button { border: 0; border-radius: 999px; padding: 3px 10px; background: rgba(255, 255, 255, .16); color: #fff; font-size: 12px; font-weight: 900; cursor: pointer; }
@@ -614,6 +639,10 @@ a { text-decoration: none; }
 .sl-chip.named { color: #fff; animation: dotin 260ms var(--spring) both; }
 .sl-tray-tip { font-size: 12px; font-weight: 700; color: var(--plum-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sl-tray-tip b { color: var(--plum); font-weight: 900; }
+.sl-tray-tipwrap { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.sl-tray-tipwrap .sl-tray-tip { flex: 1; min-width: 0; }
+.sl-tip-more { flex-shrink: 0; border: 2px solid var(--plum); border-radius: 999px; padding: 2px 10px; background: #fff; color: var(--plum); font-size: 12px; font-weight: 900; cursor: pointer; }
+.sl-tip-more.on { background: var(--plum); color: #fff; }
 .sl-tray-log { border: 0; background: none; padding: 0; width: 100%; text-align: left; cursor: pointer; min-width: 0; }
 .sl-fight .sl-hand { flex-shrink: 0; height: 172px; margin-top: auto; }
 .sl-named { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 3; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 5px; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 900; white-space: nowrap; box-shadow: 0 2px 0 rgba(0, 0, 0, .18); pointer-events: none; }

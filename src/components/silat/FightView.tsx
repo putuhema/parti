@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SilatBoard } from "@/components/silat/SilatBoard";
+import { CardInfo, UnitInfo } from "@/components/silat/Inspect";
 import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { CARDS, canCapture, canPlay, canReady, cardCost, isAttack, playCombo, readyCard, typeOf, type ComboItem } from "@/lib/silat/cards";
 import { rangkaiById, rangkaiFor, rangkaiStarts, type Rangkai } from "@/lib/silat/rangkai";
-import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, jabChance, kitPlan, moveDef, moveText, reactionDamage, sqName, TENAGA, TRAITS, unitName, type Fight } from "@/lib/silat/rules";
+import { beginEnemy, clone, coverSquares, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, jabChance, kitPlan, moveDef, moveText, reactionDamage, sqName, TENAGA, TRAITS, unitName, type Fight } from "@/lib/silat/rules";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -40,6 +41,10 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   /** The named combos just played, shown as a big banner over the board. */
   const [banner, setBanner] = useState<{ key: number; list: Rangkai[] } | null>(null);
   const [fxKey, setFxKey] = useState(0);
+  /** What the details panel explains: a hand card or an enemy. `info` is pinned by a tap, `hover` follows the mouse. */
+  type Peek = { k: "card"; i: number } | { k: "unit"; id: number };
+  const [info, setInfo] = useState<Peek | null>(null);
+  const [hover, setHover] = useState<Peek | null>(null);
   const loop = useRef(0);
   const shakeRef = useRef<HTMLDivElement>(null);
 
@@ -107,6 +112,8 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const display = q;
 
   function commit(next: Fight) {
+    setInfo(null);
+    setHover(null);
     setFxKey((k) => k + 1);
     sound(next);
     onChange(next);
@@ -127,9 +134,17 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
     setCapturing(null);
   }
 
+  /** Tapping an enemy (when the tap isn't aiming a card) shows what it is and what it's about to do. */
+  function inspect(sq: number) {
+    const u = f.units.find((x) => x.sq === sq);
+    setInfo((cur) => (!u || (cur?.k === "unit" && cur.id === u.id) ? null : { k: "unit", id: u.id }));
+  }
+
   function pickCard(i: number) {
     if (!playing) return;
     feedback.unlock();
+    // Picking a card keeps the board clear to aim; its full details open from the Details button.
+    setInfo(null);
     if (queued.has(i)) return cut(queued.get(i)! - 1);
     const id = f.hand[i];
     if (readying) {
@@ -155,16 +170,17 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   }
 
   function tap(sq: number) {
-    if (!playing) return;
-    if (capturing) { setCapturing(null); feedback.tap(); return; }
-    if (readying) { setReadying(false); feedback.tap(); return; }
+    if (!playing) { inspect(sq); return; }
+    if (capturing) { setCapturing(null); setInfo(null); feedback.tap(); return; }
+    if (readying) { setReadying(false); setInfo(null); feedback.tap(); return; }
     if (sel !== null) {
-      if (targets.includes(sq)) add({ k: "card", idx: sel, sq });
-      else if (captures.includes(sq)) { feedback.tap(); setCapturing({ idx: sel, sq }); setSel(null); }
-      else setSel(null);
+      if (targets.includes(sq)) { setInfo(null); add({ k: "card", idx: sel, sq }); }
+      else if (captures.includes(sq)) { feedback.tap(); setInfo(null); setCapturing({ idx: sel, sq }); setSel(null); }
+      else { setSel(null); inspect(sq); }
       return;
     }
-    if (steps.includes(sq)) add({ k: "step", sq });
+    if (steps.includes(sq)) { setInfo(null); add({ k: "step", sq }); }
+    else inspect(sq);
   }
 
   /** Play the combo, one action at a time on the board. It's locked in: there's no undo.
@@ -250,6 +266,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
     setSel(null);
     setCombo([]);
     setCapturing(null);
+    setInfo(null);
     const s = clone(f);
     beginEnemy(s);
     onChange(s);
@@ -275,6 +292,18 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const hint = combo.length
     ? "Add more, or press Play. Once played, it's locked in."
     : f.stepUsed ? "Build a combo: pick cards, then Play." : `Build a combo: pick cards or step, then Play. Red dots: an enemy jabs you, ${Math.round(jabChance(f) * 100)}% to hit (d20).`;
+  // The details panel: what the mouse is over, else what was last tapped.
+  const peek = hover ?? info;
+  const peekUnit = peek?.k === "unit" ? f.units.find((u) => u.id === peek.id) : undefined;
+  const peekCard = peek?.k === "card" ? f.hand[peek.i] : undefined;
+  const peekQ = peek?.k === "card" ? qIndex(peek.i) : -1;
+  const peekNote = !peekCard || !playing || (peek?.k === "card" && queued.has(peek.i))
+    ? undefined
+    : peekQ < 0 ? "Already used in this combo."
+    : canPlay(q, peekCard) || (peek?.k === "card" && captureSquares(peek.i).length) ? undefined
+    : cardCost(q, peekCard) > q.tenaga ? "Not enough Tenaga right now." : "Nothing to use it on right now.";
+  // It sits on the half of the board away from what it's about, so it never covers it.
+  const peekTop = Math.floor((peekUnit ? peekUnit.sq : f.hero.sq) / f.n) >= f.n / 2;
   const itemName = (it: ComboItem) =>
     it.k === "step"
       ? `Step ${sqName(f, it.sq)}`
@@ -374,8 +403,12 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
           <SilatBoard
             fight={f}
             preview={display !== f ? display : undefined}
-            hl={{ targets, steps, danger, jab: jabChance(q), captures, pending: capturing?.sq ?? null, combo: combo.map((it, n) => ({ sq: it.sq, n: n + 1 })) }}
+            hl={{ targets, steps, danger, jab: jabChance(q), captures, pending: capturing?.sq ?? null, combo: combo.map((it, n) => ({ sq: it.sq, n: n + 1 })), inspect: peekUnit?.sq, cover: peekUnit ? coverSquares(f, peekUnit) : undefined }}
             onTap={tap}
+            onHover={(sq) => {
+              const u = sq === null ? undefined : f.units.find((x) => x.sq === sq);
+              setHover((cur) => (!u ? (cur?.k === "unit" ? null : cur) : cur?.k === "unit" && cur.id === u.id ? cur : { k: "unit", id: u.id }));
+            }}
             fxKey={fxKey}
             combo={f.status === "play" && display === f ? f.combo : 0}
           />
@@ -399,6 +432,16 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
             </div>
           )}
 
+          {(peekUnit || peekCard) && !logOpen && (
+            <div
+              key={peek!.k === "unit" ? `u${peek!.id}` : `c${peekCard}`}
+              className={`sl-inspect ${peekTop ? "top" : "bottom"}`}
+              role="note"
+            >
+              {peekUnit ? <UnitInfo fight={display} unit={display.units.find((u) => u.id === peekUnit.id) ?? peekUnit} /> : <CardInfo id={peekCard!} fight={q} note={peekNote} />}
+            </div>
+          )}
+
           {banner && (
             <div key={banner.key} className="sl-rangkai" onAnimationEnd={() => setBanner(null)} aria-live="polite">
               <small>Jurus Rangkai</small>
@@ -417,7 +460,18 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
             ))}
           </div>
         ) : tip ? (
-          <span className="sl-tray-tip"><b>{tip[0]}</b> {tip[1]}</span>
+          <span className="sl-tray-tipwrap">
+            <span className="sl-tray-tip"><b>{tip[0]}</b> {tip[1]}</span>
+            {sel !== null && !capturing && !readying && (
+              <button
+                type="button"
+                className={`sl-tip-more${info?.k === "card" ? " on" : ""}`}
+                onClick={() => { feedback.tap(); setInfo((cur) => (cur?.k === "card" ? null : { k: "card", i: sel })); }}
+              >
+                {info?.k === "card" ? "Hide" : "Details"}
+              </button>
+            )}
+          </span>
         ) : combo.length ? (
           <div className="sl-combo-strip" aria-label="Your combo">
             {combo.map((it, n) => (
@@ -459,6 +513,8 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
               aria-label={`${CARDS[id].name}, costs ${CARDS[id].cost}. ${CARDS[id].text}`}
               aria-pressed={on}
               onClick={() => pickCard(i)}
+              onPointerEnter={(e) => { if (e.pointerType === "mouse") setHover({ k: "card", i }); }}
+              onPointerLeave={() => setHover((cur) => (cur?.k === "card" && cur.i === i ? null : cur))}
               style={{ left: `calc(50% + ${x}px - 50px)`, transform: `translateY(${y}px) rotate(${lifted ? 0 : rot}deg) scale(${on ? 1.12 : 1})`, zIndex: on ? 20 : i + 1 }}
             >
               <span className="deal" style={{ animationDelay: `${i * 70}ms` }}>

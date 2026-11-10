@@ -69,6 +69,9 @@ export interface Highlights {
   captures?: number[];
   /** The combo you're building: numbered markers on each step's square. */
   combo?: { sq: number; n: number }[];
+  /** The enemy the details panel is about (its square), and the squares it covers. */
+  inspect?: number;
+  cover?: number[];
 }
 
 /** Firecracker crate and boulder: pixel sprites from the Pixel Atlas (public/silat/pixel). */
@@ -112,6 +115,7 @@ export function SilatBoard({
   hl = {},
   preview,
   onTap,
+  onHover,
   fxKey,
   combo = 0,
 }: {
@@ -120,6 +124,8 @@ export function SilatBoard({
   /** What the board will look like after the selected card. Drawn as ghosts on the real board. */
   preview?: Fight;
   onTap?: (sq: number) => void;
+  /** The mouse is over this square (null: it left the board). Mouse only: touch uses taps. */
+  onHover?: (sq: number | null) => void;
   fxKey: number;
   combo?: number;
 }) {
@@ -209,7 +215,7 @@ export function SilatBoard({
   };
 
   return (
-    <div className={`sl-board${preview ? " preview" : ""}`} style={{ background: look.ground, boxShadow: `0 6px 0 ${look.edge}${preview ? ", 0 0 0 3px #ffc800" : ""}` }}>
+    <div className={`sl-board${preview ? " preview" : ""}`} onPointerLeave={() => onHover?.(null)} style={{ background: look.ground, boxShadow: `0 6px 0 ${look.edge}${preview ? ", 0 0 0 3px #ffc800" : ""}` }}>
       {s.tint && <div className="sl-tint" style={{ background: s.tint }} aria-hidden="true" />}
       {s.scene === "cell" && <div className="sl-bars" aria-hidden="true" />}
       <div className="sl-grid" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
@@ -220,7 +226,7 @@ export function SilatBoard({
           const bg = mud ? (light ? "#C9A27A" : "#B48A60") : light ? look.tint : "transparent";
           const label = `${FILES[cc]}${n - r}`;
           return (
-            <button key={sq} type="button" className="sl-sq" style={{ background: bg, boxShadow: `inset 0 0 0 0.5px ${look.line}` }} aria-label={`${label}${s.gate === sq ? (s.gateOpen ? ", the gate (open: step here to escape)" : ", the gate (locked)") : ""}${danger.has(sq) ? `, will be hit for ${danger.get(sq)}` : ""}`} onClick={() => onTap?.(sq)}>
+            <button key={sq} type="button" className="sl-sq" style={{ background: bg, boxShadow: `inset 0 0 0 0.5px ${look.line}` }} aria-label={`${label}${s.gate === sq ? (s.gateOpen ? ", the gate (open: step here to escape)" : ", the gate (locked)") : ""}${danger.has(sq) ? `, will be hit for ${danger.get(sq)}` : ""}`} onClick={() => onTap?.(sq)} onPointerEnter={(e) => { if (e.pointerType === "mouse") onHover?.(sq); }}>
               {cc === 0 && <span className="coord" style={{ left: 3, top: 1, color: light ? look.ink : look.inkAlt }}>{n - r}</span>}
               {r === n - 1 && <span className="coord" style={{ right: 3, bottom: 0, color: light ? look.ink : look.inkAlt }}>{FILES[cc]}</span>}
               {danger.has(sq) && (
@@ -364,6 +370,13 @@ export function SilatBoard({
           </div>
         ));
       })()}
+
+      {(hl.cover ?? []).map((sq) => (
+        <div key={`cv${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 1 }} aria-hidden="true"><span className="sl-cover" /></div>
+      ))}
+      {hl.inspect !== undefined && (
+        <div className="sl-tok" style={{ ...at(hl.inspect), zIndex: 4 }} aria-hidden="true"><span className="sl-inspected" /></div>
+      )}
 
       {(hl.captures ?? []).map((sq) => (
         <div key={`cap${sq}`} className="sl-tok" style={{ ...at(sq), zIndex: 4 }}>
