@@ -169,6 +169,18 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  buzzRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    rows: v.number(), // tile rows on the board (3, 4 or 5)
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see BuzzGame in convex/buzz.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
   chessReactions: defineTable({
     roomId: v.id("chessRooms"),
     playerId: v.id("players"),

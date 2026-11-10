@@ -8,10 +8,13 @@
  * @module
  */
 
+import type * as buzz from "../buzz.js";
 import type * as chess from "../chess.js";
 import type * as crons from "../crons.js";
 import type * as daily from "../daily.js";
 import type * as leaderboard from "../leaderboard.js";
+import type * as lib_buzz_board from "../lib/buzz/board.js";
+import type * as lib_buzz_questions from "../lib/buzz/questions.js";
 import type * as lib_chess from "../lib/chess.js";
 import type * as lib_chessPuzzles from "../lib/chessPuzzles.js";
 import type * as lib_helpers from "../lib/helpers.js";
@@ -35,10 +38,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  buzz: typeof buzz;
   chess: typeof chess;
   crons: typeof crons;
   daily: typeof daily;
   leaderboard: typeof leaderboard;
+  "lib/buzz/board": typeof lib_buzz_board;
+  "lib/buzz/questions": typeof lib_buzz_questions;
   "lib/chess": typeof lib_chess;
   "lib/chessPuzzles": typeof lib_chessPuzzles;
   "lib/helpers": typeof lib_helpers;

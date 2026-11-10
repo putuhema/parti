@@ -81,6 +81,22 @@ const GAMES: Game[] = [
       </span>
     ),
   },
+  {
+    href: "/buzz",
+    name: "Buzz Board",
+    sub: "Race-to-answer quiz",
+    face: "#2B70C9",
+    edge: "#1F57A0",
+    ink: "#1F57A0",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gap: 4, transform: "rotate(-5deg)" }} aria-hidden="true">
+        {["100", "200", "🔥", "300", "", "400"].map((t, i) => (
+          <span key={i} style={{ height: 24, borderRadius: 6, background: t ? (t === "🔥" ? "#FFC800" : "#fff") : "rgba(255,255,255,.25)", color: "#1F57A0", fontSize: 11, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 0 rgba(0,0,0,.14)" }}>{t}</span>
+        ))}
+      </span>
+    ),
+  },
 ];
 
 export default function Home() {
