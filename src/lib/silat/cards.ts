@@ -695,7 +695,7 @@ function buildFromEffects(id: string, d: CardData): CardCode {
     self: d.target === "self",
     pattern: d.pattern ? Object.fromEntries(Object.entries(d.pattern).map(([k, v]) => [Number(k), v])) : DEFAULT_PATTERN[d.target!],
     targets: TARGET_FN[d.target!],
-    strike: d.effects!.every((e) => e.do === "hit") ? () => d.effects!.reduce((a, e) => a + num(e.dmg), 0) : undefined,
+    strike: d.effects!.length && d.effects!.every((e) => e.do === "hit") ? () => d.effects!.reduce((a, e) => a + num(e.dmg), 0) : undefined,
     play: (s, sq) => {
       for (const e of d.effects!) {
         const u = unitAt(s, sq);

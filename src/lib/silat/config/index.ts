@@ -4,7 +4,7 @@ import balanceJson from "./balance.json";
 import enemiesJson from "./enemies.json";
 
 export type PieceKind = "p" | "n" | "b" | "r" | "q" | "k";
-export type MoveKind = "kick" | "block" | "heal" | "summon" | "command";
+export type MoveKind = "kick" | "block" | "heal" | "summon" | "command" | "slam" | "beam" | "whirl" | "pounce" | "curse" | "decree";
 
 export interface Balance {
   hero: { startHp: number; startGold: number; tenaga: number; handSize: number; healAfterFight: number; restHeal: number; shopHeal: number };
@@ -30,7 +30,15 @@ export interface MoveDef {
   range?: number;
   bonus?: number;
   piece?: PieceKind;
+  /** summon: how many; curse: how many cards. */
+  count?: number;
+  /** curse: which card (from cards.json) to shuffle into your draw pile. */
+  card?: string;
+  /** heal: every hurt ally in range, not just the most hurt one. */
+  all?: boolean;
 }
+/** A boss's moveset: it cycles through `pattern`, then `phase2` below half HP. */
+export interface BossKit { id: string; piece: PieceKind; name: string; titles?: string[]; pattern: string[]; phase2?: string[] }
 export interface Variant {
   id: string;
   piece: PieceKind;
@@ -51,16 +59,16 @@ export interface Enemies {
   traits: Record<string, { name: string; text: string }>;
   eliteTraits: string[];
   bosses: {
-    first: { name: string; piece: PieceKind; hp: number; hit: number; traits: string[] };
+    first: { name: string; piece: PieceKind; hp: number; hit: number; traits: string[]; kit: string };
     pieces: PieceKind[];
-    titles: Partial<Record<PieceKind, string[]>>;
+    kits: BossKit[];
     epithets: string[];
     powers: string[];
   };
 }
 
 const KINDS: PieceKind[] = ["p", "n", "b", "r", "q", "k"];
-const MOVE_KINDS: MoveKind[] = ["kick", "block", "heal", "summon", "command"];
+const MOVE_KINDS: MoveKind[] = ["kick", "block", "heal", "summon", "command", "slam", "beam", "whirl", "pounce", "curse", "decree"];
 
 function fail(file: string, msg: string): never {
   throw new Error(`Raja Silat config (${file}): ${msg}`);
@@ -109,6 +117,13 @@ export const ENEMIES: Enemies = (() => {
   }
   for (const k of KINDS) if (!e.variants.some((v) => v.piece === k)) fail(F, `no variant for piece "${k}": add at least one`);
   for (const t of [...e.eliteTraits, ...e.bosses.powers, ...e.bosses.first.traits]) if (!e.traits[t]) fail(F, `trait "${t}" isn't in "traits"`);
+  for (const k of e.bosses.kits) {
+    if (!KINDS.includes(k.piece)) fail(F, `bosses.kits.${k.id}.piece must be one of p n b r q k`);
+    if (!k.pattern?.length) fail(F, `bosses.kits.${k.id} needs a "pattern" of moves`);
+    for (const m of [...k.pattern, ...(k.phase2 ?? [])]) if (!e.moves[m]) fail(F, `bosses.kits.${k.id} uses move "${m}", which isn't in "moves"`);
+  }
+  if (!e.bosses.kits.some((k) => k.id === e.bosses.first.kit)) fail(F, `bosses.first.kit "${e.bosses.first.kit}" isn't one of the kits`);
+  for (const p of e.bosses.pieces) if (!e.bosses.kits.some((k) => k.piece === p && k.titles?.length)) fail(F, `bosses.pieces has "${p}" but no kit with titles for it`);
   return e;
 })();
 

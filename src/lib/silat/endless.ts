@@ -223,6 +223,16 @@ const FORMATIONS: Formation[] = [
   },
 ];
 
+// ---------------------------------------------------------------- the gate
+
+/** You start in the middle; the way out is a gate on the bottom row, away from you. */
+function startAndGate(r: R, n: number) {
+  const hero = (n - 3) * n + Math.floor(n / 2) - 1 + Math.floor(r() * 2);
+  const cols = Array.from({ length: n }, (_, c) => c).filter((c) => Math.abs(c - (hero % n)) >= 1);
+  const gate = (n - 1) * n + pick(r, cols);
+  return { hero, gate };
+}
+
 // ---------------------------------------------------------------- variants
 
 /** Pick a variant from config/enemies.json for a piece on this floor and depth, by weight. */
@@ -294,8 +304,8 @@ export interface FightPlan {
 export function generateFight(p: FightPlan, base: Pick<Setup, "heroHp" | "heroMax" | "deck">): Setup {
   const n = p.depth <= 1 ? 6 : p.depth === 2 ? 7 : 8;
   const r = rng(p.seed * 7919 + p.row * 131 + p.depth * 17);
-  const hero = (n - 1) * n + Math.floor(n / 2) - 1 + Math.floor(r() * 2);
-  const c: Ctx = { n, r, depth: p.depth, row: p.row, budget: budgetFor(p.depth, p.row, p.kind === "elite"), taken: new Set([hero]), hero, units: [] };
+  const { hero, gate } = startAndGate(r, n);
+  const c: Ctx = { n, r, depth: p.depth, row: p.row, budget: budgetFor(p.depth, p.row, p.kind === "elite"), taken: new Set([hero, gate]), hero, units: [] };
   const options = FORMATIONS.filter((f) => p.depth >= f.minDepth && (p.row >= f.minRow || p.depth > 1));
   const form = weighted(r, options.map((f) => [f, f.weight] as [Formation, number]));
   form.build(c);
@@ -334,6 +344,7 @@ export function generateFight(p: FightPlan, base: Pick<Setup, "heroHp" | "heroMa
     limit: actorsFor(p.depth, p.row),
     name: p.kind === "elite" ? `Elite · ${form.name}` : form.name,
     survive: form.survive?.(c),
+    gate,
     scene: p.scene,
     intro,
   };
@@ -365,7 +376,9 @@ export function generateWarmup(seed: number, base: Pick<Setup, "heroHp" | "heroM
   const crate = r() < 0.3;
   if (crate) things.push({ kind: "petasan", sq: back });
   else units.push({ kind: "p", sq: back });
-  const taken = new Set([hero, front, back, ...line]);
+  const gateCols = Array.from({ length: n }, (_, c) => c).filter((c) => Math.abs(c - hc) >= 2);
+  const gate = at(pick(r, gateCols.length ? gateCols : [0]), 5);
+  const taken = new Set([hero, front, back, gate, ...line]);
   const fc = front % n, fr = Math.floor(front / n);
   const hr = Math.floor(hero / n);
   /** Would a piece here guard the front pawn, or start right next to you? */
@@ -390,9 +403,9 @@ export function generateWarmup(seed: number, base: Pick<Setup, "heroHp" | "heroM
   const mud: number[] = [];
   for (let i = 0; i < 2; i++) {
     const sq = at(Math.floor(r() * n), 5);
-    if (!taken.has(sq) && !mud.includes(sq)) mud.push(sq);
+    if (!taken.has(sq) && !mud.includes(sq) && sq !== gate) mud.push(sq);
   }
-  return { n, hero, ...base, units, things, mud, seed, name: "Warm-up", scene: "cell", limit: 2 };
+  return { n, hero, ...base, units, things, mud, seed, name: "Warm-up", scene: "cell", limit: 2, gate };
 }
 
 // ---------------------------------------------------------------- bosses
@@ -403,24 +416,28 @@ export interface Boss {
   hp: number;
   hit: number;
   traits: Trait[];
+  /** Its moveset (config/enemies.json "bosses.kits"). */
+  kit: string;
 }
 
 const B = ENEMIES.bosses;
 
 /** Each prison's boss: a piece, a name and 1-3 powers. Depth 1 is always Raja Hitam. */
 export function bossFor(seed: number, depth: number): Boss {
-  if (depth <= 1) return { name: B.first.name, kind: B.first.piece, hp: B.first.hp, hit: B.first.hit, traits: B.first.traits as Trait[] };
+  if (depth <= 1) return { name: B.first.name, kind: B.first.piece, hp: B.first.hp, hit: B.first.hit, traits: B.first.traits as Trait[], kit: B.first.kit };
   const r = rng(seed * 104729 + depth * 31);
   const prev = bossFor(seed, depth - 1).name;
   const kind = pick(r, B.pieces as Kind[]);
+  // Each piece has a couple of kits (movesets); the seed picks one, and the name comes from its titles.
+  const kit = pick(r, B.kits.filter((k) => k.piece === kind && k.titles?.length));
   let name = "";
-  for (let i = 0; i < 6 && (!name || name === prev); i++) name = `${pick(r, B.titles[kind] ?? [PIECE[kind].name])} ${pick(r, B.epithets)}`;
+  for (let i = 0; i < 6 && (!name || name === prev); i++) name = `${pick(r, kit.titles!)} ${pick(r, B.epithets)}`;
   const count = (BALANCE.bosses.powersByDepth.find(([upTo]) => depth <= upTo) ?? [0, 3])[1];
   const traits: Trait[] = [];
   const pool = [...B.powers] as Trait[];
   while (traits.length < count && pool.length) traits.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);
   const BB = BALANCE.bosses;
-  return { name, kind, hp: BB.hpBase + BB.hpPerDepth * depth, hit: BB.hitBase + Math.floor(depth / BB.hitEveryDepths), traits };
+  return { name, kind, hp: BB.hpBase + BB.hpPerDepth * depth, hit: BB.hitBase + Math.floor(depth / BB.hitEveryDepths), traits, kit: kit.id };
 }
 
 /** The boss fight: the boss on the back row, an escort from the budget, the gate's terrain. */
@@ -428,10 +445,10 @@ export function generateBossFight(seed: number, depth: number, base: Pick<Setup,
   const boss = bossFor(seed, depth);
   const n = depth <= 1 ? 6 : depth === 2 ? 7 : 8;
   const r = rng(seed * 6007 + depth * 13);
-  const hero = (n - 1) * n + Math.floor(n / 2) - 1 + Math.floor(r() * 2);
+  const { hero } = startAndGate(r, n);
   const c: Ctx = { n, r, depth, row: 6, budget: Math.round(budgetFor(depth, 5) * D.bossEscortMultiplier), taken: new Set([hero]), hero, units: [] };
   put(c, boss.kind, sqAt(c, Math.floor(n / 2) - (r() < 0.5 ? 1 : 0), 0), {
-    target: true, boss: boss.name, hp: boss.hp, hit: boss.hit, heavy: true, traits: boss.traits,
+    target: true, boss: boss.name, hp: boss.hp, hit: boss.hit, heavy: true, traits: boss.traits, kit: boss.kit,
   });
   if (depth <= 1) {
     // Raja Hitam's own guard, as before.
@@ -455,6 +472,14 @@ export function generateBossFight(seed: number, depth: number, base: Pick<Setup,
     limit: depth <= 1 ? 99 : actorsFor(depth, 6),
     name: boss.name,
     scene: "gate",
-    intro: boss.traits.map((t) => `${boss.name} · ${TRAITS[t].name}: ${TRAITS[t].text}`),
+    intro: [
+      ...(() => {
+        const kit = ENEMIES.bosses.kits.find((k) => k.id === boss.kit)!;
+        const names = (ids: string[]) => ids.map((id) => ENEMIES.moves[id].name).join(" → ");
+        return [`${boss.name} (${kit.name}): ${names(kit.pattern)}${kit.phase2?.length ? `; below half HP: ${names(kit.phase2)}` : ""}`];
+      })(),
+      ...boss.traits.map((t) => `${boss.name} · ${TRAITS[t].name}: ${TRAITS[t].text}`),
+    ],
+    // No gate here: beating the prison's warden is the escape itself.
   };
 }

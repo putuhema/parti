@@ -25,9 +25,14 @@ listed keeps the built-in art, so you can add sprites one at a time.
 
 - **Who:** `hero`, `pawn`, `knight`, `bishop`, `rook`, `queen`, `king` (the King in normal fights),
   `boss` (Raja Hitam).
-- **Animations:** `idle` (loops; required, everything else is optional), `kick` (hero only: plays
-  when you kick or capture), `hit` (plays when that piece takes damage).
+- **Animations:** `idle` (loops; required, everything else is optional) and `hit` (plays when that piece
+  takes damage) for everyone. The hero also has `kick` (kicks and captures), `step` (moved to another
+  square), `block` (Block or a readied card stopped a hit), `dodge`, `win` (loops when the fight is won)
+  and `ko` (plays once when you lose and stays on its last frame).
+- Draw the hero **facing right**: the game mirrors it when it kicks or walks left.
+- `pixel: true` keeps small pixel art crisp (frames can then be any square size, e.g. 32×32).
 - `frames` defaults to 1 (a still picture). `fps` defaults to 8 for idle and 14 for kick and hit.
 - Keys starting with `_` are ignored. To try the example on the hero, rename `_example` to `hero`.
 
-The example sheets come from `scripts/make-example-sprites.py`.
+The example sheets come from `scripts/make-example-sprites.py`. The hero's pixel strips (`hero-*.png`) come from
+`scripts/make-hero-pixel.py`: each animation there is a list of poses you can edit, then run the script again.

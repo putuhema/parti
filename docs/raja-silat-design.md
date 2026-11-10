@@ -945,3 +945,52 @@ chess move. Moves have cooldowns and show as coloured intent badges.
 | Raja Tua | King | Bertahan, Panggil Pengawal | floor 5+ |
 Plain versions of each piece stay in the mix. Enemy shields soak damage before HP and drop when the next enemy turn
 starts. Signature moves use one of the turn's action slots, like any other enemy action.
+
+## 25. The escape gate and a pressing AI (2026-11-10)
+
+A playtest stalled at turn 37: the pawn storm only moved pawns in your column ±1, and a King only acts when you
+come within 2, so standing away from the e/f files froze the whole army.
+- **The gate:** every generated fight (and the Warm-up) has a locked gate on the bottom row. You start mid-board
+  (row n−3; the Warm-up keeps you on rank 2). **The King holds the key**: knocking him out opens the gate
+  ("GATE OPEN!"), and you win by stepping onto it, by step, card, capture or even being kicked there. Until then
+  standing on it does nothing; if you're on it when the King falls, you're out at once. Hold Out fights can still
+  be won by surviving. Fights without a gate (handmade test setups) are still won by knocking out the King.
+- **Pawns march again, every turn:** storm pawns (your column ±1) rush 2 squares on their first move; every other
+  pawn walks 1. Only a pawn right next to its King, while you're more than 3 away, stays to shield him. Marching
+  down takes pawns toward the gate, and they promote into Queens right beside it.
+- **Pieces guard the way out:** squares that cover the gate score +2 while it's locked; once it's open, covering
+  it +3, standing on it +4 and standing between you and it +2.
+- Board: the gate square shows a padlock (dashed while locked; glowing green when open). The header shows
+  "Gate locked: the King has the key" / "Gate open: reach it to escape!".
+- A test replays the stalled position (you on c3, pawns on the e/f files, King on f5) and checks that 20 turns of
+  doing nothing gets you hit.
+
+## 26. Clearer combos (2026-11-10)
+- A playtest looked like a bug: 4 cards played with 3 Tenaga, and Block "carried over". Both were right by the rules
+  (Kopi Tubruk's +1 Tenaga on the first knockout, and a Tangkis queued later in the combo), but the top bar showed
+  the after-combo numbers without saying so and only ever drew 3 Tenaga gems.
+- The top bar now shows **now → after** for HP and Block while you build a combo. Tenaga draws a gem per point:
+  hollow = spent by this combo, purple = bonus Tenaga beyond 3. Tenaga gains in the combo appear as chips
+  ("Kopi Tubruk: +1 Tenaga").
+- **Step-by-step playback:** Play resolves the combo one action at a time (~0.4 s apart, longer after a named
+  combo), each with its own moves, hits, sounds and floating numbers. The strip shows "2/4" and highlights the
+  action happening now. Each step is the fight as if the combo so far had been played, and the last step is the
+  whole combo, so the result is the same as before.
+
+## 27. Boss movesets (2026-11-10)
+
+Bosses all played the same: slam was automatic for every heavy piece, and boss powers were passives. Now:
+- **Slam is a move.** Only pieces that list it slam: plain Rooks, Menara, and the boss kits that include it. Queens
+  and Kings no longer slam by default (handmade setups without variants keep the old rule).
+- **Boss kits** (`bosses.kits` in enemies.json): each boss cycles through a pattern of signature moves, skipping any
+  that can't happen right now, and switches to its phase 2 pattern below half HP ("changes tactics!"). The header
+  shows the pattern with the next move highlighted; the log lists it at the start of the fight.
+- **New moves:** Beam (hits everything in a line, its own pieces too), Whirl (hits you and knocks everything around
+  it away), Pounce (leaps next to you and strikes), Curse (shuffles Kram cards into your draw pile), Rally (calls 2
+  pawns), Decree (every ally nearby acts and hits harder), Jampi Agung (heals everyone), Benteng Besi (shield 8).
+- **Kram** (curse card, cards.json): costs 1, does nothing, gone once played. Never offered as a reward.
+- Kits: Raja Hitam (Titah → Rally → Slam; phase 2: Whirl, Pounce, Rally), Raja Perang, Raja Licik, Ratu Badai,
+  Ratu Ular, Sipir, Mandor, Dukun Hitam, Penasihat, Panglima, Pendekar. A generated boss picks one of its piece's
+  kits by seed and is named after it. Boss powers (Perisai, Pulih…) still layer on top.
+- Boss fights have no gate (beating the boss is the escape), and a regular fight ends at once if the King was the
+  last piece standing.

@@ -126,5 +126,17 @@
  "piece-boss": {
   "idx": 1594,
   "caption": "gold chess king"
+ },
+ "gate-locked": {
+  "idx": 2781,
+  "caption": "bronze padlock with engraved swirls"
+ },
+ "gate-open": {
+  "idx": 782,
+  "caption": "bronze open padlock"
+ },
+ "key": {
+  "idx": 1575,
+  "caption": "dungeon key"
  }
 }

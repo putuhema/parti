@@ -666,6 +666,18 @@
           "amount": "block"
         }
       ]
+    },
+    "kram": {
+      "name": "Kram",
+      "cost": 1,
+      "type": "Siasat",
+      "exhaust": true,
+      "text": "Cramp (a curse): does nothing. Gone once played.",
+      "target": "self",
+      "pattern": {
+        "12": "hit"
+      },
+      "effects": []
     }
   }
 }

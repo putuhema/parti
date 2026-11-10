@@ -8,7 +8,7 @@ import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { CARDS, canCapture, canPlay, canReady, cardCost, isAttack, playCombo, readyCard, typeOf, type ComboItem } from "@/lib/silat/cards";
 import { rangkaiById, rangkaiFor, rangkaiStarts, type Rangkai } from "@/lib/silat/rangkai";
-import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, jabChance, reactionDamage, sqName, TENAGA, TRAITS, unitName, type Fight } from "@/lib/silat/rules";
+import { beginEnemy, clone, enemyStep, finishEnemy, forecast, freeSteps, isGuarded, jabChance, kitPlan, moveDef, moveText, reactionDamage, sqName, TENAGA, TRAITS, unitName, type Fight } from "@/lib/silat/rules";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -35,6 +35,8 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const [capturing, setCapturing] = useState<{ idx: number; sq: number } | null>(null);
   /** Choosing a Tangkis card to ready (Siap) for the enemy turn. */
   const [readying, setReadying] = useState(false);
+  /** A combo being played out on the board, one action at a time. */
+  const [anim, setAnim] = useState<{ labels: string[]; at: number } | null>(null);
   /** The named combos just played, shown as a big banner over the board. */
   const [banner, setBanner] = useState<{ key: number; list: Rangkai[] } | null>(null);
   const [fxKey, setFxKey] = useState(0);
@@ -55,7 +57,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
 
   const f = fight;
   const busy = f.status === "enemy";
-  const playing = f.status === "play" && !busy;
+  const playing = f.status === "play" && !busy && !anim;
   // The board as it will be after the combo so far (a preview: dice assume the worst for you).
   const sim = combo.length ? playCombo(f, combo, { sim: true }) : null;
   const q = sim?.fight ?? f;
@@ -165,25 +167,44 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
     if (steps.includes(sq)) add({ k: "step", sq });
   }
 
-  /** Play the whole combo. It's locked in: there's no undo. */
-  function playIt() {
+  /** Play the combo, one action at a time on the board. It's locked in: there's no undo.
+   *  Each step shows the fight as if the combo so far had been played, which lands exactly on the same
+   *  result as playing it all at once (everything, dice included, is seeded by the fight). */
+  async function playIt() {
     if (!playing || !combo.length) return;
     feedback.unlock();
-    const r = playCombo(f, combo);
+    const start = f;
+    const items = combo;
+    const labels = items.map(itemName);
     setCombo([]);
     setSel(null);
-    commit(r.fight);
-    const named = (r.fight.rangkai ?? []).map(rangkaiById).filter((x): x is Rangkai => !!x);
-    if (named.length) {
-      setBanner({ key: Date.now(), list: named });
-      setTimeout(() => feedback.win(), 120);
-      try {
-        shakeRef.current?.animate?.(
-          [{ transform: "scale(1)" }, { transform: "scale(1.035) rotate(-0.6deg)" }, { transform: "scale(.99) rotate(0.4deg)" }, { transform: "scale(1)" }],
-          { duration: 420, easing: "cubic-bezier(.34,1.56,.64,1)" },
-        );
-      } catch {}
+    setCapturing(null);
+    const id = ++loop.current;
+    let seenFx = 0;
+    let seenNamed = 0;
+    for (let i = 0; i < items.length; i++) {
+      setAnim({ labels, at: i });
+      const r = playCombo(start, items.slice(0, i + 1));
+      const shown = { ...r.fight, fx: r.fight.fx.slice(seenFx) };
+      seenFx = r.fight.fx.length;
+      commit(shown);
+      const named = (r.fight.rangkai ?? []).slice(seenNamed).map(rangkaiById).filter((x): x is Rangkai => !!x);
+      seenNamed = (r.fight.rangkai ?? []).length;
+      if (named.length) {
+        setBanner({ key: Date.now(), list: named });
+        setTimeout(() => feedback.win(), 120);
+        try {
+          shakeRef.current?.animate?.(
+            [{ transform: "scale(1)" }, { transform: "scale(1.035) rotate(-0.6deg)" }, { transform: "scale(.99) rotate(0.4deg)" }, { transform: "scale(1)" }],
+            { duration: 420, easing: "cubic-bezier(.34,1.56,.64,1)" },
+          );
+        } catch {}
+      }
+      if (r.fight.status !== "play" || i === items.length - 1) break;
+      await sleep(named.length ? 900 : 430);
+      if (loop.current !== id) return;
     }
+    setAnim(null);
   }
 
   /** Play out the enemy turn one intent at a time. Picks up where it left off after a reload. */
@@ -281,14 +302,38 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
             {[f.name, `Turn ${f.turn}`].filter(Boolean).join(" · ")}
           </span>
           {(() => {
-            // Boss powers, so you know what you're up against.
-            const boss = f.units.find((u) => u.boss && u.traits?.length);
-            return boss ? (
-              <span className="sl-powers" aria-label={`${boss.boss} powers`}>
-                {boss.traits!.map((t) => <span key={t} title={TRAITS[t].text}>{TRAITS[t].name}</span>)}
-              </span>
-            ) : null;
+            // The boss's moveset (its pattern, the next move highlighted) and its powers.
+            const boss = f.units.find((u) => u.boss);
+            if (!boss) return null;
+            const plan = kitPlan(boss);
+            // Highlight the move it's actually about to use (it skips moves that can't happen right now).
+            const planned = display.intents.find((i) => i.id === boss.id);
+            const next = planned && "step" in planned && planned.step !== undefined ? planned.step : plan?.at;
+            return (
+              <>
+                {plan && (
+                  <span className="sl-pattern" aria-label={`${boss.boss}'s moves: ${plan.list.map((id) => moveDef(id)?.name).join(", ")}`}>
+                    {boss.phase ? <b>Phase 2</b> : null}
+                    {plan.list.map((id, i) => (
+                      <span key={i} className={i === next ? "next" : undefined} title={moveText(id)}>{moveDef(id)?.name}</span>
+                    ))}
+                  </span>
+                )}
+                {!!boss.traits?.length && (
+                  <span className="sl-powers" aria-label={`${boss.boss} powers`}>
+                    {boss.traits.map((t) => <span key={t} title={TRAITS[t].text}>{TRAITS[t].name}</span>)}
+                  </span>
+                )}
+              </>
+            );
           })()}
+          {f.gate !== undefined && f.status !== "won" && (
+            <span className={`sl-gatechip${f.gateOpen ? " open" : ""}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- pixel sprite */}
+              <img src={f.gateOpen ? "/silat/pixel/key.png" : "/silat/pixel/gate-locked.png"} alt="" className="px" />
+              {f.gateOpen ? "Gate open: reach it to escape!" : "Gate locked: the King has the key"}
+            </span>
+          )}
           {f.survive && f.status !== "won" && (
             <span style={{ marginTop: 2, padding: "1px 8px", borderRadius: 999, background: "#FFF4CC", color: "#8A6400", fontSize: 12, fontWeight: 900 }}>
               Survive {Math.max(1, f.survive - f.turn + 1)} more {f.survive - f.turn + 1 === 1 ? "turn" : "turns"} (or beat the King)
@@ -307,15 +352,20 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
           <span style={{ flex: 1, height: 12, borderRadius: 7, background: "#FFDFE0", overflow: "hidden" }}>
             <span style={{ display: "block", height: "100%", width: `${(display.hero.hp / f.hero.max) * 100}%`, background: "#FF4B4B", borderRadius: 7, transition: "width 300ms" }} />
           </span>
-          <span style={{ fontSize: 14, fontWeight: 900, color: "#B81F1F" }}>{display.hero.hp}/{f.hero.max}</span>
+          <span style={{ fontSize: 14, fontWeight: 900, color: "#B81F1F" }}>
+            {display.hero.hp !== f.hero.hp ? <><span style={{ opacity: 0.55 }}>{f.hero.hp}→</span>{display.hero.hp}</> : display.hero.hp}/{f.hero.max}
+          </span>
         </div>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 10, background: "#D7FFB8", fontSize: 14, fontWeight: 900, color: "#2F6E00" }} aria-label={`Block ${display.hero.block}`}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 10, background: "#D7FFB8", fontSize: 14, fontWeight: 900, color: "#2F6E00" }} aria-label={display.hero.block !== f.hero.block ? `Block ${f.hero.block} now, ${display.hero.block} after your combo` : `Block ${f.hero.block}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
           <img src="/silat/pixel/ui-shield.png" alt="" className="px" style={{ width: 18, height: 18 }} />
-          {display.hero.block}
+          {display.hero.block !== f.hero.block ? <><span style={{ opacity: 0.55 }}>{f.hero.block}→</span>{display.hero.block}</> : f.hero.block}
         </span>
-        <span style={{ display: "flex", gap: 8, padding: "0 4px" }} aria-label={`Tenaga ${display.tenaga} of ${TENAGA}`}>
-          {Array.from({ length: TENAGA }, (_, i) => <span key={i} className={`sl-gem${i < display.tenaga ? "" : " empty"}`} />)}
+        {/* Tenaga: one gem per point. Hollow = this combo spends it; purple = bonus Tenaga (relics, cards). */}
+        <span style={{ display: "flex", gap: 8, padding: "0 4px" }} aria-label={display.tenaga !== f.tenaga ? `Tenaga ${f.tenaga} now, ${display.tenaga} left after your combo` : `Tenaga ${f.tenaga} of ${TENAGA}`}>
+          {Array.from({ length: Math.max(TENAGA, f.tenaga, display.tenaga) }, (_, i) => (
+            <span key={i} className={`sl-gem${i < display.tenaga ? (i >= TENAGA ? " bonus" : "") : i < f.tenaga ? " spent" : " empty"}`} />
+          ))}
         </span>
       </div>
 
@@ -359,7 +409,14 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
       </div>
 
       <div className="sl-tray" aria-live="polite">
-        {tip ? (
+        {anim ? (
+          <div className="sl-combo-strip" aria-label={`Playing ${anim.at + 1} of ${anim.labels.length}`}>
+            <span className="sl-chip" style={{ background: "#3C3C3C", color: "#fff" }}>{anim.at + 1}/{anim.labels.length}</span>
+            {anim.labels.map((l, n) => (
+              <span key={n} className={`sl-chip${n === anim.at ? " now" : n < anim.at ? " done" : ""}`}><b>{n + 1}</b>{l}</span>
+            ))}
+          </div>
+        ) : tip ? (
           <span className="sl-tray-tip"><b>{tip[0]}</b> {tip[1]}</span>
         ) : combo.length ? (
           <div className="sl-combo-strip" aria-label="Your combo">
@@ -370,6 +427,9 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
             ))}
             {triggered.map((r, i) => <span key={`r${i}`} className="sl-chip named" style={{ background: r.color }}>✦ {r.name}</span>)}
             {q.combo >= 2 && <span className="sl-chip" style={{ background: "#3C3C3C", color: "#FFC800" }}>×{q.combo}</span>}
+            {(q.log ?? []).slice((f.log ?? []).length).filter((l) => /\+\d+ Tenaga/.test(l.t)).map((l, i) => (
+              <span key={`t${i}`} className="sl-chip" style={{ background: "#F3E2FF", color: "#8A4FB5" }}>{l.t}</span>
+            ))}
             {[...new Map([...finishes.values()].map((r) => [r.id, r])).values()].map((r) => (
               <span key={`n${r.id}`} className="sl-chip next" style={{ color: r.color, borderColor: r.color }}>next ✦ {r.name}</span>
             ))}

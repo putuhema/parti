@@ -59,6 +59,15 @@ Give it a `target` and a list of `effects`. They run in order:
   | `heal` | heals the most hurt ally (or itself) within `range` | `amount`, `range` |
   | `summon` | calls a piece next to itself | `piece` |
   | `command` | an ally within `range` acts next turn and hits `bonus` harder once | `bonus`, `range` |
+  | `decree` | every ally within `range` acts next turn and hits `bonus` harder | `bonus`, `range` |
+  | `slam` | when you're within `range`: hits you and every square next to you | `range` |
+  | `beam` | when you're in a straight or diagonal line with it: hits everything along that line, its own pieces too | `damage` |
+  | `whirl` | when you're next to it: hits you and knocks everything around it `push` squares away | `damage`, `push` |
+  | `pounce` | leaps to an empty square next to you (up to `range` away) and strikes | `damage`, `range` |
+  | `curse` | shuffles `count` copies of `card` (from cards.json, e.g. `kram`) into your draw pile for this fight | `card`, `count` |
+
+  `summon` also takes `count`, and `heal` takes `all: true` to heal every hurt ally. `damage` left out = the piece's
+  own hit. Slam is a move too: only pieces that list it slam (plain Rooks do; Queens and Kings don't).
 
   Every move also has `cooldown` (turns to wait after using it), a `name` and a `text` (with `{placeholders}`).
 - `variants`: the enemies a fight can contain. Each is a `piece` with optional `name`, `hp`, `hit`, `moves` (tried in
@@ -69,5 +78,12 @@ Give it a `target` and a list of `effects`. They run in order:
   { "id": "war_horse", "piece": "n", "name": "Kuda Perang", "hp": 7, "moves": ["back_kick"], "weight": 1, "minDepth": 2 }
   ```
 - `traits`: boss and elite powers (name and text; what they do is in code). `eliteTraits`: the ones elites can get.
-- `bosses`: the first boss (`first`), and for generated bosses: which `pieces`, their `titles` and `epithets`
-  (names are built from both), and the `powers` they draw from.
+- `bosses`: the first boss (`first`, with its `kit`), which `pieces` generated bosses can be, the `epithets` for
+  their names, and the `powers` (traits) they draw from.
+- `bosses.kits`: boss **movesets**. A boss cycles through its `pattern` (skipping any move that can't happen right
+  now) and switches to `phase2` below half HP. A generated boss picks a kit for its piece, and its name is one of the
+  kit's `titles` plus an epithet. Every piece in `pieces` needs at least one kit with `titles`. Example:
+  ```json
+  { "id": "ratu_badai", "piece": "q", "titles": ["Ratu Badai"], "name": "Storm Queen",
+    "pattern": ["beam", "decree", "beam"], "phase2": ["beam", "whirl", "beam"] }
+  ```

@@ -1,7 +1,7 @@
 // Run with: bun test src/lib/silat
 import { describe, expect, test } from "bun:test";
-import { ALL_CARDS, CARDS, TIERS, TIER_NAMES, canCapture, tierOf, val, canPlay, canReady, cardCost, playCard, playCombo, readyCard } from "./cards";
-import { beginEnemy, clone, dist, enemyStep, enemyTurn, forecast, freeSteps, isGuarded, makeFight, plan, reactionDamage, startTurn, step, unitAt, type Fight, type Setup, type Trait } from "./rules";
+import { ALL_CARDS, CARDS, TIERS, TIER_NAMES, canCapture, tierOf, val, type ComboItem, canPlay, canReady, cardCost, playCard, playCombo, readyCard } from "./cards";
+import { beginEnemy, clone, dist, enemyStep, enemyTurn, forecast, freeSteps, isGuarded, makeFight, plan, reactionDamage, startTurn, step, unitAt, kitPlan, type Fight, type Kind, type Setup, type Trait } from "./rules";
 import { makeMap, nextNodes, nodeById, MAP_ROWS } from "./map";
 import { bossFor, budgetFor, generateFight, prisonFor } from "./endless";
 import { ENEMIES } from "./config";
@@ -177,10 +177,12 @@ describe("enemies", () => {
     expect(q.hp).toBe(7);
   });
 
-  test("pawns away from your column hold their line", () => {
-    const s = fight({ hero: sq(0, 5), units: [{ kind: "p", sq: sq(4, 1) }, { kind: "p", sq: sq(5, 2) }, { kind: "k", sq: sq(3, 0) }] });
+  test("pawns away from your column march 1 square (no rush); a pawn shielding its far-off King holds", () => {
+    const s = fight({ hero: sq(0, 5), units: [{ kind: "p", sq: sq(5, 2) }, { kind: "p", sq: sq(3, 1) }, { kind: "k", sq: sq(3, 0) }], limit: 0 });
+    s.intents = [];
     enemyTurn(s);
-    expect(s.units.filter((u) => u.kind === "p").map((u) => u.sq).sort()).toEqual([sq(4, 1), sq(5, 2)].sort());
+    expect(s.units[0].sq).toBe(sq(5, 3)); // marched 1, even though it hasn't moved before
+    expect(s.units[1].sq).toBe(sq(3, 1)); // right in front of its King, you're far away: it stays
   });
 
   test("a pawn that hasn't moved yet storms 2 squares; after that, only 1", () => {
@@ -1035,7 +1037,8 @@ describe("Slay the Spire style deck", () => {
   test("every card except the two basics is in exactly one tier", () => {
     const all = [...TIERS[1], ...TIERS[2], ...TIERS[3]];
     expect(new Set(all).size).toBe(all.length);
-    expect(all.sort()).toEqual(ALL_CARDS.map((c) => c.id).filter((id) => id !== "tendang" && id !== "tangkis").sort());
+    // Basics and the Kram curse (only bosses hand it out) are never offered as rewards.
+    expect(all.sort()).toEqual(ALL_CARDS.map((c) => c.id).filter((id) => !["tendang", "tangkis", "kram"].includes(id)).sort());
   });
   test("cards unlock as you go: basics first, tactics from floor 4, rare cards from the second prison", () => {
     expect(unlockedTier({ floor: 1, depth: 1 })).toBe(1);
@@ -1122,5 +1125,150 @@ describe("config files and enemy movesets", () => {
     const b = play(s, "tapakbesi", sq(1, 4));
     expect(b.hero.sq).toBe(sq(1, 4));
     expect(b.hero.block).toBe(3);
+  });
+});
+
+describe("the escape gate and a pressing AI", () => {
+  test("knocking out the King opens the gate; stepping onto it escapes", () => {
+    const s = fight({ hero: sq(2, 3), units: [{ kind: "k", sq: sq(2, 2), hp: 2 }, { kind: "p", sq: sq(5, 0) }], gate: sq(1, 5) }, ["dalam"]);
+    const f = play(s, "dalam", sq(2, 2));
+    expect(f.status).toBe("play"); // the King is down, but you're not out yet
+    expect(f.gateOpen).toBe(true);
+    const h = step({ ...step(f, sq(1, 4)), stepUsed: false }, sq(1, 5));
+    expect(h.status).toBe("won");
+  });
+  test("standing on the locked gate does nothing; it opens the moment the King falls", () => {
+    const s = fight({ hero: sq(1, 5), units: [{ kind: "k", sq: sq(1, 4), hp: 2 }], gate: sq(1, 5) }, ["dalam"]);
+    expect(s.status).toBe("play");
+    expect(play(s, "dalam", sq(1, 4)).status).toBe("won");
+  });
+  test("the stalemate from the screenshot can't happen: wait 20 turns and the enemies still come for you", () => {
+    const s = fight({
+      hero: sq(2, 3),
+      units: [
+        { kind: "p", sq: sq(4, 0) }, { kind: "p", sq: sq(5, 0) }, { kind: "p", sq: sq(4, 1) },
+        { kind: "k", sq: sq(5, 1), hp: 8 }, { kind: "p", sq: sq(4, 2) }, { kind: "p", sq: sq(5, 2) }, { kind: "p", sq: sq(4, 3) },
+      ],
+      gate: sq(3, 5),
+    });
+    s.fixedRoll = undefined;
+    const start = s.units.map((u) => u.sq).join();
+    for (let t = 0; t < 20 && s.status === "play"; t++) enemyTurn(s);
+    expect(s.units.map((u) => u.sq).join()).not.toBe(start);
+    expect(s.hero.hp).toBeLessThan(20);
+  });
+  test("every generated fight has a gate on the bottom row and starts you mid-board", () => {
+    for (let seed = 1; seed < 30; seed++) {
+      const f = fightFor(newRun(seed), newRun(seed).map.nodes.find((n) => n.row === 3)!);
+      expect(f.gate).toBeDefined();
+      expect(Math.floor(f.gate! / f.n)).toBe(f.n - 1);
+      expect(Math.floor(f.hero.sq / f.n)).toBe(f.n - 3);
+    }
+  });
+});
+
+describe("combo playback", () => {
+  test("step-by-step playback: each step is a consistent fight, and the last step is the whole combo", () => {
+    let checked = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const run = { ...newRun(seed), deck: ALL_CARDS.map((c) => c.id) };
+      const node = run.map.nodes.find((n) => n.row === 2 && n.kind === "fight") ?? run.map.nodes.find((n) => n.kind === "fight")!;
+      const s = fightFor({ ...run, floor: node.row }, node);
+      s.fixedRoll = undefined; // real dice
+      s.tenaga = 6;
+      // Build a combo of whatever is playable, in order, against the preview.
+      const items: ComboItem[] = [];
+      for (let k = 0; k < 4; k++) {
+        const r = playCombo(s, items, { sim: true });
+        const q = r.fight;
+        const i = q.hand.findIndex((id) => canPlay(q, id) && CARDS[id].targets(q).length);
+        if (i < 0) break;
+        const orig = r.origin[i];
+        if (orig < 0) break;
+        items.push({ k: "card", idx: orig, sq: CARDS[q.hand[i]].targets(q)[0] });
+      }
+      if (items.length < 2) continue;
+      // Each step's prefix replays the earlier steps identically (same seeded dice), so step n-1 is a true
+      // snapshot of step n's past: the hero and every piece only move forward from it.
+      const twice = playCombo(s, items).fight;
+      expect(JSON.stringify(playCombo(s, items).fight)).toBe(JSON.stringify(twice));
+      // Every prefix is a real, consistent fight state (nothing overlaps).
+      for (let n = 1; n <= items.length; n++) {
+        const p = playCombo(s, items.slice(0, n)).fight;
+        const spots = [p.hero.sq, ...p.units.map((u) => u.sq), ...p.things.map((t) => t.sq)];
+        expect(new Set(spots).size).toBe(spots.length);
+      }
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+});
+
+describe("gate fixes", () => {
+  test("boss fights have no gate: beating the boss is the escape", () => {
+    for (let seed = 1; seed < 20; seed++) {
+      for (let depth = 1; depth <= 4; depth++) {
+        const run = { ...newRun(seed), depth, map: makeMap(seed, depth) };
+        const boss = run.map.nodes.find((n) => n.kind === "boss")!;
+        expect(fightFor({ ...run, floor: boss.row }, boss).gate).toBeUndefined();
+      }
+    }
+  });
+  test("if the King was the last piece standing, you win at once", () => {
+    const s = fight({ hero: sq(2, 3), units: [{ kind: "k", sq: sq(2, 2), hp: 2 }], gate: sq(0, 5) }, ["dalam"]);
+    expect(play(s, "dalam", sq(2, 2)).status).toBe("won");
+  });
+});
+
+describe("boss movesets (kits)", () => {
+  const bossFight = (kit: string, kind: Kind, extra: Partial<Setup> = {}) =>
+    fight({ hero: sq(2, 4), units: [{ kind, sq: sq(2, 1), target: true, boss: "Uji", hp: 30, heavy: true, kit }, { kind: "p", sq: sq(5, 0) }], ...extra });
+  test("a boss follows its pattern: Ratu Badai beams down the line at you, hitting its own pieces too", () => {
+    const s = fight({ hero: sq(2, 5), units: [{ kind: "q", sq: sq(2, 0), target: true, boss: "Ratu Uji", hp: 30, heavy: true, kit: "ratu_badai" }, { kind: "p", sq: sq(2, 2) }] });
+    const it = s.intents.find((i) => i.id === s.units[0].id)!;
+    expect(it).toMatchObject({ type: "special", move: "beam", dir: 4 });
+    const after = resolveEnemy(s);
+    expect(after.hero.hp).toBeLessThan(20);
+    expect(after.units.find((u) => u.kind === "p")?.hp ?? 0).toBeLessThan(3); // its own pawn was in the way
+    expect(after.units[0].pat).toBe(1); // next up: Titah (decree)
+  });
+  test("queens no longer slam unless their kit says so; plain rooks still do", () => {
+    const q = fight({ hero: sq(2, 3), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "q", sq: sq(2, 1), variant: "queen" }] });
+    expect(q.intents.find((i) => i.id === q.units[1].id)?.type).not.toBe("slam");
+    const r = fight({ hero: sq(2, 3), units: [{ kind: "k", sq: sq(5, 0) }, { kind: "r", sq: sq(3, 1), variant: "rook" }] });
+    expect(r.intents.find((i) => i.id === r.units[1].id)?.type).toBe("slam");
+  });
+  test("Panglima pounces next to you and strikes", () => {
+    const s = bossFight("panglima", "n");
+    expect(s.intents.find((i) => i.id === s.units[0].id)).toMatchObject({ type: "special", move: "pounce" });
+    const after = resolveEnemy(s);
+    expect(dist(after, after.units[0].sq, after.hero.sq)).toBe(1);
+    expect(after.hero.hp).toBeLessThan(20);
+  });
+  test("Raja Licik curses you: Kram cards go into your draw pile", () => {
+    const s = bossFight("raja_licik", "k");
+    s.draw = ["tendang", "tendang"];
+    const after = resolveEnemy(s);
+    expect(after.draw.filter((c) => c === "kram")).toHaveLength(2);
+  });
+  test("below half HP a kit boss switches to its phase 2 pattern", () => {
+    const s = bossFight("sipir", "r", { hero: sq(2, 5) });
+    s.units[0].hp = 16;
+    s.hand = ["dalam"];
+    s.hero.sq = sq(2, 2);
+    const f = play(s, "dalam", sq(2, 1));
+    expect(f.units[0].phase).toBe(2);
+    expect(kitPlan(f.units[0])!.list).toEqual(ENEMIES.bosses.kits.find((k) => k.id === "sipir")!.phase2);
+  });
+  test("every generated boss has a kit for its piece, and kits differ between bosses", () => {
+    const kits = new Set<string>();
+    for (let seed = 1; seed < 40; seed++) for (let d = 2; d <= 6; d++) {
+      const b = bossFor(seed, d);
+      const kit = ENEMIES.bosses.kits.find((k) => k.id === b.kit)!;
+      expect(kit.piece).toBe(b.kind);
+      kits.add(b.kit);
+    }
+    expect(kits.size).toBeGreaterThanOrEqual(8);
+    expect(bossFor(1, 1).kit).toBe("raja_hitam");
   });
 });

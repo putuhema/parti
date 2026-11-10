@@ -1,6 +1,56 @@
 {
-  "_readme": "Your sprites. See README.md in this folder. Keys starting with _ are ignored (rename _hero to hero to use your hero). A file starting with / is a path from the site root; pixel: true keeps pixels crisp; filter is a CSS filter.",
-  "_hero": {
+  "_readme": "Your sprites. See README.md in this folder. Keys starting with _ are ignored (the hero uses the pixel strips from scripts/make-hero-pixel.py; to use your own drawing instead, rename hero to _hero_pixel and _hero_drawn to hero). A file starting with / is a path from the site root; pixel: true keeps pixels crisp; filter is a CSS filter.",
+  "hero": {
+    "idle": {
+      "file": "hero-idle.png",
+      "frames": 6,
+      "fps": 6,
+      "pixel": true
+    },
+    "kick": {
+      "file": "hero-kick.png",
+      "frames": 5,
+      "fps": 14,
+      "pixel": true
+    },
+    "hit": {
+      "file": "hero-hit.png",
+      "frames": 4,
+      "fps": 12,
+      "pixel": true
+    },
+    "step": {
+      "file": "hero-step.png",
+      "frames": 4,
+      "fps": 14,
+      "pixel": true
+    },
+    "block": {
+      "file": "hero-block.png",
+      "frames": 4,
+      "fps": 10,
+      "pixel": true
+    },
+    "dodge": {
+      "file": "hero-dodge.png",
+      "frames": 4,
+      "fps": 12,
+      "pixel": true
+    },
+    "win": {
+      "file": "hero-win.png",
+      "frames": 6,
+      "fps": 9,
+      "pixel": true
+    },
+    "ko": {
+      "file": "hero-ko.png",
+      "frames": 6,
+      "fps": 8,
+      "pixel": true
+    }
+  },
+  "_hero_drawn": {
     "idle": {
       "file": "idle.png",
       "frames": 4,

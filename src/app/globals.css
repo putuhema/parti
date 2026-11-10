@@ -672,3 +672,25 @@ a { text-decoration: none; }
 /* Enemy shields (from a block move) and commanded pieces. */
 .sl-eblock { position: absolute; left: 1px; top: 36%; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 4px 4px 8px 8px; background: #1899d6; color: #fff; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.5px #fff; z-index: 2; }
 .sl-empower { position: absolute; right: 1px; top: 1px; padding: 0 4px; height: 15px; border-radius: 8px; background: #ce82ff; color: #fff; font-size: 9px; font-weight: 900; display: flex; align-items: center; box-shadow: 0 0 0 1.5px #fff; z-index: 2; }
+/* The escape gate: locked until the King drops the key, then it glows. */
+.sl-gate { position: absolute; inset: 8%; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 3px dashed rgba(60, 60, 60, .45); pointer-events: none; }
+.sl-gate img { width: 62%; height: 62%; opacity: .75; }
+.sl-gate.open { border: 3px solid #58cc02; background: rgba(88, 204, 2, .22); box-shadow: 0 0 12px rgba(88, 204, 2, .8); animation: slgate 1.2s ease-in-out infinite; }
+.sl-gate.open img { opacity: 1; }
+@keyframes slgate { 50% { box-shadow: 0 0 22px rgba(88, 204, 2, 1); } }
+.sl-gatechip { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; padding: 1px 8px 1px 4px; border-radius: 999px; background: #efe7dc; color: var(--plum); font-size: 11px; font-weight: 900; }
+.sl-gatechip img { width: 16px; height: 16px; }
+.sl-gatechip.open { background: #d7ffb8; color: #2f6e00; }
+@media (prefers-reduced-motion: reduce) { .sl-gate.open { animation: none; } }
+/* Tenaga gems: spent by the combo you're building (hollow), and bonus Tenaga beyond 3 (purple). */
+.sl-gem.spent { background: transparent; box-shadow: inset 0 0 0 2.5px #ff9600; }
+.sl-gem.bonus { background: #ce82ff; box-shadow: 0 3px 0 #8a4fb5, 0 0 8px rgba(206, 130, 255, .8); }
+/* Combo playback: the action happening now, and the ones already done. */
+.sl-chip.now { background: #1899d6; color: #fff; transform: scale(1.06); transition: transform 150ms; }
+.sl-chip.now b { background: #fff; color: #1899d6; }
+.sl-chip.done { opacity: .45; }
+/* Boss pattern: the moves it cycles through, the next one highlighted. */
+.sl-pattern { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; align-items: center; margin-top: 2px; }
+.sl-pattern span { padding: 1px 6px; border-radius: 999px; background: #efe7dc; color: var(--plum-soft); font-size: 10px; font-weight: 900; }
+.sl-pattern span.next { background: #ff4b4b; color: #fff; }
+.sl-pattern b { font-size: 10px; color: #b81f1f; }

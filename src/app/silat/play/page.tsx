@@ -52,7 +52,7 @@ export default function SilatPlay() {
             <div className="rise" style={{ animationDelay: "900ms", width: "100%", maxWidth: 360, borderRadius: 26, background: "var(--paper)", padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
               <span className="stamp display" style={{ fontSize: 40, color: f.status === "won" ? "#2F6E00" : "#B81F1F" }}>{f.status === "won" ? "MENANG!" : "KALAH"}</span>
               <span style={{ fontSize: 15, fontWeight: 700, color: "var(--plum-soft)" }}>
-                {f.status === "won" ? `The enemy kneels. Knockouts: ${f.kos ?? 0} (+${(f.kos ?? 0) * 2} gold) · best combo: ${f.bestCombo}` : "You were knocked down. The run ends here."}
+                {f.status === "won" ? `${f.gate !== undefined ? "You escaped through the gate!" : "The enemy kneels."} Knockouts: ${f.kos ?? 0} (+${(f.kos ?? 0) * 2} gold) · best combo: ${f.bestCombo}` : "You were knocked down. The run ends here."}
               </span>
               <button className="pill-btn primary" style={{ marginTop: 6 }} onClick={() => { feedback.tap(); update(settle(run)); }}>
                 {f.status === "won" ? (run.at && nodeById(run.map, run.at).kind === "boss" ? "Escape!" : "Collect your reward") : "See results"}

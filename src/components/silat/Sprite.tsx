@@ -5,7 +5,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 export type SpriteId = "hero" | "pawn" | "knight" | "bishop" | "rook" | "queen" | "king" | "boss";
-export type Anim = "idle" | "kick" | "hit";
+/** idle loops. The hero also has: kick, hit, step (moved), block, dodge, win (loops) and ko (stays on its last frame). */
+export type Anim = "idle" | "kick" | "hit" | "step" | "block" | "dodge" | "win" | "ko";
 
 export interface Sheet {
   /** File name inside public/silat/sprites/. A horizontal strip: frames side by side, same size. */
@@ -77,13 +78,16 @@ function SheetPlayer({ sheet, loop, onDone }: { sheet: Sheet; loop: boolean; onD
 }
 
 /** Draws your sprite for `id` if sprites.json has one, else `fallback` (the built-in art).
- *  `play` + `nonce`: each new nonce plays that animation once (if drawn), then goes back to idle. */
-export function Sprite({ id, play, nonce = 0, fallback }: { id: SpriteId; play?: Anim; nonce?: number; fallback: ReactNode }) {
+ *  `play` + `nonce`: each new nonce plays that animation once (if drawn), then goes back to idle.
+ *  `hold`: an animation to stay in instead of idle (win loops; ko plays once and stays on its last frame). */
+export function Sprite({ id, play, nonce = 0, hold, fallback }: { id: SpriteId; play?: Anim; nonce?: number; hold?: Anim; fallback: ReactNode }) {
   const m = useManifest();
   const [done, setDone] = useState<number | null>(null);
   const anims = m?.[id];
   const idle = anims?.idle;
   if (!idle) return <>{fallback}</>;
+  const held = hold ? anims?.[hold] : undefined;
+  if (held) return <SheetPlayer key={hold} sheet={held} loop={hold !== "ko"} />;
   const oneShot = play && play !== "idle" && nonce && done !== nonce ? anims?.[play] : undefined;
   return oneShot
     ? <SheetPlayer key={`${play}-${nonce}`} sheet={oneShot} loop={false} onDone={() => setDone(nonce)} />

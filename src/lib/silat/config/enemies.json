@@ -1,90 +1,559 @@
 {
   "_about": "Enemy pieces, their variants and movesets, and bosses. See README.md in this folder.",
-
   "pieces": {
     "_about": "Base stats per chess piece. cost = how much of a fight's budget the piece uses.",
-    "p": { "name": "Pawn", "hp": 3, "hit": 2, "heavy": false, "cost": 1 },
-    "n": { "name": "Knight", "hp": 5, "hit": 3, "heavy": false, "cost": 3 },
-    "b": { "name": "Bishop", "hp": 5, "hit": 3, "heavy": false, "cost": 3 },
-    "r": { "name": "Rook", "hp": 7, "hit": 4, "heavy": true, "cost": 5 },
-    "q": { "name": "Queen", "hp": 7, "hit": 5, "heavy": true, "cost": 8 },
-    "k": { "name": "King", "hp": 16, "hit": 4, "heavy": true, "cost": 0 }
+    "p": {
+      "name": "Pawn",
+      "hp": 3,
+      "hit": 2,
+      "heavy": false,
+      "cost": 1
+    },
+    "n": {
+      "name": "Knight",
+      "hp": 5,
+      "hit": 3,
+      "heavy": false,
+      "cost": 3
+    },
+    "b": {
+      "name": "Bishop",
+      "hp": 5,
+      "hit": 3,
+      "heavy": false,
+      "cost": 3
+    },
+    "r": {
+      "name": "Rook",
+      "hp": 7,
+      "hit": 4,
+      "heavy": true,
+      "cost": 5
+    },
+    "q": {
+      "name": "Queen",
+      "hp": 7,
+      "hit": 5,
+      "heavy": true,
+      "cost": 8
+    },
+    "k": {
+      "name": "King",
+      "hp": 16,
+      "hit": 4,
+      "heavy": true,
+      "cost": 0
+    }
   },
-
   "moves": {
-    "_about": "Signature moves. kind is one of: kick, block, heal, summon, command. cooldown = turns before it can be used again. Every piece also keeps its normal chess strike/charge/move.",
+    "_about": "Signature moves. kind is one of: kick, block, heal, summon, command, slam, beam, whirl, pounce, curse, decree. damage left out = the piece's own hit. cooldown = turns before it can be used again. Every piece also keeps its normal chess strike/charge/move.",
     "back_kick": {
-      "name": "Sepak Belakang", "kind": "kick", "damage": 3, "push": 2, "cooldown": 1,
+      "name": "Sepak Belakang",
+      "kind": "kick",
+      "damage": 3,
+      "push": 2,
+      "cooldown": 1,
       "text": "Back kick: if you stand right beside it (where a knight can't normally hit), it kicks for {damage} and sends you {push} squares away."
     },
     "shield_up": {
-      "name": "Angkat Perisai", "kind": "block", "amount": 3, "range": 3, "cooldown": 2,
+      "name": "Angkat Perisai",
+      "kind": "block",
+      "amount": 3,
+      "range": 3,
+      "cooldown": 2,
       "text": "Raises its shield: blocks the next {amount} damage it takes."
     },
     "fortify": {
-      "name": "Bertahan", "kind": "block", "amount": 5, "range": 3, "cooldown": 2,
+      "name": "Bertahan",
+      "kind": "block",
+      "amount": 5,
+      "range": 3,
+      "cooldown": 2,
       "text": "Fortifies: blocks the next {amount} damage it takes."
     },
     "mend": {
-      "name": "Jampi", "kind": "heal", "amount": 3, "range": 2, "cooldown": 2,
+      "name": "Jampi",
+      "kind": "heal",
+      "amount": 3,
+      "range": 2,
+      "cooldown": 2,
       "text": "Heals the most hurt ally within {range} squares for {amount}."
     },
     "rally": {
-      "name": "Panggil Pengawal", "kind": "summon", "piece": "p", "cooldown": 3,
-      "text": "Calls a pawn to its side."
+      "name": "Panggil Pasukan",
+      "kind": "summon",
+      "piece": "p",
+      "count": 2,
+      "cooldown": 1,
+      "text": "Calls {count} pawns to its side."
     },
     "command": {
-      "name": "Perintah", "kind": "command", "bonus": 2, "range": 3, "cooldown": 2,
+      "name": "Perintah",
+      "kind": "command",
+      "bonus": 2,
+      "range": 3,
+      "cooldown": 2,
       "text": "Commands an ally within {range} squares: it acts next turn and hits {bonus} harder."
+    },
+    "slam": {
+      "name": "Hantam",
+      "kind": "slam",
+      "range": 2,
+      "text": "Slams the ground around you when you're within {range} squares: you and every square next to you get hit."
+    },
+    "beam": {
+      "name": "Sapuan Lurus",
+      "kind": "beam",
+      "text": "When you're in a straight or diagonal line with it, hits everything along that line, its own pieces too."
+    },
+    "whirl": {
+      "name": "Puting Beliung",
+      "kind": "whirl",
+      "push": 1,
+      "text": "When you're next to it, spins: hits you and knocks everything around it {push} square away."
+    },
+    "pounce": {
+      "name": "Terkam",
+      "kind": "pounce",
+      "range": 3,
+      "text": "Leaps to a square next to you (up to {range} away) and strikes."
+    },
+    "curse": {
+      "name": "Kutukan",
+      "kind": "curse",
+      "card": "kram",
+      "count": 2,
+      "cooldown": 1,
+      "text": "Curses you: shuffles {count} useless Kram cards into your draw pile for this fight."
+    },
+    "decree": {
+      "name": "Titah",
+      "kind": "decree",
+      "bonus": 1,
+      "range": 4,
+      "cooldown": 1,
+      "text": "Royal decree: every ally within {range} squares acts next turn and hits {bonus} harder."
+    },
+    "mass_mend": {
+      "name": "Jampi Agung",
+      "kind": "heal",
+      "amount": 2,
+      "range": 9,
+      "all": true,
+      "cooldown": 1,
+      "text": "Heals every hurt ally (and itself) for {amount}."
+    },
+    "fortify_big": {
+      "name": "Benteng Besi",
+      "kind": "block",
+      "amount": 8,
+      "range": 9,
+      "cooldown": 1,
+      "text": "Fortifies: blocks the next {amount} damage it takes."
     }
   },
-
   "variants": [
-    { "_about": "Fights pick a variant for each piece by weight, among those allowed on this floor (minRow/maxRow: map floor 0-6) and depth (minDepth). hp/hit override the piece's base stats; moves are tried before its normal chess moves." },
-    { "id": "pawn", "piece": "p", "weight": 6 },
-    { "id": "shield_pawn", "piece": "p", "name": "Pion Perisai", "hp": 4, "moves": ["shield_up"], "weight": 2, "minRow": 2 },
-
-    { "id": "knight", "piece": "n", "weight": 3 },
-    { "id": "wild_horse", "piece": "n", "name": "Kuda Liar", "moves": ["back_kick"], "weight": 3, "minRow": 1 },
-
-    { "id": "bishop", "piece": "b", "weight": 3 },
-    { "id": "dukun", "piece": "b", "name": "Dukun", "moves": ["mend"], "weight": 2, "minRow": 2 },
-
-    { "id": "rook", "piece": "r", "weight": 3 },
-    { "id": "tower", "piece": "r", "name": "Menara", "hp": 9, "moves": ["fortify"], "weight": 2, "minRow": 3 },
-
-    { "id": "queen", "piece": "q", "weight": 3 },
-    { "id": "war_queen", "piece": "q", "name": "Ratu Perang", "moves": ["command"], "weight": 2, "minDepth": 2 },
-
-    { "id": "young_king", "piece": "k", "name": "Raja Muda", "weight": 1, "maxRow": 1 },
-    { "id": "war_king", "piece": "k", "name": "Raja Perang", "moves": ["command", "rally"], "weight": 1, "minRow": 2, "maxRow": 3 },
-    { "id": "old_king", "piece": "k", "name": "Raja Tua", "moves": ["fortify", "rally"], "weight": 1, "minRow": 4 }
+    {
+      "_about": "Fights pick a variant for each piece by weight, among those allowed on this floor (minRow/maxRow: map floor 0-6) and depth (minDepth). hp/hit override the piece's base stats; moves are tried in order before its normal chess move. Slam is a move now: only pieces that list it slam."
+    },
+    {
+      "id": "pawn",
+      "piece": "p",
+      "weight": 6
+    },
+    {
+      "id": "shield_pawn",
+      "piece": "p",
+      "name": "Pion Perisai",
+      "hp": 4,
+      "moves": [
+        "shield_up"
+      ],
+      "weight": 2,
+      "minRow": 2
+    },
+    {
+      "id": "knight",
+      "piece": "n",
+      "weight": 3
+    },
+    {
+      "id": "wild_horse",
+      "piece": "n",
+      "name": "Kuda Liar",
+      "moves": [
+        "back_kick"
+      ],
+      "weight": 3,
+      "minRow": 1
+    },
+    {
+      "id": "bishop",
+      "piece": "b",
+      "weight": 3
+    },
+    {
+      "id": "dukun",
+      "piece": "b",
+      "name": "Dukun",
+      "moves": [
+        "mend"
+      ],
+      "weight": 2,
+      "minRow": 2
+    },
+    {
+      "id": "rook",
+      "piece": "r",
+      "weight": 3,
+      "moves": [
+        "slam"
+      ]
+    },
+    {
+      "id": "tower",
+      "piece": "r",
+      "name": "Menara",
+      "hp": 9,
+      "moves": [
+        "fortify",
+        "slam"
+      ],
+      "weight": 2,
+      "minRow": 3
+    },
+    {
+      "id": "queen",
+      "piece": "q",
+      "weight": 3
+    },
+    {
+      "id": "war_queen",
+      "piece": "q",
+      "name": "Ratu Perang",
+      "moves": [
+        "command"
+      ],
+      "weight": 2,
+      "minDepth": 2
+    },
+    {
+      "id": "young_king",
+      "piece": "k",
+      "name": "Raja Muda",
+      "weight": 1,
+      "maxRow": 1
+    },
+    {
+      "id": "war_king",
+      "piece": "k",
+      "name": "Raja Perang",
+      "moves": [
+        "command",
+        "rally"
+      ],
+      "weight": 1,
+      "minRow": 2,
+      "maxRow": 3
+    },
+    {
+      "id": "old_king",
+      "piece": "k",
+      "name": "Raja Tua",
+      "moves": [
+        "fortify",
+        "rally"
+      ],
+      "weight": 1,
+      "minRow": 4
+    }
   ],
-
   "traits": {
     "_about": "Boss and elite powers. Names and descriptions only; what they do is in the code.",
-    "perisai": { "name": "Perisai", "text": "Armoured: every hit on it deals 1 less (at least 1)." },
-    "pulih": { "name": "Pulih", "text": "Heals 2 HP at the end of every enemy turn." },
-    "duri": { "name": "Duri", "text": "Spiked: each time you hurt it on your turn, you take 1." },
-    "pemanggil": { "name": "Pemanggil", "text": "Calls a pawn every 2 turns." },
-    "kokoh": { "name": "Kokoh", "text": "Rooted: pushes and throws can't move it." },
-    "murka": { "name": "Murka", "text": "Below half HP it rises in fury: hits harder and calls 2 pawns." },
-    "bayangan": { "name": "Bayangan", "text": "If you end next to it, it vanishes to the far side of the board." }
-  },
-
-  "eliteTraits": ["perisai", "kokoh", "duri", "pulih"],
-
-  "bosses": {
-    "first": { "name": "Raja Hitam", "piece": "k", "hp": 30, "hit": 4, "traits": ["murka"] },
-    "pieces": ["k", "q", "r", "b", "n"],
-    "titles": {
-      "k": ["Raja", "Sultan"],
-      "q": ["Ratu", "Permaisuri"],
-      "r": ["Sipir", "Mandor"],
-      "b": ["Dukun", "Penasihat"],
-      "n": ["Panglima", "Pendekar"]
+    "perisai": {
+      "name": "Perisai",
+      "text": "Armoured: every hit on it deals 1 less (at least 1)."
     },
-    "epithets": ["Besi", "Kelam", "Api", "Bisu", "Taring", "Rantai", "Kabut", "Batu", "Racun", "Gila", "Petir", "Bayang", "Karat", "Tanpa Wajah"],
-    "powers": ["perisai", "pulih", "duri", "pemanggil", "kokoh", "murka", "bayangan"]
+    "pulih": {
+      "name": "Pulih",
+      "text": "Heals 2 HP at the end of every enemy turn."
+    },
+    "duri": {
+      "name": "Duri",
+      "text": "Spiked: each time you hurt it on your turn, you take 1."
+    },
+    "pemanggil": {
+      "name": "Pemanggil",
+      "text": "Calls a pawn every 2 turns."
+    },
+    "kokoh": {
+      "name": "Kokoh",
+      "text": "Rooted: pushes and throws can't move it."
+    },
+    "murka": {
+      "name": "Murka",
+      "text": "Below half HP it rises in fury: hits harder and calls 2 pawns."
+    },
+    "bayangan": {
+      "name": "Bayangan",
+      "text": "If you end next to it, it vanishes to the far side of the board."
+    }
+  },
+  "eliteTraits": [
+    "perisai",
+    "kokoh",
+    "duri",
+    "pulih"
+  ],
+  "bosses": {
+    "first": {
+      "name": "Raja Hitam",
+      "piece": "k",
+      "hp": 30,
+      "hit": 4,
+      "traits": [
+        "murka"
+      ],
+      "kit": "raja_hitam"
+    },
+    "pieces": [
+      "k",
+      "q",
+      "r",
+      "b",
+      "n"
+    ],
+    "epithets": [
+      "Besi",
+      "Kelam",
+      "Api",
+      "Bisu",
+      "Taring",
+      "Rantai",
+      "Kabut",
+      "Batu",
+      "Racun",
+      "Gila",
+      "Petir",
+      "Bayang",
+      "Karat",
+      "Tanpa Wajah"
+    ],
+    "powers": [
+      "perisai",
+      "pulih",
+      "duri",
+      "pemanggil",
+      "kokoh",
+      "murka",
+      "bayangan"
+    ],
+    "_about": "Bosses. Each boss uses a kit: it cycles through 'pattern' (skipping moves that can't happen right now) and switches to 'phase2' below half HP. Generated bosses pick a kit for their piece and take their name from the kit's titles plus an epithet.",
+    "kits": [
+      {
+        "id": "raja_hitam",
+        "piece": "k",
+        "name": "Raja Hitam",
+        "pattern": [
+          "decree",
+          "rally",
+          "slam"
+        ],
+        "phase2": [
+          "whirl",
+          "pounce",
+          "rally"
+        ]
+      },
+      {
+        "id": "raja_perang",
+        "piece": "k",
+        "titles": [
+          "Raja",
+          "Sultan"
+        ],
+        "name": "War King",
+        "pattern": [
+          "decree",
+          "rally",
+          "slam"
+        ],
+        "phase2": [
+          "whirl",
+          "rally",
+          "decree"
+        ]
+      },
+      {
+        "id": "raja_licik",
+        "piece": "k",
+        "titles": [
+          "Raja Licik",
+          "Sultan Bayang"
+        ],
+        "name": "Sly King",
+        "pattern": [
+          "curse",
+          "pounce",
+          "rally"
+        ],
+        "phase2": [
+          "curse",
+          "whirl",
+          "pounce"
+        ]
+      },
+      {
+        "id": "ratu_badai",
+        "piece": "q",
+        "titles": [
+          "Ratu Badai",
+          "Permaisuri Badai"
+        ],
+        "name": "Storm Queen",
+        "pattern": [
+          "beam",
+          "decree",
+          "beam"
+        ],
+        "phase2": [
+          "beam",
+          "whirl",
+          "beam"
+        ]
+      },
+      {
+        "id": "ratu_ular",
+        "piece": "q",
+        "titles": [
+          "Ratu Ular",
+          "Permaisuri Ular"
+        ],
+        "name": "Serpent Queen",
+        "pattern": [
+          "pounce",
+          "curse",
+          "pounce"
+        ],
+        "phase2": [
+          "pounce",
+          "whirl",
+          "curse"
+        ]
+      },
+      {
+        "id": "sipir",
+        "piece": "r",
+        "titles": [
+          "Sipir",
+          "Kepala Sipir"
+        ],
+        "name": "Warden",
+        "pattern": [
+          "slam",
+          "fortify_big",
+          "beam"
+        ],
+        "phase2": [
+          "beam",
+          "slam",
+          "rally"
+        ]
+      },
+      {
+        "id": "mandor",
+        "piece": "r",
+        "titles": [
+          "Mandor",
+          "Mandor Rantai"
+        ],
+        "name": "Overseer",
+        "pattern": [
+          "beam",
+          "rally",
+          "fortify_big"
+        ],
+        "phase2": [
+          "slam",
+          "beam",
+          "rally"
+        ]
+      },
+      {
+        "id": "dukun_hitam",
+        "piece": "b",
+        "titles": [
+          "Dukun Hitam",
+          "Dukun"
+        ],
+        "name": "Black Shaman",
+        "pattern": [
+          "curse",
+          "mass_mend",
+          "beam"
+        ],
+        "phase2": [
+          "curse",
+          "beam",
+          "curse"
+        ]
+      },
+      {
+        "id": "penasihat",
+        "piece": "b",
+        "titles": [
+          "Penasihat",
+          "Wazir"
+        ],
+        "name": "Vizier",
+        "pattern": [
+          "decree",
+          "mass_mend",
+          "beam"
+        ],
+        "phase2": [
+          "beam",
+          "decree",
+          "beam"
+        ]
+      },
+      {
+        "id": "panglima",
+        "piece": "n",
+        "titles": [
+          "Panglima",
+          "Panglima Kuda"
+        ],
+        "name": "Cavalry General",
+        "pattern": [
+          "pounce",
+          "back_kick",
+          "whirl"
+        ],
+        "phase2": [
+          "pounce",
+          "whirl"
+        ]
+      },
+      {
+        "id": "pendekar",
+        "piece": "n",
+        "titles": [
+          "Pendekar",
+          "Pendekar Liar"
+        ],
+        "name": "Wild Swordsman",
+        "pattern": [
+          "pounce",
+          "rally",
+          "whirl"
+        ],
+        "phase2": [
+          "pounce",
+          "pounce",
+          "whirl"
+        ]
+      }
+    ]
   }
 }

@@ -4,19 +4,31 @@ import { useState, type CSSProperties } from "react";
 import { Piece } from "@/components/chess/Board";
 import { SilatKing } from "@/components/shell";
 import { RIVE_ON, RiveDice, RiveHero } from "@/components/silat/RiveSprites";
-import { Sprite, spriteFor } from "@/components/silat/Sprite";
+import { Sprite, spriteFor, type Anim } from "@/components/silat/Sprite";
 import type { MoveKind } from "@/lib/silat/config";
-import { DIRS, TRAITS, type Scene, chargeEnd, col, intentValid, isGuarded, moveDef, moveText, occupant, row, slamArea, unitHit, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
+import { DIRS, TRAITS, type Scene, chargeEnd, col, intentValid, isGuarded, moveDef, moveText, occupant, row, slamArea, specialDanger, unitHit, type Fight, type Fx, type Intent, type Kind } from "@/lib/silat/rules";
 
 const FILES = "abcdefgh";
 
 /** Intent badge colour and icon for each kind of signature move. */
-const SPECIAL_COLOR: Record<MoveKind, string> = { kick: "#FF4B4B", block: "#1899D6", heal: "#46A302", summon: "#8A4FB5", command: "#CE82FF" };
-const SPECIAL_ICON: Record<Exclude<MoveKind, "kick">, string> = {
+const SPECIAL_COLOR: Record<MoveKind, string> = {
+  kick: "#FF4B4B", beam: "#FF4B4B", whirl: "#FF4B4B", pounce: "#FF4B4B", slam: "#FF4B4B",
+  block: "#1899D6", heal: "#46A302", summon: "#8A4FB5", command: "#CE82FF", decree: "#CE82FF", curse: "#3C3C3C",
+};
+/** Moves that hit you (red badge with damage, red danger squares). */
+const ATTACK_KINDS = new Set<MoveKind>(["kick", "beam", "whirl", "pounce", "slam"]);
+const SPECIAL_ICON: Record<MoveKind, string> = {
+  kick: "M2 2 L5 5 L2 8 M5 2 L8 5 L5 8",
+  beam: "M5 9 V1.5 M2.5 4 L5 1.5 L7.5 4 M3.5 6.5 H6.5",
+  whirl: "M8 5 A3 3 0 1 1 5 2 M5 2 L6.8 1 M5 2 L6.4 3.6",
+  pounce: "M1.5 8.5 Q3 2 8.5 2 M6 1 L8.5 2 L7 4.3",
+  slam: "M5 1 V3 M5 7 V9 M1 5 H3 M7 5 H9 M2 2 L3.4 3.4 M6.6 6.6 L8 8 M8 2 L6.6 3.4 M3.4 6.6 L2 8",
   block: "M5 1 L8.5 2.5 V5 C8.5 7.3 6.8 8.6 5 9.2 C3.2 8.6 1.5 7.3 1.5 5 V2.5z",
   heal: "M5 1.5 V8.5 M1.5 5 H8.5",
   summon: "M5 1.5 a1.6 1.6 0 1 1 0 3.2 a1.6 1.6 0 1 1 0 -3.2 M3 8.5 L5 4.7 L7 8.5z",
   command: "M2.5 9 V1.5 L8 3.5 L2.5 5.5",
+  decree: "M1.5 7.5 L2.5 3 L5 5 L7.5 3 L8.5 7.5z",
+  curse: "M2.5 2.5 L7.5 7.5 M7.5 2.5 L2.5 7.5",
 };
 
 /** Each part of the prison is a real place with a subtle grid on top, not a plain checkerboard.
@@ -87,6 +99,7 @@ const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   fury: () => ["MURKA!", "#FF4B4B"],
   guard: (f) => [`+${"n" in f ? f.n : ""} shield`, "#1CB0F6"],
   command: () => ["ORDERS!", "#CE82FF"],
+  gate: (f) => (f.t === "gate" && f.open ? ["GATE OPEN!", "#58CC02"] : ["", ""]),
   heal: (f) => [`+${"n" in f ? f.n : ""}`, "#58CC02"],
   capture: () => ["CAPTURE!", "#1CB0F6"],
   parry: () => ["SIAP!", "#58CC02"],
@@ -125,10 +138,10 @@ export function SilatBoard({
   live.forEach((it) => {
     const u = p.units.find((x) => x.id === it.id)!;
     const m = it.type === "special" ? moveDef(it.move) : undefined;
-    const hit = m ? (m.kind === "kick" ? (m.damage ?? 0) + (u.empower ?? 0) : 0) : unitHit(u);
+    const hit = m ? (ATTACK_KINDS.has(m.kind) ? (m.damage !== undefined ? m.damage + (u.empower ?? 0) : unitHit(u)) : 0) : unitHit(u);
     badges.set(it.id, { ord: p.intents.indexOf(it) + 1, it, hit });
     if (it.type === "special") {
-      if (m?.kind === "kick" && it.target !== undefined) danger.set(it.target, (danger.get(it.target) ?? 0) + hit);
+      for (const sq of specialDanger(p, u, it)) if (!p.units.some((v) => v.sq === sq)) danger.set(sq, (danger.get(sq) ?? 0) + hit);
       return;
     }
     if (it.type === "slam") {
@@ -167,7 +180,7 @@ export function SilatBoard({
 
   // Pieces that just left the board: keep drawing them for a moment while they fly off or fade.
   type Leaving = { id: number; kind: Kind; from: number; tx: number; ty: number };
-  const [snap, setSnap] = useState<{ key: number; units: Fight["units"]; leaving: Leaving[] }>({ key: fxKey, units: s.units, leaving: [] });
+  const [snap, setSnap] = useState<{ key: number; units: Fight["units"]; leaving: Leaving[]; heroSq: number; stepped: boolean; left: boolean }>({ key: fxKey, units: s.units, leaving: [], heroSq: s.hero.sq, stepped: false, left: false });
   if (snap.key !== fxKey) {
     const leaving = snap.units
       .filter((u) => !s.units.some((x) => x.id === u.id))
@@ -177,13 +190,18 @@ export function SilatBoard({
         const [dx, dy] = f?.t === "ringout" && f.dir !== undefined ? DIRS[f.dir] : [0, 0];
         return { id: u.id, kind: u.kind, from: u.sq, tx: (col(s, end) - col(s, u.sq) + dx * 1.6) * 100, ty: (row(s, end) - row(s, u.sq) + dy * 1.6) * 100 };
       });
-    setSnap({ key: fxKey, units: s.units, leaving });
+    // The hero's sprite faces right: turn it to face the way it last kicked or walked.
+    const lunge = s.fx.find((x): x is Extract<Fx, { t: "lunge" }> => x.t === "lunge");
+    const dx = lunge ? DIRS[lunge.dir][0] : col(s, s.hero.sq) - col(s, snap.heroSq);
+    setSnap({ key: fxKey, units: s.units, leaving, heroSq: s.hero.sq, stepped: snap.heroSq !== s.hero.sq, left: dx < 0 ? true : dx > 0 ? false : snap.left });
   }
   const arrowAngle = (u: { sq: number }, it: Intent) => {
     if (it.type === "charge") return it.dir * 45;
     if (it.type === "slam") return 0;
     if (it.type === "special") {
-      if (it.target === undefined || moveDef(it.move)?.kind !== "kick") return 0;
+      const kind = moveDef(it.move)?.kind;
+      if (kind === "beam" && it.dir !== undefined) return it.dir * 45;
+      if ((kind !== "kick" && kind !== "pounce") || it.target === undefined) return 0;
       return Math.round((Math.atan2(row(s, it.target) - row(s, u.sq), col(s, it.target) - col(s, u.sq)) * 180) / Math.PI) + 90;
     }
     const to = it.type === "move" ? it.to : it.target;
@@ -202,7 +220,7 @@ export function SilatBoard({
           const bg = mud ? (light ? "#C9A27A" : "#B48A60") : light ? look.tint : "transparent";
           const label = `${FILES[cc]}${n - r}`;
           return (
-            <button key={sq} type="button" className="sl-sq" style={{ background: bg, boxShadow: `inset 0 0 0 0.5px ${look.line}` }} aria-label={danger.has(sq) ? `${label}, will be hit for ${danger.get(sq)}` : label} onClick={() => onTap?.(sq)}>
+            <button key={sq} type="button" className="sl-sq" style={{ background: bg, boxShadow: `inset 0 0 0 0.5px ${look.line}` }} aria-label={`${label}${s.gate === sq ? (s.gateOpen ? ", the gate (open: step here to escape)" : ", the gate (locked)") : ""}${danger.has(sq) ? `, will be hit for ${danger.get(sq)}` : ""}`} onClick={() => onTap?.(sq)}>
               {cc === 0 && <span className="coord" style={{ left: 3, top: 1, color: light ? look.ink : look.inkAlt }}>{n - r}</span>}
               {r === n - 1 && <span className="coord" style={{ right: 3, bottom: 0, color: light ? look.ink : look.inkAlt }}>{FILES[cc]}</span>}
               {danger.has(sq) && (
@@ -215,6 +233,12 @@ export function SilatBoard({
                 </>
               )}
               {s.hop === sq && <span className="sl-hop" />}
+              {s.gate === sq && (
+                <span className={`sl-gate${s.gateOpen ? " open" : ""}`} aria-hidden="true">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- pixel sprite */}
+                  <img src={s.gateOpen ? "/silat/pixel/gate-open.png" : "/silat/pixel/gate-locked.png"} alt="" className="px" />
+                </span>
+              )}
             </button>
           );
         })}
@@ -228,7 +252,7 @@ export function SilatBoard({
       {s.units.map((u) => {
         const b = badges.get(u.id);
         const special = b?.it.type === "special" ? moveDef(b.it.move) : undefined;
-        const attack = b && b.it.type !== "move" && (!special || special.kind === "kick");
+        const attack = b && b.it.type !== "move" && (!special || ATTACK_KINDS.has(special.kind));
         return (
           <div key={`u${u.id}`} className={`sl-tok${marks.get(u.sq)?.gone ? " sl-doomed" : ""}${u.boss ? " sl-bossglow" : ""}`} style={at(u.sq)}>
             <Sprite
@@ -245,10 +269,8 @@ export function SilatBoard({
                 aria-label={`acts ${b.ord}${special ? `, ${special.name}` : ""}${attack ? `, hits for ${b.hit}` : special ? "" : ", moves"}`} title={special ? `${special.name}: ${b.it.type === "special" ? moveText(b.it.move) : ""}` : undefined}>
                 {b.ord}
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style={{ transform: `rotate(${arrowAngle(u, b.it)}deg)` }}>
-                  {special && special.kind !== "kick" ? (
-                    <path d={SPECIAL_ICON[special.kind]} stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  ) : special ? (
-                    <path d="M2 2 L5 5 L2 8 M5 2 L8 5 L5 8" stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  {special ? (
+                    <path d={SPECIAL_ICON[special.kind]} stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                   ) : b.it.type === "slam" ? (
                     <path d="M5 1 V3 M5 7 V9 M1 5 H3 M7 5 H9 M2 2 L3.4 3.4 M6.6 6.6 L8 8 M8 2 L6.6 3.4 M3.4 6.6 L2 8" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
                   ) : b.it.type === "strike" ? (
@@ -285,15 +307,25 @@ export function SilatBoard({
         ) : (() => {
           const l = s.fx.find((x): x is Extract<Fx, { t: "lunge" }> => x.t === "lunge");
           const [dx, dy] = l ? DIRS[l.dir] : [0, 0];
-          const hurt = s.fx.some((x) => x.t === "dmg" && x.hero);
+          const here = (t: Fx["t"]) => s.fx.some((x) => x.t === t && x.sq === s.hero.sq);
+          // Which of the hero's animations this batch of effects calls for, most important first.
+          const play: Anim | undefined = s.fx.some((x) => x.t === "dmg" && x.hero) ? "hit"
+            : l || s.fx.some((x) => x.t === "capture") ? "kick"
+            : here("dodge") ? "dodge"
+            : here("block") || here("parry") ? "block"
+            : snap.stepped ? "step"
+            : undefined;
           return (
             <span key={l ? `l${fxKey}` : "still"} className={l ? "sl-lunge" : undefined} style={{ display: "block", width: "100%", height: "100%", ["--lx" as string]: `${dx * 34}%`, ["--ly" as string]: `${dy * 34}%` }}>
-              <Sprite
-                id="hero"
-                play={hurt ? "hit" : "kick"}
-                nonce={hurt || l || s.fx.some((x) => x.t === "capture") ? fxKey : 0}
-                fallback={<SilatKing prisoner />}
-              />
+              <span style={{ display: "block", width: "100%", height: "100%", transform: snap.left ? "scaleX(-1)" : undefined }}>
+                <Sprite
+                  id="hero"
+                  play={play}
+                  nonce={play ? fxKey : 0}
+                  hold={s.status === "lost" ? "ko" : s.status === "won" ? "win" : undefined}
+                  fallback={<SilatKing prisoner />}
+                />
+              </span>
             </span>
           );
         })()}
