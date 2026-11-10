@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Piece } from "@/components/chess/Board";
 import { ShellPage, SilatKing } from "@/components/shell";
 import { Icon } from "@/components/ui";
+import { Gem } from "@/components/trivia/common";
 import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
 
@@ -62,8 +63,23 @@ const GAMES: Game[] = [
     face: "#E5383B",
     edge: "#A52126",
     ink: "#A52126",
-    tag: "NEW",
     art: <SilatKing size={92} band="#FFC800" bandInk="#8E5A00" />,
+  },
+  {
+    href: "/trivia",
+    name: "Quiz Loop",
+    sub: "Trivia board game",
+    face: "#4A3F55",
+    edge: "#2F2838",
+    ink: "#4A3F55",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 96, height: 90 }} aria-hidden="true">
+        {[[0, 30, 40, -14], [3, 26, 6, 10], [5, 50, 22, 2]].map(([cat, x, y, rot]) => (
+          <span key={cat} style={{ position: "absolute", left: x - 18, top: y, transform: `rotate(${rot}deg)`, filter: "drop-shadow(0 3px 0 rgba(0,0,0,.25))" }}><Gem cat={cat} size={cat === 5 ? 56 : 44} /></span>
+        ))}
+      </span>
+    ),
   },
 ];
 

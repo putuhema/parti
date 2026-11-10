@@ -93,7 +93,8 @@ export async function freeCode(ctx: QueryCtx) {
     const a = await ctx.db.query("rooms").withIndex("by_code", (q) => q.eq("code", code)).first();
     const b = await ctx.db.query("chessRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
     const c = await ctx.db.query("wordRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
-    if ((!a || a.status === "finished") && (!b || b.status === "finished") && (!c || c.status === "finished")) break;
+    const d = await ctx.db.query("triviaRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
+    if ([a, b, c, d].every((r) => !r || r.status === "finished")) break;
   }
   return code;
 }

@@ -157,6 +157,18 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  triviaRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    goal: v.number(), // gems needed to win
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see TriviaGame in convex/trivia.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
   chessReactions: defineTable({
     roomId: v.id("chessRooms"),
     playerId: v.id("players"),

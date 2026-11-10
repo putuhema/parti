@@ -723,3 +723,33 @@ a { text-decoration: none; }
 .sl-pattern span { padding: 1px 6px; border-radius: 999px; background: #efe7dc; color: var(--plum-soft); font-size: 10px; font-weight: 900; }
 .sl-pattern span.next { background: #ff4b4b; color: #fff; }
 .sl-pattern b { font-size: 10px; color: #b81f1f; }
+
+/* ---------- Quiz Loop ---------- */
+.tq-hero { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 12px; border-radius: 24px; background: var(--cream-2); box-shadow: 0 4px 0 var(--cream-3); }
+.tq-card { border-radius: 22px; background: var(--cream-2); box-shadow: 0 4px 0 var(--cream-3); padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.tq-players { display: grid; gap: 6px; }
+.tq-player { display: flex; flex-direction: column; gap: 5px; padding: 6px 8px; border-radius: 14px; border: 2px solid var(--line); background: #fff; min-width: 0; transition: border-color 200ms, box-shadow 200ms; }
+.tq-stage { position: relative; width: 100%; max-width: min(100%, 440px, calc(100dvh - 330px)); min-width: min(100%, 300px); margin: 0 auto; }
+.tq-board { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: repeat(7, minmax(0, 1fr)); gap: 3px; aspect-ratio: 1; padding: 6px; border-radius: 22px; background: #fff; border: 2px solid var(--cream-3); box-shadow: 0 5px 0 var(--cream-3); }
+.tq-space { border: 0; padding: 0; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 900; cursor: default; min-width: 0; min-height: 0; transition: transform 160ms var(--spring); }
+.tq-space:disabled { opacity: 1; }
+.tq-space.target { position: relative; z-index: 1; cursor: pointer; animation: tqpulse 1s ease-in-out infinite; outline: 3px solid var(--plum); outline-offset: 1px; }
+.tq-space.target:active { transform: scale(.92); }
+.tq-emoji { font-size: clamp(13px, 4.2cqw, 20px); line-height: 1; filter: saturate(.9); }
+.tq-center { grid-row: 2 / 7; grid-column: 2 / 7; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; border-radius: 16px; background: var(--paper); }
+.tq-token { position: absolute; width: calc((100% - 12px) / 7 * .46); aspect-ratio: 1; border-radius: 50%; border: 2.5px solid #fff; transform: translate(-50%, -50%); transition: left 520ms var(--spring), top 520ms var(--spring); pointer-events: none; }
+.tq-token.on { animation: tqhop 1.2s ease-in-out infinite; }
+.tq-actions { display: flex; flex-direction: column; gap: 8px; min-height: 96px; }
+.tq-question { position: absolute; inset: 0 0 auto 0; min-height: 100%; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 22px; background: #fff; border: 3px solid; }
+.tq-choice { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 6px 12px 6px 6px; border-radius: 14px; border: 2px solid var(--line); background: #fff; box-shadow: 0 3px 0 var(--line); font-size: 16px; font-weight: 800; color: var(--ink); cursor: pointer; transition: transform var(--press), background 200ms; }
+.tq-choice:active:not(:disabled) { transform: translateY(3px); box-shadow: none; }
+.tq-choice:disabled { cursor: default; }
+.tq-choice.right { background: var(--lime); border-color: var(--lime-edge); box-shadow: 0 3px 0 var(--lime-edge); color: #fff; animation: pop 300ms var(--spring); }
+.tq-choice.wrong { background: var(--cherry); border-color: var(--cherry-edge); box-shadow: 0 3px 0 var(--cherry-edge); color: #fff; animation: shake 360ms ease-out; }
+.tq-choice.dim { opacity: .5; }
+.tq-letter { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; flex-shrink: 0; background: rgba(255,255,255,.3); }
+.tq-die-roll { animation: tqroll 520ms var(--spring); }
+@keyframes tqpulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+@keyframes tqhop { 0%,100% { transform: translate(-50%, -50%); } 50% { transform: translate(-50%, -72%); } }
+@keyframes tqroll { 0% { transform: rotate(-200deg) scale(.4); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tq-token, .tq-token.on, .tq-space.target, .tq-die-roll { animation: none; transition: none; } }

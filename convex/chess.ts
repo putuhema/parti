@@ -228,7 +228,18 @@ export const joinAny = mutation({
     const chessRoom = await roomByCode(ctx, c);
     const sudoku = await ctx.db.query("rooms").withIndex("by_code", (q) => q.eq("code", c)).first();
     const words = await ctx.db.query("wordRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
-    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0);
+    const trivia = await ctx.db.query("triviaRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0);
+    if (trivia && trivia._creationTime === newest) {
+      if (!trivia.members.some((m) => m.playerId === me._id)) {
+        if (trivia.members.length >= MAX_MEMBERS) throw new ConvexError("This room is full");
+        const taken = new Set(trivia.members.map((m) => m.seat));
+        let seat = 0;
+        while (taken.has(seat)) seat++;
+        await ctx.db.patch(trivia._id, { members: [...trivia.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/trivia/room/${trivia.code}`;
+    }
     if (words && words._creationTime === newest) {
       if (!words.members.some((m) => m.playerId === me._id)) {
         if (words.members.length >= MAX_MEMBERS) throw new ConvexError("This room is full");
