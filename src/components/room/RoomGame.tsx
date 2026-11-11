@@ -85,6 +85,10 @@ export function RoomGame({ room }: { room: RoomView }) {
   const seatPaint = new Map(room.players.map((p) => [String(p.seat), paints.get(p.id)!]));
   const digitColor = coop && room.owners ? (cell: number) => seatPaint.get(room.owners![cell])?.ink : undefined;
 
+  // The finish: co-op when the team completes the board, a race when your own board is done.
+  const solved = coop ? room.outcome === "won" : !!room.myFinishedAt;
+  const rank = room.myFinishedAt ? room.players.filter((p) => p.finishedAt && p.finishedAt <= room.myFinishedAt!).length : 0;
+  const finishNote = coop ? "Team solved it!" : rank ? `${rank}${["st", "nd", "rd"][rank - 1] ?? "th"} place!` : undefined;
   const elapsed = Math.max(0, now - startAt);
   const heartsLeft = Math.max(0, room.maxLives - room.myMistakes);
   const teamFilled = room.players.reduce((n, p) => n + p.filled, 0);
@@ -146,7 +150,9 @@ export function RoomGame({ room }: { room: RoomView }) {
           hints={hints}
           digitColor={digitColor}
           cursors={cursors}
-          disabled={counting}
+          disabled={counting || solved}
+          solved={solved}
+          finishNote={finishNote}
           announce={announce}
         />
       )}

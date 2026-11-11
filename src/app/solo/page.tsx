@@ -273,6 +273,7 @@ function SoloGame({ label, picked, onAgain, onChange, onDrill }: { label: string
         right={<span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={{ fontSize: 18, fontWeight: 900, color: "var(--muted)" }}>{formatTime((doneAt ?? now) - startedAt)}</span><Hearts left={Math.max(0, 3 - mistakes)} total={3} /></span>}
       />
       <Game puzzle={puzzle} values={values} onPlace={onPlace} hints={hintApi} disabled={!!doneAt}
+        solved={!!doneAt} finishNote={doneAt ? `${formatTime(doneAt - startedAt)} · ${mistakes} mistake${mistakes === 1 ? "" : "s"}` : undefined}
         coach={marks} focusCell={focus} notesPatch={notesPatch}
         onUndoPatch={(id) => { for (const k of patchElims.current.get(id) ?? []) known.current.delete(k); patchElims.current.delete(id); }}
         coachTool={doneAt ? undefined : { onClick: askCoach, active: !!lesson, pulse: !lesson && now - lastProgress > STUCK_MS }}
@@ -310,7 +311,8 @@ function SoloGame({ label, picked, onAgain, onChange, onDrill }: { label: string
           onClose={() => setLesson(null)}
         />
       )}
-      {doneAt && (
+      {/* The board's SOLVED! celebration plays first; the summary follows. */}
+      {doneAt && now - doneAt > 2200 && (
         <div className="overlay">
           <Confetti />
           <Mascot size={120} mood="joy" className="jump" />

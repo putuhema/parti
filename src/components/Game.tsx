@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { peersOf } from "../../convex/lib/sudoku";
 import { feedback } from "@/lib/feedback";
-import { Icon, type Paint } from "./ui";
+import { Confetti, Icon, type Paint } from "./ui";
 
 export type PlaceResult = { correct: boolean; row: boolean; col: boolean; box: boolean; finished: boolean; lockMs?: number };
 
@@ -18,6 +18,10 @@ type Props = {
   onSelect?: (cell: number) => void;
   hints?: { left: number; use: (cell: number) => Promise<PlaceResult> } | null;
   disabled?: boolean;
+  /** The puzzle is solved (by you or, in co-op, a teammate): play the finish celebration. */
+  solved?: boolean;
+  /** A line under SOLVED!, e.g. "1st place!". */
+  finishNote?: string;
   /** Extra line shown in the toast slot, e.g. "Maya placed a 6". */
   announce?: { id: string | number; text: string; kind?: ToastKind } | null;
   /** Coach overlay: what to highlight on the board for the current lesson step. */
@@ -59,7 +63,7 @@ const CORNER_RADIUS: Record<number, "borderTopLeftRadius" | "borderTopRightRadiu
   0: "borderTopLeftRadius", 8: "borderTopRightRadius", 72: "borderBottomLeftRadius", 80: "borderBottomRightRadius",
 };
 
-export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, announce, coach, coachTool, focusCell, notesPatch, onUndoPatch, wrongTip }: Props) {
+export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, solved, finishNote, announce, coach, coachTool, focusCell, notesPatch, onUndoPatch, wrongTip }: Props) {
   const firstEmpty = useMemo(() => Math.max(0, values.indexOf("0")), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [sel, setSel] = useState<number>(firstEmpty);
   const [notesMode, setNotesMode] = useState(false);
@@ -70,7 +74,14 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
   const [anim, setAnim] = useState<{ cell: number; kind: "pop" | "shake"; id: number } | null>(null);
   /** Cells that show why a number was wrong (they flash briefly). */
   const [conflict, setConflict] = useState<{ cells: number[]; id: number } | null>(null);
-  const [sweep, setSweep] = useState<{ cells: Map<number, number>; id: number } | null>(null);
+  const [sweep, setSweep] = useState<{ cells: Map<number, number>; id: number; color?: string } | null>(null);
+  /** Double and triple clears jolt the board. */
+  const [jolt, setJolt] = useState(0);
+  /** A number-pad key that just completed (all nine placed). */
+  const [keyBurst, setKeyBurst] = useState<{ d: number; id: number } | null>(null);
+  /** The finish celebration: a wave over the whole board and a SOLVED! stamp. */
+  const [finished, setFinished] = useState(false);
+  if (solved && !finished) setFinished(true);
   const [toast, setToast] = useState<{ text: string; kind: ToastKind; id: number; ms: number; low?: boolean } | null>(null);
   const combo = useRef(0);
   const seq = useRef(1);
@@ -126,31 +137,62 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
   );
 
   const celebrate = useCallback(
-    (cell: number, r: PlaceResult) => {
+    (cell: number, r: PlaceResult, digit?: number) => {
       setAnim({ cell, kind: "pop", id: seq.current++ });
       combo.current += 1;
+      if (r.finished) { setFinished(true); return; }
       const p = peersOf(cell);
       const cells = new Map<number, number>();
-      let label = "";
-      const add = (list: number[]) => list.forEach((j, k) => !cells.has(j) && cells.set(j, k));
-      if (r.row) { add(p.row); label = "Row cleared!"; }
-      if (r.col) { add(p.col); label = label ? "Double clear!" : "Column cleared!"; }
-      if (r.box) { add(p.box); label = label ? (r.row && r.col ? "Triple clear!" : "Double clear!") : "Box cleared!"; }
-      if (r.finished) feedback.win();
-      else if (label) feedback.clear();
-      else feedback.correct(combo.current);
-      if (cells.size) {
+      const groups: string[] = [];
+      // Cells light up in a wave, spreading from the one you just placed.
+      const add = (list: number[]) => list.forEach((j) => {
+        const dist = Math.max(Math.abs(Math.floor(j / 9) - Math.floor(cell / 9)), Math.abs((j % 9) - (cell % 9)));
+        if (!cells.has(j) || cells.get(j)! > dist) cells.set(j, dist);
+      });
+      if (r.row) { add(p.row); groups.push("ROW"); }
+      if (r.col) { add(p.col); groups.push("COLUMN"); }
+      if (r.box) { add(p.box); groups.push("BOX"); }
+      const n = groups.length;
+      if (n) {
+        feedback.clear(n, combo.current);
         const id = seq.current++;
         setSweep({ cells, id });
-        later(() => setSweep((s) => (s?.id === id ? null : s)), 1000);
-      }
-      if (!r.finished) {
-        if (label) showToast(label, "clear");
-        else if (combo.current >= 3) showToast(`Combo ×${combo.current}!`, "combo");
-      }
+        later(() => setSweep((s) => (s?.id === id ? null : s)), 1100);
+        if (n >= 2) { setJolt(id); later(() => setJolt((j) => (j === id ? 0 : j)), 400); }
+        showToast(n === 1 ? `${groups[0]}!` : n === 2 ? "DOUBLE!" : "TRIPLE!", "clear");
+      } else feedback.correct(combo.current);
+      // All nine of this number are now on the board.
+      const allNine = digit !== undefined && [...values].filter((v) => v === String(digit)).length + 1 === 9;
+      if (allNine) {
+        const id = seq.current++;
+        setKeyBurst({ d: digit!, id });
+        later(() => setKeyBurst((k) => (k?.id === id ? null : k)), 900);
+        if (!n) { feedback.digitDone(); showToast(`All ${digit}s done!`, "combo"); }
+      } else if (!n && combo.current >= 3) showToast(`Combo ×${combo.current}!`, "combo");
     },
-    [showToast],
+    [showToast, values],
   );
+
+  // The celebration's sound plays once, when the finish begins.
+  useEffect(() => { if (finished) feedback.solved(); }, [finished]);
+
+  // Co-op: a teammate's number that completes a group lights it up in their color on your board.
+  const [prevValues, setPrevValues] = useState(values);
+  if (values !== prevValues) {
+    setPrevValues(values);
+    for (let i = 0; i < 81; i++) {
+      if (prevValues[i] !== "0" || values[i] === "0" || pending[i] || anim?.cell === i) continue;
+      const p = peersOf(i);
+      const done = [p.row, p.col, p.box].filter((g) => [...g, i].every((j) => values[j] !== "0"));
+      if (!done.length) continue;
+      const cells = new Map<number, number>();
+      done.flat().forEach((j) => cells.set(j, Math.max(Math.abs(Math.floor(j / 9) - Math.floor(i / 9)), Math.abs((j % 9) - (i % 9)))));
+      cells.set(i, 0);
+      // A negative id from the fill count: unique per board state, and never clashes with our own ids.
+      setSweep({ cells, id: -[...values].filter((v) => v !== "0").length, color: digitColor?.(i) });
+      break;
+    }
+  }
 
   const place = useCallback(
     async (d: number) => {
@@ -181,7 +223,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
             for (const j of [...p.row, ...p.col, ...p.box]) if (next[j]?.includes(d)) next[j] = next[j].filter((x) => x !== d);
             return next;
           });
-          celebrate(i, r);
+          celebrate(i, r, d);
         } else {
           setUndo((u) => [...u, { cell: i, wrong: wrong[i] }]);
           setWrong((w) => ({ ...w, [i]: String(d) }));
@@ -284,7 +326,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
 
   return (
     <>
-      <div className="board-wrap">
+      <div className={`board-wrap${jolt ? " jolt" : ""}`}>
         <div className="board" role="grid" aria-label="Sudoku board">
           {Array.from({ length: 81 }, (_, i) => {
             const r = Math.floor(i / 9), c = i % 9;
@@ -312,13 +354,16 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
             if (conflict?.cells.includes(i)) cls.push("conflict");
             const sw = sweep?.cells.get(i);
             if (sw !== undefined) cls.push(sweep!.id % 2 ? "sweep" : "sweep2");
+            if (finished) cls.push("finish-wave");
             const style: CSSProperties = {
               borderRight: c === 8 ? 0 : c % 3 === 2 ? "2px solid var(--line-2)" : "1px solid var(--line)",
               borderBottom: r === 8 ? 0 : r % 3 === 2 ? "2px solid var(--line-2)" : "1px solid var(--line)",
               // Corner cells follow the board's rounded corner, so their highlight does too.
               ...(CORNER_RADIUS[i] ? { [CORNER_RADIUS[i]]: 14 } : {}),
             };
-            if (sw !== undefined) style.animationDelay = `${sw * 40}ms`;
+            if (sw !== undefined) style.animationDelay = `${sw * 45}ms`;
+            if (sw !== undefined && sweep?.color) (style as Record<string, string>)["--sweep"] = sweep.color;
+            if (finished) style.animationDelay = `${(r + c) * 40}ms`;
             const dc = !given && values[i] !== "0" ? digitColor?.(i) : undefined;
             if (dc) style.color = dc;
             if (cur && i !== sel) {
@@ -360,7 +405,14 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
             );
           })}
         </div>
-        {toast && (
+        {finished && (
+          <div className="solved-stamp" role="status" aria-live="assertive">
+            <span className="solved-word">SOLVED!</span>
+            {finishNote && <span className="solved-note">{finishNote}</span>}
+          </div>
+        )}
+        {finished && <Confetti count={70} />}
+        {toast && !finished && (
           <div key={toast.id} className={`toast ${toast.kind}${toast.low ? " low" : ""}`} role="status" style={{ animationDuration: `${toast.ms}ms`, fontSize: toast.text.length > 30 ? 15 : undefined }}>
             {(toast.kind === "combo" || toast.kind === "clear") && <Icon.Bolt size={18} color="#FFC800" />}
             {toast.text}
@@ -405,8 +457,8 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
           const left = 9 - (counts[String(d)] ?? 0);
           return (
             <button
-              key={d}
-              className={`key ${notesMode ? "notes" : ""}`}
+              key={keyBurst?.d === d ? `burst-${keyBurst.id}` : d}
+              className={`key ${notesMode ? "notes" : ""}${keyBurst?.d === d ? " burst" : ""}`}
               disabled={left <= 0 || disabled}
               onClick={() => void place(d)}
               aria-label={left <= 0 ? `${d} is complete` : `${notesMode ? "Note" : "Place"} ${d}, ${left} left`}

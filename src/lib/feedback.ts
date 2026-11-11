@@ -68,9 +68,27 @@ export const feedback = {
     tone(140, 0.08, 0.2, "square", 0.08);
     buzz([40, 30, 40]);
   },
-  clear() {
-    [784, 988, 1175, 1568].forEach((f, i) => tone(f, i * 0.06, 0.14, "triangle", 0.14));
-    buzz([15, 30, 15]);
+  /** A row, column or box done. `groups` 2–3 (double/triple) and a longer combo sound bigger. */
+  clear(groups = 1, combo = 1) {
+    const lift = Math.min(combo, 6) * 0.04; // each combo step nudges the pitch up
+    const base = [784, 988, 1175, 1568, ...(groups >= 2 ? [1976] : []), ...(groups >= 3 ? [2349] : [])];
+    base.forEach((f, i) => tone(f * (1 + lift), i * 0.055, 0.16, "triangle", 0.15));
+    tone(98 * groups, 0, 0.18, "sine", 0.18); // a low thump underneath
+    buzz(groups >= 2 ? [25, 30, 25, 30, 45] : [18, 30, 18]);
+  },
+  /** All nine of one number placed. */
+  digitDone() {
+    tone(1318, 0, 0.08, "square", 0.05);
+    tone(1760, 0.07, 0.12, "triangle", 0.12);
+    tone(2637, 0.14, 0.18, "triangle", 0.1);
+    buzz([12, 20, 12]);
+  },
+  /** Puzzle solved: drums, then a rising fanfare. */
+  solved() {
+    [0, 0.12, 0.24].forEach((t) => tone(82, t, 0.14, "square", 0.12));
+    [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.36 + i * 0.09, 0.3, "triangle", 0.16));
+    tone(2093, 0.95, 0.6, "triangle", 0.12);
+    buzz([40, 50, 40, 50, 120]);
   },
   win() {
     [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i * 0.11, 0.22, "triangle", 0.16));

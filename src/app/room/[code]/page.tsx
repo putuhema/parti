@@ -19,6 +19,23 @@ export default function RoomPage() {
   const presence = useMutation(api.rooms.presence);
   const [joinError, setJoinError] = useState("");
 
+  // Results show once you're done (race) or the game ends. If that happens while you're
+  // on the board, and you actually solved it, hold the board briefly for the celebration.
+  const doneMe = room?.mode === "race" && (room.myFinishedAt || room.myGaveUp);
+  const wantResults = !!room && room.status !== "lobby" && (room.status === "finished" || !!doneMe);
+  const solvedIt = !!room && (room.mode === "coop" ? room.outcome === "won" : !!room.myFinishedAt);
+  const [prevWant, setPrevWant] = useState(wantResults);
+  const [held, setHeld] = useState<number | null>(null);
+  if (wantResults !== prevWant) {
+    setPrevWant(wantResults);
+    if (wantResults && solvedIt && room) setHeld(room.gameNo);
+  }
+  useEffect(() => {
+    if (held === null) return;
+    const t = setTimeout(() => setHeld(null), CELEBRATE_MS);
+    return () => clearTimeout(t);
+  }, [held]);
+
   // Opening an invite link joins you automatically.
   const needsJoin = room && !room.isMember && room.status !== "playing";
   // Auto-join only when you open the link, never right after you leave (you'd bounce back in).
@@ -49,10 +66,14 @@ export default function RoomPage() {
   }
 
   if (room.status === "lobby") return <Lobby room={room} />;
-  const doneMe = room.mode === "race" && (room.myFinishedAt || room.myGaveUp);
-  if (room.status === "finished" || doneMe) return <RoomResults room={room} />;
+  // Keep the board up for a moment after you finish, so the celebration can play.
+  if (held === room.gameNo) return <RoomGame key={room.gameNo} room={room} />;
+  if (wantResults) return <RoomResults room={room} />;
   return <RoomGame key={room.gameNo} room={room} />;
 }
+
+/** How long the SOLVED! celebration plays before the results screen. */
+const CELEBRATE_MS = 2400;
 
 function Center({ children }: { children: React.ReactNode }) {
   return <main className="screen" style={{ alignItems: "center", justifyContent: "center" }}>{children}</main>;

@@ -19,9 +19,22 @@ const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 export default function DailyPage() {
   const daily = useQuery(api.daily.today, {});
+  // Solving it while on the board holds the board briefly, so the SOLVED! celebration plays.
+  const done = daily?.run?.timeMs !== undefined;
+  const [prevDone, setPrevDone] = useState(done);
+  const [holding, setHolding] = useState(false);
+  if (done !== prevDone) {
+    setPrevDone(done);
+    if (done && daily?.run) setHolding(true);
+  }
+  useEffect(() => {
+    if (!holding) return;
+    const t = setTimeout(() => setHolding(false), 2400);
+    return () => clearTimeout(t);
+  }, [holding]);
   if (!daily) return <main className="screen" style={{ alignItems: "center", justifyContent: "center" }}><Mascot size={80} className="bob" /></main>;
   if (!daily.run) return <Intro daily={daily} />;
-  if (daily.run.timeMs === undefined) return daily.puzzle ? <Play daily={daily} /> : null;
+  if (daily.run.timeMs === undefined || holding) return daily.puzzle ? <Play daily={daily} /> : null;
   return <Result daily={daily} />;
 }
 
@@ -182,7 +195,8 @@ function Play({ daily }: { daily: Daily }) {
         }
       />
       <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>The clock keeps running if you leave. Go go go!</p>
-      <Game puzzle={daily.puzzle!} values={run.values} onPlace={onPlace} hints={null} />
+      <Game puzzle={daily.puzzle!} values={run.values} onPlace={onPlace} hints={null}
+        solved={run.timeMs !== undefined} finishNote={run.timeMs !== undefined ? `Your time: ${formatTime(run.timeMs)}` : undefined} />
     </main>
   );
 }
