@@ -33,30 +33,12 @@ export function roomPaints<T extends { id: string; isMe: boolean; seat: number }
 
 // ---------- Sudoku | Chess switch ----------
 // ---------- Mascot ----------
-export function Mascot({ size = 72, mood = "happy", className }: { size?: number; mood?: "happy" | "joy" | "wow"; className?: string }) {
+/** The party mascot: your drawing in public/mascot.png (198×248). `size` is the height. */
+export function Mascot({ size = 72, className }: { size?: number; mood?: "happy" | "joy" | "wow"; className?: string }) {
   return (
-    <svg className={className} width={size} height={size} viewBox="0 0 72 72" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <rect x="4" y="10" width="64" height="58" rx="18" fill="#3A8700" />
-      <rect x="4" y="4" width="64" height="58" rx="18" fill="#58CC02" />
-      {mood === "joy" ? (
-        <>
-          <path d="M18 27 q7 -8 14 0 M40 27 q7 -8 14 0" stroke="#3C3C3C" strokeWidth="4" fill="none" strokeLinecap="round" />
-          <path d="M24 39 q12 14 24 0z" fill="#3C3C3C" />
-        </>
-      ) : (
-        <>
-          <circle cx="25" cy="27" r="9" fill="#fff" />
-          <circle cx="47" cy="27" r="9" fill="#fff" />
-          <circle cx="27" cy="29" r="4.5" fill="#3C3C3C" />
-          <circle cx="49" cy="29" r="4.5" fill="#3C3C3C" />
-          {mood === "wow" ? (
-            <ellipse cx="36" cy="46" rx="5" ry="6" fill="#3C3C3C" />
-          ) : (
-            <path d="M28 43 q8 7 16 0" stroke="#3C3C3C" strokeWidth="4" fill="none" strokeLinecap="round" />
-          )}
-        </>
-      )}
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/mascot.png" alt="" aria-hidden="true" draggable={false} className={className}
+      width={Math.round((size * 198) / 248)} height={size} style={{ flexShrink: 0, display: "block" }} />
   );
 }
 

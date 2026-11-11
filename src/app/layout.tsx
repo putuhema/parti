@@ -19,7 +19,10 @@ export const metadata: Metadata = {
   title: "pums party",
   description: "A party of games to play with friends: Sudoku, chess, word games and quizzes.",
   appleWebApp: { capable: true, title: "pums party", statusBarStyle: "default" },
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: {
+    icon: [{ url: "/logo.png", sizes: "378x378", type: "image/png" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: { url: "/apple-icon.png", sizes: "180x180" },
+  },
 };
 
 export const viewport: Viewport = {
