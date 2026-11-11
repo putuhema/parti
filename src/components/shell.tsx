@@ -84,24 +84,3 @@ export function ShellPage({ tab, right, children, gap = 16 }: { tab?: Tab; right
     </main>
   );
 }
-
-/** The Raja Silat hero: a white king with a red silat headband. */
-export function SilatKing({ size = 80, band = "#E5383B", bandInk = "#8E1B1D", prisoner }: { size?: number; band?: string; bandInk?: string; prisoner?: boolean }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" style={{ filter: "drop-shadow(0 3px 0 rgba(0,0,0,.18))" }}>
-      <path d="M18.5 2.5 h3 v3 h3 v3 h-3 v4 h-3 v-4 h-3 v-3 h3z M13 13.5 h14 a3 3 0 0 1 2.7 4.3 L27 31 H13 L10.3 17.8 A3 3 0 0 1 13 13.5z" fill="#fff" stroke="#3C3C3C" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M12.5 21 h15" stroke="#3C3C3C" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M10 30.5 h20 a3 3 0 0 1 3 3 v1.5 a2 2 0 0 1 -2 2 h-22 a2 2 0 0 1 -2 -2 v-1.5 a3 3 0 0 1 3 -3z" fill="#D7D7D7" stroke="#3C3C3C" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M11.3 16.2 h17.4 v3.6 h-17.4z" fill={band} stroke={bandInk} strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M28 17 l6 -3.5 l-1.2 4.6 l4 1.4 l-8.4 1.3z" fill={band} stroke={bandInk} strokeWidth="1.2" strokeLinejoin="round" />
-      {prisoner && (
-        <>
-          {/* Prison stripes and a broken shackle: you're escaping. */}
-          <path d="M12.3 24.6 h15.4 M12.9 27.8 h14.2" stroke="#3C3C3C" strokeWidth="1.6" strokeLinecap="round" opacity=".55" />
-          <circle cx="7.2" cy="33.2" r="2.3" fill="none" stroke="#8C8C8C" strokeWidth="1.5" />
-          <path d="M4.6 35.8 l-1.4 1.4 M3 34.4 l-1.6 .4" stroke="#8C8C8C" strokeWidth="1.4" strokeLinecap="round" />
-        </>
-      )}
-    </svg>
-  );
-}

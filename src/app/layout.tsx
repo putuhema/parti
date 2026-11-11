@@ -17,7 +17,7 @@ const fredoka = Fredoka({
 
 export const metadata: Metadata = {
   title: "pums party",
-  description: "A party of games to play with friends: Sudoku, chess, word games and Raja Silat.",
+  description: "A party of games to play with friends: Sudoku, chess, word games and quizzes.",
   appleWebApp: { capable: true, title: "pums party", statusBarStyle: "default" },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };

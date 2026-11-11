@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Piece } from "@/components/chess/Board";
-import { ShellPage, SilatKing } from "@/components/shell";
+import { ShellPage } from "@/components/shell";
 import { Icon } from "@/components/ui";
 import { Gem } from "@/components/trivia/common";
 import { feedback } from "@/lib/feedback";
@@ -55,15 +55,6 @@ const GAMES: Game[] = [
         ))}
       </span>
     ),
-  },
-  {
-    href: "/silat",
-    name: "Raja Silat",
-    sub: "Kick, don't capture",
-    face: "#E5383B",
-    edge: "#A52126",
-    ink: "#A52126",
-    art: <SilatKing size={92} band="#FFC800" bandInk="#8E5A00" />,
   },
   {
     href: "/trivia",
