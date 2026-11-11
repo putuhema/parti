@@ -37,7 +37,7 @@ export default function Solo() {
   const [round, setRound] = useState(0);
   if (mode) {
     const back = () => { setMode(null); setTricks(mode.kind === "drill"); };
-    return <PracticeLoader key={round} mode={mode} onAgain={() => setRound((r) => r + 1)} onChange={back} />;
+    return <PracticeLoader key={`${round}-${mode.kind === "drill" ? mode.trick : mode.level}`} mode={mode} onAgain={() => setRound((r) => r + 1)} onChange={back} onDrill={(trick) => setMode({ kind: "drill", trick })} />;
   }
   if (tricks) return <TricksScreen onBack={() => setTricks(false)} onDrill={(trick) => setMode({ kind: "drill", trick })} />;
   return (
@@ -106,7 +106,7 @@ function TricksScreen({ onBack, onDrill }: { onBack: () => void; onDrill: (t: Te
 }
 
 /** Picks a puzzle the coach can solve at this level (in a worker so the screen stays smooth), or sets up a drill. */
-function PracticeLoader({ mode, onAgain, onChange }: { mode: Mode; onAgain: () => void; onChange: () => void }) {
+function PracticeLoader({ mode, onAgain, onChange, onDrill }: { mode: Mode; onAgain: () => void; onChange: () => void; onDrill: (t: TechniqueId) => void }) {
   const [picked, setPicked] = useState<PracticePuzzle | "none" | null>(() => {
     if (mode.kind !== "drill") return null;
     const d = drillFor(mode.trick);
@@ -138,10 +138,10 @@ function PracticeLoader({ mode, onAgain, onChange }: { mode: Mode; onAgain: () =
       </main>
     );
   }
-  return <SoloGame label={mode.kind === "drill" ? `DRILL · ${TECHNIQUES[mode.trick].name.toUpperCase()}` : `SOLO · ${mode.kind === "level" ? mode.level.toUpperCase() : ""}`} picked={picked} onAgain={onAgain} onChange={onChange} />;
+  return <SoloGame label={mode.kind === "drill" ? `DRILL · ${TECHNIQUES[mode.trick].name.toUpperCase()}` : `SOLO · ${mode.kind === "level" ? mode.level.toUpperCase() : ""}`} picked={picked} onAgain={onAgain} onChange={onChange} onDrill={onDrill} />;
 }
 
-function SoloGame({ label, picked, onAgain, onChange }: { label: string; picked: PracticePuzzle; onAgain: () => void; onChange: () => void }) {
+function SoloGame({ label, picked, onAgain, onChange, onDrill }: { label: string; picked: PracticePuzzle; onAgain: () => void; onChange: () => void; onDrill: (t: TechniqueId) => void }) {
   const { puzzle, solution } = picked;
   const drill = picked.drill;
   // A drill starts part-way through, with Kubo already pointing at the trick.
@@ -300,6 +300,7 @@ function SoloGame({ label, picked, onAgain, onChange }: { label: string; picked:
           index={lesson.index}
           stage={lesson.stage}
           progress={me.tricks}
+          onDrill={drill ? undefined : onDrill}
           onMore={() => setLesson({ ...lesson, stage: 1 })}
           onShow={showStep}
           onNext={() => setLesson({ ...lesson, index: lesson.index + 1, stage: 0 })}

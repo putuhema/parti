@@ -172,8 +172,9 @@ describe("crediting the player's own moves", () => {
         const { cell, digit } = last.place;
         const credit = explainMove(values, before, cell, digit);
         expect(credit, `cell ${cell}`).not.toBeNull();
-        // Credited tricks are a subset of the lesson's, ending with the single that places it.
-        expect(credit!.every((t) => lesson.steps.some((s) => s.technique === t))).toBe(true);
+        // Credit names real tricks, no more than the lesson needed, ending with the single that places it.
+        expect(credit!.every((t) => t in TECHNIQUES)).toBe(true);
+        expect(credit!.length).toBeLessThanOrEqual(lesson.steps.length);
         expect(["fullHouse", "hiddenSingle", "nakedSingle"]).toContain(credit!.at(-1));
         // A wrong digit never earns credit.
         const wrong = (digit % 9) + 1;

@@ -647,3 +647,5 @@ a { text-decoration: none; }
 .cell.co-green::before { content: "B"; color: var(--lime-dark); }
 .cell .co-pair { font-size: 4.2cqw; font-weight: 900; color: var(--plum); letter-spacing: .04em; margin-top: 3px; }
 .toast.low { top: auto; bottom: -18px; }
+.coach-card .coach-lead { font-size: 13px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; color: var(--lime-dark); margin-bottom: -6px; }
+.coach-practice { align-self: flex-start; border: 0; background: none; padding: 2px 0; font: inherit; font-size: 14px; font-weight: 900; color: var(--sky-btn); cursor: pointer; }

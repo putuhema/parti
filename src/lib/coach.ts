@@ -109,6 +109,12 @@ function candidates(values: string, elim: Set<string>) {
   return cand;
 }
 
+/**
+ * While set, a technique keeps searching past steps this rejects. Lets the coach look for
+ * a step with a particular effect (e.g. one that unlocks a number) without changing every technique.
+ */
+let accept: ((step: Step) => boolean) | null = null;
+
 /** Turn proposed eliminations into a step, if any of them actually removes something. */
 function elimStep(cand: number[], technique: TechniqueId, raw: Elim[], partial: Omit<Step, "technique" | "elim" | "marks"> & { show: number[] }): Step | null {
   const elim = raw.filter((e) => cand[e.cell] & bit(e.digit));
@@ -121,7 +127,8 @@ function elimStep(cand: number[], technique: TechniqueId, raw: Elim[], partial: 
     m.strike.push(e.digit);
   }
   const { show: _show, ...rest } = partial; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return { technique, elim, marks, ...rest };
+  const step: Step = { technique, elim, marks, ...rest };
+  return accept && !accept(step) ? null : step;
 }
 
 // ---------- Placements ----------
@@ -709,14 +716,31 @@ export const LESSON_STEPS = 30;
  * The next thing to learn: any eliminations needed, then the cell they unlock.
  * `known` holds eliminations from earlier lessons ("cell:digit"); new ones are added to it.
  */
-export function nextLesson(values: string, known: Set<string>, maxSteps = LESSON_STEPS): Lesson {
+export function nextLesson(values: string, known: Set<string>, maxSteps = LESSON_STEPS, opts: { tidy?: boolean } = {}): Lesson {
+  const tidy = opts.tidy ?? true;
+  const start = new Set(known);
   const steps: Step[] = [];
   for (let guard = 0; guard < maxSteps; guard++) {
     const fh = fullHouse(values);
     if (fh) return { steps: [...steps, fh], stuck: false };
     const cand = candidates(values, known);
-    const single = hiddenSingle(values, cand) ?? nakedSingle(values, cand, steps.length > 0 || known.size > 0);
-    if (single) return { steps: [...steps, single], stuck: false };
+    if (!steps.length || !tidy) {
+      const single = hiddenSingle(values, cand) ?? nakedSingle(values, cand, steps.length > 0 || known.size > 0);
+      if (single) return { steps: [...steps, single], stuck: false };
+    } else {
+      // Numbers are now available. Teach the one with the easiest, shortest route,
+      // keeping only the steps that number really needs.
+      const best = bestRoute(values, start, steps, cand);
+      if (best) return { steps: best, stuck: false };
+    }
+    if (tidy && !steps.length) {
+      // Best case: one trick that by itself unlocks a number. Easiest tricks first.
+      const direct = oneTrickLesson(values, known, cand);
+      if (direct) {
+        for (const e of direct[0].elim) known.add(keyOf(e));
+        return { steps: direct, stuck: false };
+      }
+    }
     let found: Step | null = null;
     for (const f of ELIMINATORS) if ((found = f(cand))) break;
     if (!found) return { steps, stuck: true };
@@ -726,6 +750,83 @@ export function nextLesson(values: string, known: Set<string>, maxSteps = LESSON
   return { steps, stuck: true };
 }
 
+/** A trick whose eliminations immediately leave a number with only one place to go, plus that number. */
+function oneTrickLesson(values: string, known: Set<string>, cand: number[]): Step[] | null {
+  let single: Step | null = null;
+  accept = (st) => {
+    const after = new Set([...known, ...st.elim.map(keyOf)]);
+    const c2 = candidates(values, after);
+    // Only singles in cells the trick touched, or in their groups, count as "unlocked by it".
+    const touched = new Set(st.elim.flatMap((e) => [e.cell, ...PEERS[e.cell]]));
+    for (const cell of touched) {
+      if (values[cell] !== "0" || !c2[cell]) continue;
+      const s = hiddenSingle(values, c2, cell) ?? nakedSingle(values, c2, true, cell);
+      if (s) { single = s; return true; }
+    }
+    return false;
+  };
+  try {
+    for (const f of ELIMINATORS) {
+      const st = f(cand);
+      if (st && single) return [st, single];
+    }
+    return null;
+  } finally {
+    accept = null;
+  }
+}
+
+const keyOf = (e: Elim) => `${e.cell}:${e.digit}`;
+
+/** A single (full house, hidden or naked) that places `digit` in `cell`, given these eliminations. */
+function singleAtCell(values: string, elims: Set<string>, cell: number, afterElims: boolean): Step | null {
+  const fh = fullHouse(values, cell);
+  if (fh) return fh;
+  const cand = candidates(values, elims);
+  return hiddenSingle(values, cand, cell) ?? nakedSingle(values, cand, afterElims, cell);
+}
+
+/** The cells whose candidates a step's pattern relies on. Removing eliminations elsewhere can't break it. */
+function reliesOn(step: Step): Set<number> {
+  if (step.technique === "bug") return new Set(Array.from({ length: 81 }, (_, i) => i));
+  return new Set([...step.area, ...step.focus, ...step.focus.flatMap((c) => PEERS[c])]);
+}
+
+/**
+ * Drop elimination steps the target number doesn't need. A step is only dropped if the
+ * number still follows without it and no later kept step's pattern relied on what it removed.
+ */
+function prune(values: string, start: Set<string>, chain: Step[], cell: number, digit: number) {
+  let kept = [...chain];
+  const elimsOf = (list: Step[]) => new Set([...start, ...list.flatMap((st) => st.elim.map(keyOf))]);
+  for (let k = kept.length - 1; k >= 0; k--) {
+    const rest = kept.filter((_, j) => j !== k);
+    if (singleAtCell(values, elimsOf(rest), cell, true)?.place?.digit !== digit) continue;
+    const gone = kept[k].elim;
+    if (kept.slice(k + 1).some((later) => { const r = reliesOn(later); return gone.some((e) => r.has(e.cell)); })) continue;
+    kept = rest;
+  }
+  const final = singleAtCell(values, elimsOf(kept), cell, kept.length > 0 || start.size > 0)!;
+  return [...kept, final];
+}
+
+function bestRoute(values: string, start: Set<string>, chain: Step[], cand: number[]): Step[] | null {
+  const all = new Set([...start, ...chain.flatMap((st) => st.elim.map(keyOf))]);
+  let best: Step[] | null = null;
+  let bestScore = Infinity;
+  for (let cell = 0; cell < 81; cell++) {
+    if (values[cell] !== "0" || !cand[cell]) continue;
+    const single = singleAtCell(values, all, cell, true);
+    if (!single?.place) continue;
+    const route = prune(values, start, chain, cell, single.place.digit);
+    const tricks = route.slice(0, -1);
+    // Easiest hardest-trick first, then fewest steps.
+    const score = Math.max(0, ...tricks.map((st) => TECHNIQUES[st.technique].level)) * 100 + tricks.length;
+    if (score < bestScore) { best = route; bestScore = score; }
+  }
+  return best;
+}
+
 /**
  * Which tricks justify a move the player just made (placing `digit` in `cell`), or null
  * if the coach can't explain it (a lucky guess, or logic beyond its tricks).
@@ -733,6 +834,26 @@ export function nextLesson(values: string, known: Set<string>, maxSteps = LESSON
  * tricks the move really depends on are credited.
  */
 export function explainMove(values: string, known: Set<string>, cell: number, digit: number): TechniqueId[] | null {
+  // Simplest first: a plain single, then one trick that unlocks this exact number.
+  const direct = singleAtCell(values, known, cell, known.size > 0);
+  if (direct) return direct.place?.digit === digit ? [direct.technique] : null;
+  let unlocked: Step | null = null;
+  accept = (st) => {
+    const s2 = singleAtCell(values, new Set([...known, ...st.elim.map(keyOf)]), cell, true);
+    if (s2?.place?.digit !== digit) return false;
+    unlocked = s2;
+    return true;
+  };
+  try {
+    const cand = candidates(values, known);
+    for (const f of ELIMINATORS) {
+      const st = f(cand);
+      if (st && unlocked) return [st.technique, (unlocked as Step).technique];
+    }
+  } finally {
+    accept = null;
+  }
+  // Otherwise a chain of tricks, pruned to what this cell needs.
   const singleAt = (elims: Set<string>) => {
     const fh = fullHouse(values, cell);
     if (fh) return fh;
@@ -761,6 +882,17 @@ export function explainMove(values: string, known: Set<string>, cell: number, di
   }
   const finalStep = singleAt(new Set([...known, ...needed.flatMap((st) => st.elim.map((e) => `${e.cell}:${e.digit}`))]));
   return [...needed.map((st) => st.technique), (finalStep ?? single).technique];
+}
+
+/** "3 from row 2, column 5 and row 2, column 6": what a step crossed off, for the card. */
+export function describeElims(elim: Elim[], max = 3) {
+  const byDigit = new Map<number, number[]>();
+  for (const e of elim) byDigit.set(e.digit, [...(byDigit.get(e.digit) ?? []), e.cell]);
+  return [...byDigit].map(([d, cells]) => {
+    const names = cells.slice(0, max).map(cellName);
+    const more = cells.length > max ? ` and ${cells.length - max} more` : "";
+    return `${d} from ${names.length > 1 && !more ? list(names) : names.join(", ")}${more}`;
+  }).join("; ");
 }
 
 /** What's still possible in each cell, given the eliminations the player has been shown. */
@@ -814,7 +946,7 @@ export function grade(puzzle: string) {
   const levels: Record<1 | 2 | 3 | 4, number> = { 1: 0, 2: 0, 3: 0, 4: 0 }; // steps per trick level
   let hardest = 1;
   while (values.includes("0")) {
-    const l = nextLesson(values, known);
+    const l = nextLesson(values, known, LESSON_STEPS, { tidy: false });
     for (const st of l.steps) {
       used.add(st.technique);
       levels[TECHNIQUES[st.technique].level]++;

@@ -1,7 +1,8 @@
 "use client";
 
 import { Icon, Mascot } from "@/components/ui";
-import { LEVEL_NAMES, TECHNIQUES, nudgeOf, type Lesson } from "@/lib/coach";
+import { LEVEL_NAMES, TECHNIQUES, describeElims, nudgeOf, type Lesson, type TechniqueId } from "@/lib/coach";
+import { hasDrill } from "@/lib/drills";
 import { feedback } from "@/lib/feedback";
 
 const LEVEL_COLORS = { 1: "chip-sky", 2: "chip-sun", 3: "chip-grape", 4: "chip-mist" } as const;
@@ -13,12 +14,14 @@ export type Stage = 0 | 1 | 2;
  * Kubo's lesson card, docked at the bottom over the keypad so the board stays visible.
  * Each step starts as a gentle nudge; you ask for more only if you need it.
  */
-export function CoachCard({ lesson, index, stage, progress, onMore, onShow, onNext, onPlace, onTry, onReveal, onClose }: {
+export function CoachCard({ lesson, index, stage, progress, onDrill, onMore, onShow, onNext, onPlace, onTry, onReveal, onClose }: {
   lesson: Lesson;
   index: number;
   stage: Stage;
   /** Your record per trick: found yourself after a nudge, or shown. */
   progress?: Record<string, { found: number; shown: number }>;
+  /** Jump to drills for a trick ("Practice pointing pairs"). */
+  onDrill?: (trick: TechniqueId) => void;
   onMore: () => void;
   onShow: () => void;
   onNext: () => void;
@@ -49,7 +52,7 @@ export function CoachCard({ lesson, index, stage, progress, onMore, onShow, onNe
               <span className={`chip ${LEVEL_COLORS[t!.level]}`} style={{ padding: "3px 8px", fontSize: 11 }}>{LEVEL_NAMES[t!.level].toUpperCase()}</span>
             </span>
           )}
-          {step && total > 1 && <span style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>Step {index + 1} of {total}{lesson.stuck ? "" : ", then a number goes in"}</span>}
+          {step && total > 1 && <span style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>Step {index + 1} of {total}{lesson.stuck || last ? "" : ", then a number goes in"}</span>}
         </span>
         <button className="icon-btn" aria-label="Close coach" onClick={tap(onClose)}><Icon.Close size={14} /></button>
       </div>
@@ -66,9 +69,17 @@ export function CoachCard({ lesson, index, stage, progress, onMore, onShow, onNe
       )}
       {step && stage === 2 && (
         <>
+          {index > 0 && (
+            <span className="coach-lead">{step.place ? "Now it pays off:" : "Building on that:"}</span>
+          )}
           <p>{step.text}</p>
           <details><summary>How does a {t!.name.toLowerCase()} work?</summary><p>{t!.tip}</p></details>
-          {step.elim.length > 0 && <span style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>I&apos;ve crossed these off in your notes.</span>}
+          {step.elim.length > 0 && (
+            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>Crossed off in your notes: {describeElims(step.elim)}.</span>
+          )}
+          {onDrill && t!.level >= 2 && hasDrill(step.technique) && (
+            <button className="coach-practice" onClick={tap(() => onDrill(step.technique))}>Practice {t!.name.toLowerCase()}s →</button>
+          )}
         </>
       )}
       {stuckHere && (
