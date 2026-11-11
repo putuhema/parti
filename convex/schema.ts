@@ -181,6 +181,48 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  faceRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see FaceGame in convex/faceoff.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  gridRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    lang: v.union(v.literal("en"), v.literal("id")),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see GridGame in convex/scramble.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  gridDailies: defineTable({
+    date: v.string(),
+    number: v.number(),
+    grid: v.array(v.string()),
+    words: v.array(v.string()), // every word in the grid; never sent before you finish
+  }).index("by_date", ["date"]),
+
+  gridDailyRuns: defineTable({
+    date: v.string(),
+    playerId: v.id("players"),
+    found: v.array(v.string()),
+    score: v.number(),
+    startedAt: v.number(),
+    endsAt: v.number(),
+    awarded: v.optional(v.boolean()),
+  })
+    .index("by_player_date", ["playerId", "date"])
+    .index("by_date_score", ["date", "score"]),
+
   chessReactions: defineTable({
     roomId: v.id("chessRooms"),
     playerId: v.id("players"),

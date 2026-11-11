@@ -45,3 +45,8 @@ export function pairExamples(a: string, b: string, lang: RoomLang, limit = 600) 
   const common = collect(langs(lang).map((l) => s[l]), a, b, limit);
   return common.length >= 4 ? common : pairWords(a, b, lang, limit);
 }
+
+/** Every word in a language, or just the everyday ones. */
+export function wordSet(lang: Lang, common = false) {
+  return common ? sets().common[lang] : sets().all[lang];
+}

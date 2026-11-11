@@ -27,6 +27,7 @@ import { MATES } from "./lib/chessPuzzles";
 import { addXp, befriend, findPlayer, freeCode, requirePlayer } from "./lib/helpers";
 import { chessMode } from "./schema";
 import { BUZZ_MAX } from "./lib/buzz/board";
+import { SCRAMBLE_MAX } from "./lib/scramble/board";
 
 type PId = Id<"players">;
 type Room = Doc<"chessRooms">;
@@ -231,7 +232,27 @@ export const joinAny = mutation({
     const words = await ctx.db.query("wordRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const trivia = await ctx.db.query("triviaRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const buzz = await ctx.db.query("buzzRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
-    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0);
+    const face = await ctx.db.query("faceRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const grid = await ctx.db.query("gridRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0);
+    if (grid && grid._creationTime === newest) {
+      if (!grid.members.some((m) => m.playerId === me._id)) {
+        if (grid.members.length >= SCRAMBLE_MAX) throw new ConvexError("This room is full");
+        const taken = new Set(grid.members.map((m) => m.seat));
+        let seat = 0;
+        while (taken.has(seat)) seat++;
+        await ctx.db.patch(grid._id, { members: [...grid.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/scramble/room/${grid.code}`;
+    }
+    if (face && face._creationTime === newest) {
+      if (!face.members.some((m) => m.playerId === me._id)) {
+        if (face.members.length >= 2) throw new ConvexError("This room is full");
+        const seat = face.members.some((m) => m.seat === 0) ? 1 : 0;
+        await ctx.db.patch(face._id, { members: [...face.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/faceoff/room/${face.code}`;
+    }
     if (buzz && buzz._creationTime === newest) {
       if (!buzz.members.some((m) => m.playerId === me._id)) {
         if (buzz.members.length >= BUZZ_MAX) throw new ConvexError("This room is full");

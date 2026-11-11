@@ -6,6 +6,7 @@ import { Piece } from "@/components/chess/Board";
 import { ShellPage } from "@/components/shell";
 import { Icon } from "@/components/ui";
 import { Gem } from "@/components/trivia/common";
+import { Portrait } from "@/components/faceoff/common";
 import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
 
@@ -84,6 +85,38 @@ const GAMES: Game[] = [
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gap: 4, transform: "rotate(-5deg)" }} aria-hidden="true">
         {["100", "200", "🔥", "300", "", "400"].map((t, i) => (
           <span key={i} style={{ height: 24, borderRadius: 6, background: t ? (t === "🔥" ? "#FFC800" : "#fff") : "rgba(255,255,255,.25)", color: "#1F57A0", fontSize: 11, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 0 rgba(0,0,0,.14)" }}>{t}</span>
+        ))}
+      </span>
+    ),
+  },
+  {
+    href: "/faceoff",
+    name: "Face Off",
+    sub: "Guess the hidden face",
+    face: "#D9489F",
+    edge: "#B2347F",
+    ink: "#B2347F",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", gap: 6, transform: "rotate(-5deg)" }} aria-hidden="true">
+        {[10, 0, 14].map((c, i) => (
+          <span key={c} style={{ width: 38, borderRadius: 10, overflow: "hidden", background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.16)", transform: `translateY(${i === 1 ? -8 : 4}px)`, opacity: i === 2 ? 0.45 : 1 }}><Portrait index={c} /></span>
+        ))}
+      </span>
+    ),
+  },
+  {
+    href: "/scramble",
+    name: "Scramble",
+    sub: "Swipe words in a grid",
+    face: "#FF9600",
+    edge: "#E08600",
+    ink: "#9A5200",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 26px)", gap: 4, transform: "rotate(5deg)" }} aria-hidden="true">
+        {["W", "O", "R", "S", "D", "E", "T", "A", "L"].map((l, i) => (
+          <span key={i} style={{ height: 26, borderRadius: 7, background: [0, 1, 2, 4].includes(i) ? "#FFC800" : "#fff", color: "#9A5200", fontSize: 14, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 0 rgba(0,0,0,.14)" }}>{l}</span>
         ))}
       </span>
     ),
