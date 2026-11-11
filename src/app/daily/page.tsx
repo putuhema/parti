@@ -11,6 +11,7 @@ import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
 import { useIdentity } from "@/lib/identity";
+import { useTrickCredit } from "@/lib/useTrickCredit";
 
 type Daily = NonNullable<FunctionReturnType<typeof api.daily.today>>;
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -160,7 +161,13 @@ function Play({ daily }: { daily: Daily }) {
   const place = useMutation(api.daily.place);
   const now = useNow(1000);
   const run = daily.run!;
-  const onPlace = useCallback((cell: number, digit: number) => place({ cell, digit }), [place]);
+  const credit = useTrickCredit();
+  const before = run.values;
+  const onPlace = useCallback(async (cell: number, digit: number) => {
+    const r = await place({ cell, digit });
+    if (r.correct) credit(before, cell, digit);
+    return r;
+  }, [place, credit, before]);
   const elapsed = now - run.startedAt + run.mistakes * daily.penaltyMs;
   return (
     <main className="screen tight">

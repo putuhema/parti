@@ -67,6 +67,31 @@ export const relink = internalMutation({
   },
 });
 
+/** The Sudoku coach's tricks, so a bad name can't fill the record. */
+const TRICKS = new Set([
+  "fullHouse", "hiddenSingle", "nakedSingle", "pointing", "boxLine", "nakedPair", "hiddenPair", "nakedTriple", "hiddenTriple",
+  "xWing", "skyscraper", "kite", "emptyRectangle", "finnedXWing", "yWing", "xyzWing", "wWing", "swordfish", "coloring",
+  "uniqueRectangle", "xChain", "xyChain", "bug",
+]);
+
+/** Record a coach lesson: tricks you found yourself after a nudge, or that Kubo had to show. */
+export const recordTricks = mutation({
+  args: { found: v.array(v.string()), shown: v.array(v.string()) },
+  handler: async (ctx, { found, shown }) => {
+    const p = await requirePlayer(ctx);
+    const tricks = { ...(p.tricks ?? {}) };
+    if (found.length + shown.length > 400) throw new ConvexError("Too many at once");
+    for (const [list, key] of [[found, "found"], [shown, "shown"]] as const) {
+      for (const t of list) {
+        if (!TRICKS.has(t)) continue;
+        const cur = tricks[t] ?? { found: 0, shown: 0 };
+        tricks[t] = { ...cur, [key]: cur[key] + 1 };
+      }
+    }
+    await ctx.db.patch(p._id, { tricks });
+  },
+});
+
 export const rename = mutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
@@ -96,6 +121,7 @@ export const me = query({
       tierName: TIERS[p.tier],
       weekXp: w.xp,
       chessLessons: p.chessLessons ?? {},
+      tricks: p.tricks ?? {},
       // A guest has no email to show; a saved account does.
       account: user && !user.isAnonymous ? { email: user.email } : null,
     };

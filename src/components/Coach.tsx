@@ -13,10 +13,12 @@ export type Stage = 0 | 1 | 2;
  * Kubo's lesson card, docked at the bottom over the keypad so the board stays visible.
  * Each step starts as a gentle nudge; you ask for more only if you need it.
  */
-export function CoachCard({ lesson, index, stage, onMore, onShow, onNext, onPlace, onTry, onReveal, onClose }: {
+export function CoachCard({ lesson, index, stage, progress, onMore, onShow, onNext, onPlace, onTry, onReveal, onClose }: {
   lesson: Lesson;
   index: number;
   stage: Stage;
+  /** Your record per trick: found yourself after a nudge, or shown. */
+  progress?: Record<string, { found: number; shown: number }>;
   onMore: () => void;
   onShow: () => void;
   onNext: () => void;
@@ -56,6 +58,9 @@ export function CoachCard({ lesson, index, stage, onMore, onShow, onNext, onPlac
       {step && stage === 1 && (
         <>
           <p>{nudgeOf(step).text} There&apos;s a <b>{t!.name.toLowerCase()}</b> here.</p>
+          {(progress?.[step.technique]?.found ?? 0) > 0 && (
+            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--lime-dark)" }}>You&apos;ve found {progress![step.technique].found} of these on your own. You can do this!</span>
+          )}
           <details open><summary>How does a {t!.name.toLowerCase()} work?</summary><p>{t!.tip}</p></details>
         </>
       )}

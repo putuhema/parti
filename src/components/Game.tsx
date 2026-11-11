@@ -23,7 +23,7 @@ type Props = {
   /** Coach overlay: what to highlight on the board for the current lesson step. */
   coach?: CoachMarks | null;
   /** A "Coach" button in the tools row. */
-  coachTool?: { onClick: () => void; active: boolean };
+  coachTool?: { onClick: () => void; active: boolean; pulse?: boolean };
   /** Move the selection to this cell (the id makes repeat requests count). */
   focusCell?: { cell: number; id: number } | null;
   /**
@@ -31,6 +31,10 @@ type Props = {
    * Cells without notes get the full list of what's still possible (`keep`).
    */
   notesPatch?: { id: number; cells: Record<number, { keep: number[]; drop: number[] }> } | null;
+  /** Called when the player undoes a coach notes edit, with that edit's id. */
+  onUndoPatch?: (id: number) => void;
+  /** What to say about a wrong number that doesn't clash with anything you can see. */
+  wrongTip?: (digit: number) => string;
 };
 
 export type CoachMarks = {
@@ -46,7 +50,8 @@ export type CoachMarks = {
 };
 
 type ToastKind = "combo" | "clear" | "bad" | "info";
-type Undo = { cell: number; notes?: number[]; wrong?: string };
+/** One undo step: a cell's wrong digit or notes, or (from the coach) several cells' notes at once. */
+type Undo = { cell: number; notes?: number[]; wrong?: string; many?: Record<number, number[]>; patch?: number };
 
 const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 /** The board is rounded (16px with a 2px border), so its four corner cells are too. */
@@ -54,7 +59,7 @@ const CORNER_RADIUS: Record<number, "borderTopLeftRadius" | "borderTopRightRadiu
   0: "borderTopLeftRadius", 8: "borderTopRightRadius", 72: "borderBottomLeftRadius", 80: "borderBottomRightRadius",
 };
 
-export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, announce, coach, coachTool, focusCell, notesPatch }: Props) {
+export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, announce, coach, coachTool, focusCell, notesPatch, onUndoPatch, wrongTip }: Props) {
   const firstEmpty = useMemo(() => Math.max(0, values.indexOf("0")), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [sel, setSel] = useState<number>(firstEmpty);
   const [notesMode, setNotesMode] = useState(false);
@@ -63,8 +68,10 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
   const [pending, setPending] = useState<Record<number, string>>({});
   const [undo, setUndo] = useState<Undo[]>([]);
   const [anim, setAnim] = useState<{ cell: number; kind: "pop" | "shake"; id: number } | null>(null);
+  /** Cells that show why a number was wrong (they flash briefly). */
+  const [conflict, setConflict] = useState<{ cells: number[]; id: number } | null>(null);
   const [sweep, setSweep] = useState<{ cells: Map<number, number>; id: number } | null>(null);
-  const [toast, setToast] = useState<{ text: string; kind: ToastKind; id: number } | null>(null);
+  const [toast, setToast] = useState<{ text: string; kind: ToastKind; id: number; ms: number; low?: boolean } | null>(null);
   const combo = useRef(0);
   const seq = useRef(1);
   const timers = useRef<number[]>([]);
@@ -72,10 +79,13 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const later = (fn: () => void, ms: number) => timers.current.push(window.setTimeout(fn, ms));
 
-  const showToast = useCallback((text: string, kind: ToastKind) => {
+  /** `low` puts the message under the board, when the cells it's about are near the top. */
+  const showToast = useCallback((text: string, kind: ToastKind, low = false) => {
     const id = seq.current++;
-    setToast({ text, kind, id });
-    later(() => setToast((t) => (t?.id === id ? null : t)), 1400);
+    // Longer messages stay up long enough to read.
+    const ms = Math.max(1400, text.length * 60);
+    setToast({ text, kind, id, ms, low });
+    later(() => setToast((t) => (t?.id === id ? null : t)), ms);
   }, []);
 
   useEffect(() => {
@@ -91,6 +101,9 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
   const [seenPatch, setSeenPatch] = useState<number | null>(null);
   if (notesPatch && notesPatch.id !== seenPatch) {
     setSeenPatch(notesPatch.id);
+    // The coach's edit is one undo step that puts every touched cell's notes back.
+    const touched = Object.keys(notesPatch.cells).map(Number);
+    setUndo((u) => [...u, { cell: touched[0], many: Object.fromEntries(touched.map((c) => [c, notes[c] ?? []])), patch: notesPatch.id }]);
     setNotes((n) => {
       const next = { ...n };
       for (const [k, { keep, drop }] of Object.entries(notesPatch.cells)) {
@@ -179,7 +192,21 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
             setLocked(true);
             later(() => setLocked(false), r.lockMs);
             showToast("Too many mistakes! Frozen for 3s", "bad");
-          } else showToast("Oops! Not quite", "bad");
+          } else {
+            // Say why: a clash you can see, or a number that's ruled out by logic.
+            const p = peersOf(i);
+            const clash = (["row", "col", "box"] as const)
+              .map((k) => ({ k, cell: p[k].find((x) => values[x] === String(d)) }))
+              .filter((x): x is { k: "row" | "col" | "box"; cell: number } => x.cell !== undefined);
+            if (clash.length) {
+              const id = seq.current++;
+              setConflict({ cells: clash.map((c) => c.cell), id });
+              later(() => setConflict((c) => (c?.id === id ? null : c)), 1800);
+              const where = clash.map((c) => ({ row: "row", col: "column", box: "box" })[c.k]);
+              const nearTop = [i, ...clash.map((c) => c.cell)].some((c) => c < 18);
+              showToast(`There's already a ${d} in this ${where.length > 1 ? `${where.slice(0, -1).join(", ")} and ${where.at(-1)}` : where[0]}`, "bad", nearTop);
+            } else showToast(wrongTip?.(d) ?? "Oops! Not quite", "bad", i < 18);
+          }
         }
       } catch (e) {
         showToast(e instanceof Error && e.message.includes("countdown") ? "Wait for GO!" : "Couldn't place that", "info");
@@ -187,7 +214,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
         setPending((p) => { const n = { ...p }; delete n[i]; return n; });
       }
     },
-    [disabled, locked, sel, puzzle, values, pending, notesMode, onPlace, celebrate, wrong, showToast],
+    [disabled, locked, sel, puzzle, values, pending, notesMode, onPlace, celebrate, wrong, showToast, wrongTip],
   );
 
   const erase = useCallback(() => {
@@ -207,8 +234,10 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
     setUndo((u) => u.slice(0, -1));
     if ("wrong" in last) setWrong((w) => { const n = { ...w }; if (last.wrong) n[last.cell] = last.wrong; else delete n[last.cell]; return n; });
     if ("notes" in last) setNotes((n) => ({ ...n, [last.cell]: last.notes ?? [] }));
+    if (last.many) setNotes((n) => ({ ...n, ...last.many }));
+    if (last.patch !== undefined) onUndoPatch?.(last.patch);
     select(last.cell);
-  }, [undo, select]);
+  }, [undo, select, onUndoPatch]);
 
   const useHint = useCallback(async () => {
     if (!hints || hints.left <= 0 || disabled) return;
@@ -280,6 +309,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
               else if (coach.area.includes(i)) cls.push("co-area");
             }
             if (pending[i]) cls.push("pending");
+            if (conflict?.cells.includes(i)) cls.push("conflict");
             const sw = sweep?.cells.get(i);
             if (sw !== undefined) cls.push(sweep!.id % 2 ? "sweep" : "sweep2");
             const style: CSSProperties = {
@@ -308,7 +338,10 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
                 aria-selected={i === sel}
                 role="gridcell"
               >
-                {cm ? (
+                {cm && coach?.order?.includes(i) ? (
+                  // Chain cells: the two options, centered, so the step number doesn't cover one.
+                  <span className="co-pair" aria-hidden="true">{cm.show.join(" ")}</span>
+                ) : cm ? (
                   <span className="notes co-notes" aria-hidden="true">
                     {DIGITS.map((d) => <span key={d} className={cm.strike.includes(d) ? "strike" : ""}>{cm.show.includes(d) ? d : ""}</span>)}
                   </span>
@@ -328,7 +361,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
           })}
         </div>
         {toast && (
-          <div key={toast.id} className={`toast ${toast.kind}`} role="status">
+          <div key={toast.id} className={`toast ${toast.kind}${toast.low ? " low" : ""}`} role="status" style={{ animationDuration: `${toast.ms}ms`, fontSize: toast.text.length > 30 ? 15 : undefined }}>
             {(toast.kind === "combo" || toast.kind === "clear") && <Icon.Bolt size={18} color="#FFC800" />}
             {toast.text}
           </div>
@@ -349,9 +382,9 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
           <span className="name">NOTES {notesMode ? "ON" : "OFF"}</span>
         </button>
         {coachTool && (
-          <button className={`tool ${coachTool.active ? "on" : ""}`} onClick={() => { feedback.unlock(); feedback.tap(); coachTool.onClick(); }} aria-pressed={coachTool.active} aria-label="Coach: explain the next move">
+          <button className={`tool ${coachTool.active ? "on" : ""}${coachTool.pulse ? " pulse" : ""}`} onClick={() => { feedback.unlock(); feedback.tap(); coachTool.onClick(); }} aria-pressed={coachTool.active} aria-label="Coach: explain the next move">
             <span className="face">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/mascot.png" alt="" width={20} height={25} /></span>
-            <span className="name">COACH</span>
+            <span className="name">{coachTool.pulse ? "STUCK?" : "COACH"}</span>
           </button>
         )}
         {hints ? (

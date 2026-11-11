@@ -9,6 +9,7 @@ import { Avatar, Hearts, Icon, Sheet, formatTime, roomPaints, type Paint } from 
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
 import { BoardView, ReactionBar, ReactionFloats } from "./BoardView";
+import { useTrickCredit } from "@/lib/useTrickCredit";
 import type { RoomView } from "./types";
 
 const REACTIONS = ["Nice!", "Help?", "On it!"];
@@ -28,7 +29,13 @@ export function RoomGame({ room }: { room: RoomView }) {
   const startAt = room.startAt ?? 0;
   const [counting, setCounting] = useState(() => Date.now() < startAt);
 
-  const onPlace = useCallback((cell: number, digit: number) => place({ code: room.code, cell, digit }), [place, room.code]);
+  const credit = useTrickCredit();
+  const before = room.values;
+  const onPlace = useCallback(async (cell: number, digit: number) => {
+    const r = await place({ code: room.code, cell, digit });
+    if (r.correct && before) credit(before, cell, digit);
+    return r;
+  }, [place, room.code, credit, before]);
   const onSelect = useCallback((cell: number) => { if (coop) void presence({ code: room.code, cell }).catch(() => {}); }, [coop, presence, room.code]);
   const hints = useMemo(
     () => ({ left: room.hintsLeft, use: (cell: number) => hint({ code: room.code, cell }) }),

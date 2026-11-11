@@ -46,6 +46,8 @@ export default defineSchema({
     lastDailyDate: v.optional(v.string()),
     wins: v.number(),
     chessLessons: v.optional(v.record(v.string(), v.number())), // lesson id -> best stars
+    // Sudoku coach: per trick, how often you found it after a nudge vs. needed it shown.
+    tricks: v.optional(v.record(v.string(), v.object({ found: v.number(), shown: v.number() }))),
   })
     .index("by_token", ["token"])
     .index("by_user", ["userId"])
