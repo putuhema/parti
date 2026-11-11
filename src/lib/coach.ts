@@ -6,10 +6,13 @@
  * candidates out until a single appears. Techniques are tried easiest first.
  */
 
+import { setAt } from "../../convex/lib/sudoku";
+
 export type TechniqueId =
   | "fullHouse" | "hiddenSingle" | "nakedSingle"
-  | "pointing" | "boxLine" | "nakedPair" | "hiddenPair" | "nakedTriple"
-  | "xWing" | "yWing" | "swordfish";
+  | "pointing" | "boxLine" | "nakedPair"
+  | "hiddenPair" | "nakedTriple" | "hiddenTriple" | "xWing" | "skyscraper" | "kite"
+  | "yWing" | "xyzWing" | "wWing" | "swordfish" | "coloring" | "uniqueRectangle" | "xyChain";
 
 export const TECHNIQUES: Record<TechniqueId, { name: string; level: 1 | 2 | 3 | 4; tip: string }> = {
   fullHouse: { name: "Full house", level: 1, tip: "When a row, column or box has just one empty cell left, it gets the one number that's missing." },
@@ -20,9 +23,17 @@ export const TECHNIQUES: Record<TechniqueId, { name: string; level: 1 | 2 | 3 | 
   nakedPair: { name: "Naked pair", level: 2, tip: "Two cells in the same row, column or box that can only hold the same two numbers will use up those two numbers. Cross them off everywhere else in that group." },
   hiddenPair: { name: "Hidden pair", level: 3, tip: "If two numbers can only go in the same two cells of a group, those cells are reserved for them. Any other candidates in those two cells can go." },
   nakedTriple: { name: "Naked triple", level: 3, tip: "Three cells in one group that only hold three numbers between them use up those three numbers. Cross them off in the rest of the group." },
-  xWing: { name: "X-Wing", level: 4, tip: "When a number has exactly two spots in each of two rows, and the spots line up in the same two columns, it forms a rectangle. Either diagonal can be the answer, but both use those two columns, so the number can't go anywhere else in them. Works with rows and columns swapped too." },
+  hiddenTriple: { name: "Hidden triple", level: 3, tip: "If three numbers can only go in the same three cells of a group, those cells are reserved for them. Any other candidates in those cells can go." },
+  xWing: { name: "X-Wing", level: 3, tip: "When a number has exactly two spots in each of two rows, and the spots line up in the same two columns, it forms a rectangle. Either diagonal can be the answer, but both use those two columns, so the number can't go anywhere else in them. Works with rows and columns swapped too." },
+  skyscraper: { name: "Skyscraper", level: 3, tip: "Two rows (or columns) each have a number in exactly two spots, and one end of each lines up. Only one of those lined-up ends can be the number, so one of the two other ends (the tops of the towers) must be. A cell that sees both tops can't be that number." },
+  kite: { name: "2-String Kite", level: 3, tip: "A number has exactly two spots in a row and two in a column, and one spot of each shares a box. They can't both be the number, so one of the far ends is. Any cell seeing both far ends can't be it." },
   yWing: { name: "Y-Wing", level: 4, tip: "A pivot cell with two options (A or B) sees two wing cells: one with A or C, one with B or C. Whatever the pivot becomes, one wing turns into C. So any cell that sees both wings can't be C." },
+  xyzWing: { name: "XYZ-Wing", level: 4, tip: "Like a Y-Wing, but the pivot has three options (A, B or C) and the wings are A/C and B/C. One of the three cells must be C, so a cell that sees all three can't be C." },
+  wWing: { name: "W-Wing", level: 4, tip: "Two cells far apart can only be the same two numbers, A or B. If a strong link on A connects them (A has just two spots in some group, one seeing each cell), they can't both be A. So one of them is B, and any cell seeing both can't be B." },
   swordfish: { name: "Swordfish", level: 4, tip: "An X-Wing with three rows: if a number's spots in three rows all fall inside the same three columns, it can't go anywhere else in those columns." },
+  coloring: { name: "Simple coloring", level: 4, tip: "Pick one number and follow its strong links (groups where it has only two spots), coloring the cells two colors in turn. One color is all right and the other all wrong. If two cells of the same color see each other, that color is wrong. And any cell that sees both colors can't be the number." },
+  uniqueRectangle: { name: "Unique rectangle", level: 4, tip: "Four cells in a rectangle across two boxes can't all hold just the same two numbers: the two could swap, giving two solutions, and a proper Sudoku has only one. So if three corners are just A or B, the fourth corner can't be A or B." },
+  xyChain: { name: "XY-Chain", level: 4, tip: "Link cells that each have two options, where neighbors see each other and share a number. Start by saying \"if the first cell isn't Z\" and follow the chain: each cell is forced in turn, until the last one must be Z. So one end or the other is Z, and any cell that sees both ends can't be Z." },
 };
 
 export const LEVEL_NAMES = { 1: "Beginner", 2: "Intermediate", 3: "Tricky", 4: "Advanced" } as const;
@@ -41,6 +52,10 @@ export type Step = {
   marks: Record<number, { show: number[]; strike: number[] }>;
   place?: { cell: number; digit: number };
   elim: Elim[];
+  /** Simple coloring: the two sets of chain cells. */
+  colors?: { a: number[]; b: number[] };
+  /** Chains: the cells in the order to follow them (shown numbered). */
+  order?: number[];
 };
 export type Lesson = { steps: Step[]; stuck: boolean };
 
@@ -141,9 +156,9 @@ function hiddenSingle(values: string, cand: number[]): Step | null {
         technique: "hiddenSingle", area: u, focus: [cell], clues: [...clues], elim: [], place: { cell, digit: d },
         marks: { [cell]: { show: [d], strike: [] } },
         text: !clues.size
-          ? `In ${unitName(u)}, ${d} only fits in one cell: ${cellName(cell)}. The other cells were ruled out by the step before.`
+          ? `In ${unitName(u)}, ${d} only fits in one cell: ${cellName(cell)}. The other cells were already ruled out (crossed off in your notes).`
           : ruledOut
-            ? `Look for ${d} in ${unitName(u)}. The ${d}s you can see nearby (highlighted) block most of its empty cells, and the step before ruled out the rest. So ${d} can only go in ${cellName(cell)}.`
+            ? `Look for ${d} in ${unitName(u)}. The ${d}s you can see nearby (highlighted) block most of its empty cells, and the rest were already ruled out (crossed off in your notes). So ${d} can only go in ${cellName(cell)}.`
             : `Look for ${d} in ${unitName(u)}. The ${d}s you can see nearby (highlighted) block every other empty cell, so ${d} can only go in ${cellName(cell)}.`,
       };
     }
@@ -158,7 +173,7 @@ function nakedSingle(values: string, cand: number[], afterElims: boolean): Step 
     return {
       technique: "nakedSingle", area: [...new Set([...ROWS[rowOf(i)], ...COLS[colOf(i)], ...BOXES[boxOf(i)]])], focus: [i], clues: [], elim: [],
       place: { cell: i, digit }, marks: { [i]: { show: [digit], strike: [] } },
-      text: `Check ${cellName(i)} against its row, column and box. Every other number is already used around it${afterElims ? " or ruled out above" : ""}, so it has to be ${digit}.`,
+      text: `Check ${cellName(i)} against its row, column and box. Every other number is already used around it${afterElims ? " or crossed off in your notes" : ""}, so it has to be ${digit}.`,
     };
   }
   return null;
@@ -299,15 +314,263 @@ function yWing(cand: number[]): Step | null {
   return null;
 }
 
+
+// ---------- More eliminations: chains and wings ----------
+/** Units where digit d has exactly two spots: a "strong link" (one of the two must be d). */
+function strongLinks(cand: number[], d: number) {
+  const out: { a: number; b: number; unit: number[] }[] = [];
+  const seen = new Set<string>();
+  for (const u of UNITS) {
+    const spots = u.filter((i) => cand[i] & bit(d));
+    if (spots.length !== 2) continue;
+    const key = `${spots[0]}-${spots[1]}`;
+    if (seen.has(key)) continue; // the same pair can be linked by a row and a box
+    seen.add(key);
+    out.push({ a: spots[0], b: spots[1], unit: u });
+  }
+  return out;
+}
+const seeingAll = (cand: number[], d: number, cells: number[]) =>
+  Array.from({ length: 81 }, (_, i) => i).filter((i) => cand[i] & bit(d) && !cells.includes(i) && cells.every((c) => sees(i, c)));
+
+function hiddenTriple(cand: number[]): Step | null {
+  for (const u of UNITS) {
+    const where = (d: number) => u.filter((i) => cand[i] & bit(d));
+    const ds = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((d) => where(d).length >= 2 && where(d).length <= 3);
+    for (const trio of combos(ds, 3)) {
+      const cells = [...new Set(trio.flatMap(where))];
+      if (cells.length !== 3) continue;
+      const out = cells.flatMap((cell) => digitsOf(cand[cell]).filter((d) => !trio.includes(d)).map((digit) => ({ cell, digit })));
+      const s = elimStep(cand, "hiddenTriple", out, {
+        area: u, focus: cells, clues: [], show: trio,
+        text: `In ${unitName(u)}, ${list(trio)} can only go in the three highlighted cells. Those cells are reserved for them, so their other candidates can go.`,
+      });
+      if (s) return s;
+    }
+  }
+  return null;
+}
+
+function skyscraper(cand: number[]): Step | null {
+  for (let d = 1; d <= 9; d++) {
+    for (const [base, cOf, bw, cw] of [[ROWS, colOf, "row", "column"], [COLS, rowOf, "column", "row"]] as const) {
+      const lines = base.map((l, n) => ({ n, spots: l.filter((i) => cand[i] & bit(d)) })).filter((x) => x.spots.length === 2);
+      for (const [l1, l2] of combos(lines, 2)) {
+        for (const e1 of l1.spots) for (const e2 of l2.spots) {
+          if (cOf(e1) !== cOf(e2)) continue;
+          const t1 = l1.spots.find((x) => x !== e1)!, t2 = l2.spots.find((x) => x !== e2)!;
+          if (cOf(t1) === cOf(t2)) continue; // that's an X-Wing
+          const s = elimStep(cand, "skyscraper", seeingAll(cand, d, [t1, t2]).map((cell) => ({ cell, digit: d })), {
+            area: [...base[l1.n], ...base[l2.n]], focus: [e1, e2, t1, t2], clues: [], show: [d],
+            text: `${d} has exactly two spots in ${bw} ${l1.n + 1} and in ${bw} ${l2.n + 1}, and one end of each lines up in ${cw} ${cOf(e1) + 1}. Only one of those two can be ${d}, so one of the other ends (${cellName(t1)} or ${cellName(t2)}) must be ${d}. Any cell that sees both of them can't be ${d}.`,
+          });
+          if (s) return s;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function kite(cand: number[]): Step | null {
+  for (let d = 1; d <= 9; d++) {
+    const rows = ROWS.map((l, n) => ({ n, spots: l.filter((i) => cand[i] & bit(d)) })).filter((x) => x.spots.length === 2);
+    const cols = COLS.map((l, n) => ({ n, spots: l.filter((i) => cand[i] & bit(d)) })).filter((x) => x.spots.length === 2);
+    for (const r of rows) for (const c of cols) {
+      for (const x of r.spots) for (const y of c.spots) {
+        if (x === y || boxOf(x) !== boxOf(y)) continue;
+        const rt = r.spots.find((i) => i !== x)!, ct = c.spots.find((i) => i !== y)!;
+        if (rt === ct || rt === y || ct === x) continue;
+        const s = elimStep(cand, "kite", seeingAll(cand, d, [rt, ct]).map((cell) => ({ cell, digit: d })), {
+          area: [...ROWS[r.n], ...COLS[c.n]], focus: [x, y, rt, ct], clues: [], show: [d],
+          text: `${d} has two spots in row ${r.n + 1} and two in column ${c.n + 1}, and one spot of each sits in ${boxName(boxOf(x))}. Those two can't both be ${d}, so one of the far ends (${cellName(rt)} or ${cellName(ct)}) must be. A cell that sees both far ends can't be ${d}.`,
+        });
+        if (s) return s;
+      }
+    }
+  }
+  return null;
+}
+
+function xyzWing(cand: number[]): Step | null {
+  const bi = cand.map((m, i) => (count(m) === 2 ? i : -1)).filter((i) => i >= 0);
+  for (let pivot = 0; pivot < 81; pivot++) {
+    if (count(cand[pivot]) !== 3) continue;
+    const wings = bi.filter((w) => sees(pivot, w) && (cand[w] & cand[pivot]) === cand[w]);
+    for (const [w1, w2] of combos(wings, 2)) {
+      const shared = cand[w1] & cand[w2];
+      if (count(shared) !== 1 || (cand[w1] | cand[w2]) !== cand[pivot]) continue;
+      const z = digitsOf(shared)[0];
+      const s = elimStep(cand, "xyzWing", seeingAll(cand, z, [pivot, w1, w2]).map((cell) => ({ cell, digit: z })), {
+        area: [], focus: [pivot, w1, w2], clues: [], show: digitsOf(cand[pivot]),
+        text: `The pivot at ${cellName(pivot)} is ${list(digitsOf(cand[pivot]))}, and the two wings it sees share ${z}. However the pivot turns out, one of these three cells is ${z}. So a cell that sees all three can't be ${z}.`,
+      });
+      if (s) return s;
+    }
+  }
+  return null;
+}
+
+function wWing(cand: number[]): Step | null {
+  const bi = cand.map((m, i) => (count(m) === 2 ? i : -1)).filter((i) => i >= 0);
+  for (const [p, q] of combos(bi, 2)) {
+    if (cand[p] !== cand[q] || sees(p, q)) continue;
+    const [a, b] = digitsOf(cand[p]);
+    for (const [x, y] of [[a, b], [b, a]]) {
+      for (const link of strongLinks(cand, x)) {
+        const { a: m, b: n } = link;
+        if ([m, n].includes(p) || [m, n].includes(q)) continue;
+        if (!((sees(m, p) && sees(n, q)) || (sees(m, q) && sees(n, p)))) continue;
+        const s = elimStep(cand, "wWing", seeingAll(cand, y, [p, q]).map((cell) => ({ cell, digit: y })), {
+          area: link.unit, focus: [p, q, m, n], clues: [], show: [a, b],
+          text: `${cap(cellName(p))} and ${cellName(q)} can only be ${a} or ${b}. In ${unitName(link.unit)}, ${x} has just two spots, and each sees one of them, so they can't both be ${x}. One of them is ${y}, which means a cell that sees both can't be ${y}.`,
+        });
+        if (s) return s;
+      }
+    }
+  }
+  return null;
+}
+
+function coloring(cand: number[]): Step | null {
+  for (let d = 1; d <= 9; d++) {
+    const links = strongLinks(cand, d);
+    const adj = new Map<number, number[]>();
+    for (const { a, b } of links) { adj.set(a, [...(adj.get(a) ?? []), b]); adj.set(b, [...(adj.get(b) ?? []), a]); }
+    const color = new Map<number, 0 | 1>();
+    for (const start of adj.keys()) {
+      if (color.has(start)) continue;
+      // Two-color this chain.
+      const comp: number[] = [];
+      const stack = [start];
+      color.set(start, 0);
+      let ok = true;
+      while (stack.length) {
+        const c = stack.pop()!;
+        comp.push(c);
+        for (const n of adj.get(c) ?? []) {
+          if (!color.has(n)) { color.set(n, color.get(c) === 0 ? 1 : 0); stack.push(n); }
+          else if (color.get(n) === color.get(c)) ok = false;
+        }
+      }
+      if (!ok || comp.length < 4) continue;
+      const A = comp.filter((c) => color.get(c) === 0), B = comp.filter((c) => color.get(c) === 1);
+      // Wrap: two cells of one color see each other, so that whole color is wrong.
+      for (const [same, other, label] of [[A, B, "blue"], [B, A, "green"]] as const) {
+        const clash = combos(same, 2).find(([x, y]) => sees(x, y));
+        if (!clash) continue;
+        const s = elimStep(cand, "coloring", same.map((cell) => ({ cell, digit: d })), {
+          area: [], focus: [...same, ...other], clues: [], show: [d],
+          text: `Follow the chain of ${d}s: each link is a group where ${d} has only two spots, so the colors alternate and one color is all ${d}s. Two ${label} cells (${cellName(clash[0])} and ${cellName(clash[1])}) see each other, so ${label} can't be the ${d}s. Cross ${d} off every ${label} cell.`,
+        });
+        if (s) return { ...s, colors: { a: A, b: B } };
+      }
+      // Trap: a cell outside the chain that sees both colors.
+      const out = Array.from({ length: 81 }, (_, i) => i)
+        .filter((i) => cand[i] & bit(d) && !comp.includes(i) && A.some((x) => sees(i, x)) && B.some((x) => sees(i, x)))
+        .map((cell) => ({ cell, digit: d }));
+      const s = elimStep(cand, "coloring", out, {
+        area: [], focus: comp, clues: [], show: [d],
+        text: `Follow the chain of ${d}s: each link is a group where ${d} has only two spots, so the colors alternate. Either all blue cells are ${d} or all green ones are (the colors on the board). A cell that sees a blue cell and a green cell sees a ${d} either way, so it can't be ${d}.`,
+      });
+      if (s) return { ...s, colors: { a: A, b: B } };
+    }
+  }
+  return null;
+}
+
+function uniqueRectangle(cand: number[]): Step | null {
+  for (const [r1, r2] of combos([0, 1, 2, 3, 4, 5, 6, 7, 8], 2)) {
+    for (const [c1, c2] of combos([0, 1, 2, 3, 4, 5, 6, 7, 8], 2)) {
+      const cells = [r1 * 9 + c1, r1 * 9 + c2, r2 * 9 + c1, r2 * 9 + c2];
+      if (new Set(cells.map(boxOf)).size !== 2 || cells.some((i) => !cand[i])) continue;
+      const pairs = cells.filter((i) => count(cand[i]) === 2);
+      if (pairs.length !== 3 || !pairs.every((i) => cand[i] === cand[pairs[0]])) continue;
+      const corner = cells.find((i) => !pairs.includes(i))!;
+      const ab = cand[pairs[0]];
+      if ((cand[corner] & ab) !== ab) continue;
+      const [a, b] = digitsOf(ab);
+      const s = elimStep(cand, "uniqueRectangle", [{ cell: corner, digit: a }, { cell: corner, digit: b }], {
+        area: [], focus: cells, clues: [], show: [a, b],
+        text: `These four cells make a rectangle across two boxes, and three corners can only be ${a} or ${b}. If ${cellName(corner)} were ${a} or ${b} too, the ${a}s and ${b}s could swap and the puzzle would have two answers. A proper Sudoku has just one, so that corner can't be ${a} or ${b}.`,
+      });
+      if (s) return s;
+    }
+  }
+  return null;
+}
+
+/** Spell out an XY-Chain link by link: "If ① isn't 5 it's 4, so ② can't be 4: it's 7 …". */
+function chainText(path: number[], z: number, other: (cell: number, digit: number) => number) {
+  const n = (k: number) => `(${k + 1})`;
+  let carry = other(path[0], z);
+  const links = [`If ${n(0)} at ${cellName(path[0])} isn't ${z}, it must be ${carry}.`];
+  for (let k = 1; k < path.length; k++) {
+    const next = other(path[k], carry);
+    links.push(`Then ${n(k)} can't be ${carry}, so it's ${next}.`);
+    carry = next;
+  }
+  return `Follow the numbered cells; each has only two options. ${links.join(" ")} So if ${n(0)} isn't ${z}, ${n(path.length - 1)} is. One end of the chain is always ${z}, so any cell that sees both ends can't be ${z}.`;
+}
+
+function xyChain(cand: number[]): Step | null {
+  const bi = cand.map((m, i) => (count(m) === 2 ? i : -1)).filter((i) => i >= 0);
+  const other = (i: number, d: number) => digitsOf(cand[i]).find((x) => x !== d)!;
+  // Shortest chains first: they're the easiest to follow.
+  for (let len = 4; len <= 8; len++) {
+    for (const start of bi) {
+      for (const z of digitsOf(cand[start])) {
+        const path = [start];
+        // `carry` is the value `cur` is forced to take if the start cell isn't z.
+        const walk = (cur: number, carry: number): Step | null => {
+          if (path.length === len) {
+            if (carry !== z) return null;
+            const s = elimStep(cand, "xyChain", seeingAll(cand, z, [start, cur]).filter((i) => !path.includes(i)).map((cell) => ({ cell, digit: z })), {
+              area: [], focus: [...path], clues: [], show: [],
+              text: chainText(path, z, (i, d) => other(i, d)),
+            });
+            if (s) {
+              // Show both options in every chain cell, and the crossed-out digit where it's removed.
+              const marks: Step["marks"] = {};
+              for (const c of path) marks[c] = { show: digitsOf(cand[c]), strike: [] };
+              for (const e of s.elim) marks[e.cell] = { show: [e.digit], strike: [e.digit] };
+              s.marks = marks;
+              s.order = [...path];
+            }
+            return s;
+          }
+          for (const n of bi) {
+            if (path.includes(n) || !sees(cur, n) || !(cand[n] & bit(carry))) continue;
+            path.push(n);
+            const s = walk(n, other(n, carry));
+            path.pop();
+            if (s) return s;
+          }
+          return null;
+        };
+        const s = walk(start, other(start, z));
+        if (s) return s;
+      }
+    }
+  }
+  return null;
+}
+
 const ELIMINATORS: ((cand: number[]) => Step | null)[] = [
-  pointing, boxLine, (c) => nakedSubset(c, 2), hiddenPair, (c) => nakedSubset(c, 3), (c) => fish(c, 2), yWing, (c) => fish(c, 3),
+  // Easiest first, so the coach always teaches the simplest way forward.
+  pointing, boxLine, (c) => nakedSubset(c, 2),
+  hiddenPair, (c) => nakedSubset(c, 3), hiddenTriple, (c) => fish(c, 2), skyscraper, kite,
+  yWing, xyzWing, wWing, (c) => fish(c, 3), coloring, uniqueRectangle, xyChain,
 ];
+
+/** How many elimination steps a single lesson may take before giving up. */
+export const LESSON_STEPS = 30;
 
 /**
  * The next thing to learn: any eliminations needed, then the cell they unlock.
  * `known` holds eliminations from earlier lessons ("cell:digit"); new ones are added to it.
  */
-export function nextLesson(values: string, known: Set<string>, maxSteps = 6): Lesson {
+export function nextLesson(values: string, known: Set<string>, maxSteps = LESSON_STEPS): Lesson {
   const steps: Step[] = [];
   for (let guard = 0; guard < maxSteps; guard++) {
     const fh = fullHouse(values);
@@ -322,6 +585,61 @@ export function nextLesson(values: string, known: Set<string>, maxSteps = 6): Le
     steps.push(found);
   }
   return { steps, stuck: true };
+}
+
+/** What's still possible in each cell, given the eliminations the player has been shown. */
+export function candidateDigits(values: string, known: Set<string>) {
+  return candidates(values, known).map(digitsOf);
+}
+
+/**
+ * The first, gentle hint for a step: where to look, without giving the move away.
+ * `cells` are tinted on the board.
+ */
+export function nudgeOf(step: Step): { text: string; cells: number[] } {
+  const d = step.place?.digit ?? step.elim[0]?.digit;
+  const unit = step.area.length === 9 ? unitName(step.area) : null;
+  const shown = [...new Set(Object.values(step.marks).flatMap((m) => m.show))];
+  switch (step.technique) {
+    case "fullHouse": return { text: `${cap(unit!)} is almost full. What's missing?`, cells: step.area };
+    case "hiddenSingle": return { text: `Where can ${d} go in ${unit}?`, cells: step.area };
+    case "nakedSingle": return { text: `Look closely at ${cellName(step.focus[0])}. What's left for it?`, cells: [step.focus[0]] };
+    case "pointing": return { text: `Look at where ${d} can go in ${unit}.`, cells: step.area };
+    case "boxLine": return { text: `Look at where ${d} can go in ${unit}.`, cells: step.area };
+    case "nakedPair":
+    case "nakedTriple": return { text: `In ${unit}, look for cells that share the same few options.`, cells: step.area };
+    case "hiddenPair":
+    case "hiddenTriple": return { text: `In ${unit}, some numbers have very few places to go.`, cells: step.area };
+    case "xWing":
+    case "swordfish": return { text: `Track where ${d} can go in each of the highlighted lines.`, cells: step.area };
+    case "skyscraper":
+    case "kite": return { text: `Find rows and columns where ${d} has exactly two spots.`, cells: step.area };
+    case "yWing":
+    case "xyzWing": return { text: `Look at ${cellName(step.focus[0])} and the cells around it with only two options.`, cells: [step.focus[0]] };
+    case "wWing": return { text: `${cap(cellName(step.focus[0]))} and ${cellName(step.focus[1])} have the same two options. Can something link them?`, cells: step.focus.slice(0, 2) };
+    case "coloring": return { text: `Follow the ${d}s that have only two spots in a row, column or box.`, cells: [] };
+    case "uniqueRectangle": return { text: `Look for a rectangle of cells that can only be ${list(shown)}.`, cells: step.focus };
+    case "xyChain": return { text: `Start at ${cellName(step.focus[0])} and follow cells that have only two options.`, cells: [step.focus[0]] };
+  }
+}
+
+/**
+ * Solve a puzzle the way the coach would, to rate it: can the coach finish it,
+ * and what's the hardest trick it needs (level 1 = singles only)?
+ */
+export function grade(puzzle: string) {
+  let values = puzzle;
+  const known = new Set<string>();
+  const used = new Set<TechniqueId>();
+  let hardest = 1;
+  while (values.includes("0")) {
+    const l = nextLesson(values, known);
+    for (const st of l.steps) { used.add(st.technique); hardest = Math.max(hardest, TECHNIQUES[st.technique].level); }
+    const last = l.steps.at(-1);
+    if (l.stuck || !last?.place) return { solved: false, hardest, used: [...used] };
+    values = setAt(values, last.place.cell, String(last.place.digit));
+  }
+  return { solved: true, hardest, used: [...used] };
 }
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);

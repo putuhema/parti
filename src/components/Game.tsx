@@ -26,6 +26,11 @@ type Props = {
   coachTool?: { onClick: () => void; active: boolean };
   /** Move the selection to this cell (the id makes repeat requests count). */
   focusCell?: { cell: number; id: number } | null;
+  /**
+   * The coach's deductions, written into the player's notes: `drop` digits are crossed off.
+   * Cells without notes get the full list of what's still possible (`keep`).
+   */
+  notesPatch?: { id: number; cells: Record<number, { keep: number[]; drop: number[] }> } | null;
 };
 
 export type CoachMarks = {
@@ -34,6 +39,10 @@ export type CoachMarks = {
   clues: number[];
   target?: number;
   marks: Record<number, { show: number[]; strike: number[] }>;
+  /** Simple coloring: the two alternating colors of a chain. */
+  colors?: { a: number[]; b: number[] };
+  /** Chains: cells numbered in the order to follow. */
+  order?: number[];
 };
 
 type ToastKind = "combo" | "clear" | "bad" | "info";
@@ -45,7 +54,7 @@ const CORNER_RADIUS: Record<number, "borderTopLeftRadius" | "borderTopRightRadiu
   0: "borderTopLeftRadius", 8: "borderTopRightRadius", 72: "borderBottomLeftRadius", 80: "borderBottomRightRadius",
 };
 
-export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, announce, coach, coachTool, focusCell }: Props) {
+export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, announce, coach, coachTool, focusCell, notesPatch }: Props) {
   const firstEmpty = useMemo(() => Math.max(0, values.indexOf("0")), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [sel, setSel] = useState<number>(firstEmpty);
   const [notesMode, setNotesMode] = useState(false);
@@ -78,6 +87,18 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
   if (focusCell && focusCell.id !== seenFocus) {
     setSeenFocus(focusCell.id);
     setSel(focusCell.cell);
+  }
+  const [seenPatch, setSeenPatch] = useState<number | null>(null);
+  if (notesPatch && notesPatch.id !== seenPatch) {
+    setSeenPatch(notesPatch.id);
+    setNotes((n) => {
+      const next = { ...n };
+      for (const [k, { keep, drop }] of Object.entries(notesPatch.cells)) {
+        const cell = Number(k);
+        next[cell] = n[cell]?.length ? n[cell].filter((d) => !drop.includes(d)) : keep;
+      }
+      return next;
+    });
   }
 
   // Wrong digits and notes only show on empty cells, so a cell a teammate fills just hides them.
@@ -252,6 +273,8 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
             if (isWrong && i === sel) cls.push("err");
             if (coach) {
               if (coach.target === i) cls.push("co-target");
+              else if (coach.colors?.a.includes(i)) cls.push("co-blue");
+              else if (coach.colors?.b.includes(i)) cls.push("co-green");
               else if (coach.focus.includes(i)) cls.push("co-focus");
               else if (coach.clues.includes(i)) cls.push("co-clue");
               else if (coach.area.includes(i)) cls.push("co-area");
@@ -299,6 +322,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
                 {cur && (
                   <span className="cursor-tag" style={{ background: cur.paint.face }}>{cur.name}</span>
                 )}
+                {coach?.order?.includes(i) && <span className="co-order" aria-hidden="true">{coach.order.indexOf(i) + 1}</span>}
               </button>
             );
           })}
