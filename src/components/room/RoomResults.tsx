@@ -2,10 +2,12 @@
 
 import { useMutation } from "convex/react";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
-import { Avatar, Confetti, Mascot, formatTime, roomPaints } from "@/components/ui";
+import { Avatar, Confetti, Icon, Mascot, formatTime, roomPaints, type Paint } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
+import { useNow } from "@/lib/hooks";
+import { BoardView, ReactionBar, ReactionFloats } from "./BoardView";
 import type { RoomView } from "./types";
 
 export function RoomResults({ room }: { room: RoomView }) {
@@ -15,6 +17,7 @@ export function RoomResults({ room }: { room: RoomView }) {
   const start = room.startAt ?? 0;
   const iWon = coop ? room.outcome === "won" : room.winnerId === room.meId;
   const stillPlaying = room.status === "playing";
+  const [watchId, setWatchId] = useState<string | null>(null);
 
   useEffect(() => {
     if (iWon) feedback.win();
@@ -36,7 +39,7 @@ export function RoomResults({ room }: { room: RoomView }) {
     title = `${winnerName} won!`;
     line = "Better luck next round.";
   }
-  if (stillPlaying && !coop) line = "Waiting for the others to finish…";
+  if (stillPlaying && !coop) line = "The others are still solving. Tap Watch to spectate.";
 
   const standings = [...room.players].sort((a, b) => {
     if (coop) return b.filled - a.filled;
@@ -47,9 +50,15 @@ export function RoomResults({ room }: { room: RoomView }) {
   const myTime = room.myFinishedAt ? room.myFinishedAt - start : room.endedAt && coop ? room.endedAt - start : null;
   const xp = coop ? (room.outcome === "won" ? 30 : 0) : iWon ? 45 : room.myFinishedAt ? 20 : 0;
 
+  const watched = room.players.find((p) => p.id === watchId);
+  if (watched && watched.board && room.puzzle) {
+    return <Watch room={room} p={watched} paints={paints} onBack={() => setWatchId(null)} onSwitch={setWatchId} />;
+  }
+
   return (
     <main className="screen">
       {iWon && <Confetti />}
+      <ReactionFloats room={room} paints={paints} />
       <section style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, paddingTop: 24 }}>
         <Mascot size={120} mood={iWon || room.myFinishedAt ? "joy" : "wow"} className={iWon ? "jump" : "bob"} />
         <h1 style={{ margin: "8px 0 0", fontSize: 38, fontWeight: 900, color: iWon ? "var(--lime-dark)" : "var(--ink)", textAlign: "center" }}>{title}</h1>
@@ -82,14 +91,19 @@ export function RoomResults({ room }: { room: RoomView }) {
                   <span className="bar" style={{ height: 8 }}><span style={{ width: `${p.progress}%`, background: paints.get(p.id)!.face }} /></span>
                 )}
               </span>
-              <span style={{ fontSize: 16, fontWeight: 900, color: p.isMe ? "var(--sky-edge)" : "var(--muted)" }}>
-                {coop ? `${p.filled} cells` : p.finishedAt ? formatTime(p.finishedAt - start) : p.gaveUp ? "Gave up" : "Solving…"}
-              </span>
+              {!coop && stillPlaying && !p.isMe && !p.finishedAt && !p.gaveUp && p.board ? (
+                <button className="btn btn-sm btn-green" style={{ width: "auto", padding: "0 14px" }} onClick={() => { feedback.tap(); setWatchId(p.id); }} aria-label={`Watch ${p.name} solve`}>Watch</button>
+              ) : (
+                <span style={{ fontSize: 16, fontWeight: 900, color: p.isMe ? "var(--sky-edge)" : "var(--muted)" }}>
+                  {coop ? `${p.filled} cells` : p.finishedAt ? formatTime(p.finishedAt - start) : p.gaveUp ? "Gave up" : "Solving…"}
+                </span>
+              )}
             </div>
           );
         })}
       </section>
 
+      {!coop && stillPlaying && room.players.length > 1 && <ReactionBar code={room.code} />}
       <div className="grow" />
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {room.isHost ? (
@@ -111,5 +125,60 @@ function Stat({ label, value, face, ink, head }: { label: string; value: string;
       <span style={{ background: face, color: head, fontSize: 12, fontWeight: 900, letterSpacing: ".06em", textAlign: "center", padding: 5 }}>{label}</span>
       <span style={{ fontSize: 24, fontWeight: 900, color: ink, textAlign: "center", padding: "10px 0" }}>{value}</span>
     </div>
+  );
+}
+
+type Player = RoomView["players"][number];
+
+/** Watch someone who's still solving: their live board, progress and mistakes. */
+function Watch({ room, p, paints, onBack, onSwitch }: { room: RoomView; p: Player; paints: Map<string, Paint>; onBack: () => void; onSwitch: (id: string) => void }) {
+  const now = useNow(1000);
+  const start = room.startAt ?? 0;
+  const paint = paints.get(p.id)!;
+  const others = room.players.filter((x) => !x.isMe && !x.finishedAt && !x.gaveUp && x.board && x.id !== p.id);
+  const last = room.lastMove?.playerId === p.id && room.lastMove.correct ? room.lastMove.cell : null;
+  const done = !!p.finishedAt || p.gaveUp || room.status === "finished";
+  return (
+    <main className="screen tight" style={{ gap: 12 }}>
+      <header className="topbar" style={{ gap: 8 }}>
+        <button className="icon-btn" aria-label="Back to results" onClick={() => { feedback.tap(); onBack(); }}><Icon.Back /></button>
+        <span className="chip chip-sky">WATCHING</span>
+        <span className="grow" />
+        <span style={{ fontSize: 18, fontWeight: 900, fontVariantNumeric: "tabular-nums", color: "var(--muted)" }} aria-label="Race time">{formatTime((p.finishedAt ?? now) - start)}</span>
+      </header>
+
+      <section style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Avatar name={p.name} paint={paint} size={40} />
+        <span style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
+          <span style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 17, fontWeight: 900 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+            <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{room.empties - p.filled} left{p.mistakes > 0 && <span style={{ color: "var(--cherry-edge)" }}> · ✕{p.mistakes}</span>}</span>
+          </span>
+          <span className="bar"><span style={{ width: `${p.progress}%`, background: paint.face }} /></span>
+        </span>
+      </section>
+
+      {done && (
+        <p className="pop" style={{ margin: 0, padding: "10px 14px", borderRadius: 16, background: "var(--sun-soft)", textAlign: "center", fontSize: 17, fontWeight: 900, color: "var(--sun-ink)" }}>
+          {p.finishedAt ? `${p.name} finished in ${formatTime(p.finishedAt - start)}!` : p.gaveUp ? `${p.name} gave up` : "Race over"}
+        </p>
+      )}
+
+      <BoardView puzzle={room.puzzle!} values={p.board} paint={paint} last={last} />
+
+      <ReactionBar code={room.code} />
+      {others.length > 0 && (
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+          {others.map((o) => (
+            <button key={o.id} className="btn btn-white btn-sm" style={{ width: "auto", padding: "0 12px" }} onClick={() => { feedback.tap(); onSwitch(o.id); }}>
+              Watch {o.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="grow" />
+      <button className="btn btn-white" onClick={() => { feedback.tap(); onBack(); }}>Back to results</button>
+      <ReactionFloats room={room} paints={paints} />
+    </main>
   );
 }

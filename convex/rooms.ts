@@ -99,6 +99,10 @@ export const view = query({
     const empties = room.puzzle ? countEmpty(room.puzzle) : 81;
     const shared = boards.find((b) => !b.playerId);
     const now = Date.now();
+    // In a race, once you've finished or given up (or the race is over) you may watch the others' boards.
+    const myRaceBoard = boards.find((b) => b.playerId === me._id);
+    const canWatch = room.mode === "race" && (room.status === "finished" || !!myRaceBoard?.finishedAt || !!myRaceBoard?.gaveUp);
+    const puzzle = room.puzzle;
 
     const players = await Promise.all(
       all.map(async (m) => {
@@ -121,6 +125,10 @@ export const view = query({
           mistakes: board?.mistakes ?? 0,
           finishedAt: board?.finishedAt,
           gaveUp: board?.gaveUp ?? false,
+          // Which cells they've filled ("1") without the digits, so rivals can peek mid-race.
+          mask: board && puzzle ? [...board.values].map((d, i) => (puzzle[i] === "0" && d !== "0" ? "1" : "0")).join("") : null,
+          // Their actual board, only for someone who's done racing.
+          board: canWatch && board ? board.values : null,
         };
       }),
     );

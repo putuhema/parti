@@ -8,6 +8,7 @@ import { Game } from "@/components/Game";
 import { Avatar, Hearts, Icon, Sheet, formatTime, roomPaints, type Paint } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
+import { BoardView, ReactionBar, ReactionFloats } from "./BoardView";
 import type { RoomView } from "./types";
 
 const REACTIONS = ["Nice!", "Help?", "On it!"];
@@ -17,11 +18,11 @@ export function RoomGame({ room }: { room: RoomView }) {
   const place = useMutation(api.rooms.place);
   const hint = useMutation(api.rooms.hint);
   const presence = useMutation(api.rooms.presence);
-  const react = useMutation(api.rooms.react);
   const giveUp = useMutation(api.rooms.giveUp);
   const leave = useMutation(api.rooms.leave);
   const now = useNow(1000);
   const [quitOpen, setQuitOpen] = useState(false);
+  const [peekId, setPeekId] = useState<string | null>(null);
   const paints = useMemo(() => roomPaints(room.players), [room.players]);
   const coop = room.mode === "coop";
   const startAt = room.startAt ?? 0;
@@ -46,23 +47,28 @@ export function RoomGame({ room }: { room: RoomView }) {
   }
   if (!coop && room.winnerId && room.winnerId !== room.meId) {
     announce = { id: `w${room.winnerId}`, text: `${nameOf(room.winnerId)} finished first!`, kind: "info" };
-  }
-  useEffect(() => { if (announce?.kind === "info" && announce.id.startsWith("m")) feedback.ping(); }, [announce?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Floating reactions from friends.
-  const [mountedAt] = useState(() => Date.now());
-  const seen = useRef(new Set<string>());
-  const [floats, setFloats] = useState<{ id: string; text: string; paint: Paint; left: number }[]>([]);
-  useEffect(() => {
-    for (const r of room.reactions) {
-      if (seen.current.has(r.id) || r.at < mountedAt) continue;
-      seen.current.add(r.id);
-      const paint = paints.get(r.playerId) ?? paints.values().next().value!;
-      const f = { id: r.id, text: r.playerId === room.meId ? r.text : `${nameOf(r.playerId)}: ${r.text}`, paint, left: 10 + Math.random() * 50 };
-      setFloats((x) => [...x, f]);
-      setTimeout(() => setFloats((x) => x.filter((y) => y.id !== f.id)), 2300);
+  } else if (!coop) {
+    // Close-race alerts: a rival gets near the end.
+    let closest: { id: string; left: number } | null = null;
+    for (const p of room.players) {
+      if (p.isMe || p.finishedAt || p.gaveUp) continue;
+      const left = room.empties - p.filled;
+      if (left <= 10 && (!closest || left < closest.left)) closest = { id: p.id, left };
     }
-  }, [room.reactions]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (closest) {
+      const tier = closest.left <= 3 ? 3 : 10;
+      announce = {
+        id: `l${closest.id}-${tier}`,
+        text: tier === 3 ? `${nameOf(closest.id)} has only ${closest.left} cell${closest.left === 1 ? "" : "s"} left!` : `${nameOf(closest.id)} has ${closest.left} cells left`,
+        kind: "bad",
+      };
+    }
+  }
+  useEffect(() => {
+    if (!announce) return;
+    if (announce.id.startsWith("l")) feedback.check();
+    else if (announce.kind === "info" && announce.id.startsWith("m")) feedback.ping();
+  }, [announce?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cursors = coop
     ? room.players
@@ -83,7 +89,7 @@ export function RoomGame({ room }: { room: RoomView }) {
         <span className={`chip ${coop ? "chip-grape" : "chip-sky"}`}>{coop ? "CO-OP" : "RACE"} · {room.difficulty.toUpperCase()}</span>
         <span className="grow" />
         <span style={{ fontSize: 18, fontWeight: 900, fontVariantNumeric: "tabular-nums", color: "var(--muted)" }} aria-label="Time">{formatTime(elapsed)}</span>
-        <Hearts left={heartsLeft} total={room.maxLives} size={coop ? 18 : 22} />
+        {coop ? <Hearts left={heartsLeft} total={room.maxLives} size={18} /> : <Mistakes n={room.myMistakes} free={room.maxLives} />}
       </header>
 
       {coop ? (
@@ -108,16 +114,17 @@ export function RoomGame({ room }: { room: RoomView }) {
           {room.players.map((p) => {
             const paint = paints.get(p.id)!;
             return (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, opacity: p.gaveUp ? 0.4 : 1 }}>
+              <button key={p.id} type="button" className="race-row" disabled={p.isMe} onClick={() => { feedback.tap(); setPeekId(p.id); }}
+                aria-label={p.isMe ? undefined : `Peek at ${p.name}'s board: ${p.progress}% done, ${p.mistakes} mistakes`} style={{ opacity: p.gaveUp ? 0.4 : 1 }}>
                 <Avatar name={p.name} paint={paint} size={30} />
                 <span style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
                   <span style={{ display: "flex", justifyContent: "space-between", gap: 4, fontSize: 13, fontWeight: 900 }}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.isMe ? "You" : p.name}</span>
-                    <span style={{ color: "var(--muted)" }}>{p.finishedAt ? "✓" : `${p.progress}%`}</span>
+                    <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{p.finishedAt ? "✓" : `${p.progress}%`}{p.mistakes > 0 && <span style={{ color: "var(--cherry-edge)" }}> ✕{p.mistakes}</span>}</span>
                   </span>
                   <span className="bar"><span style={{ width: `${p.progress}%`, background: p.isMe ? "var(--sky)" : paint.face }} /></span>
                 </span>
-              </div>
+              </button>
             );
           })}
         </section>
@@ -137,25 +144,16 @@ export function RoomGame({ room }: { room: RoomView }) {
         />
       )}
 
-      {coop && room.players.length > 1 && (
-        <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-          {REACTIONS.map((r) => (
-            <button key={r} className="btn btn-white btn-sm" style={{ minHeight: 36, fontSize: 14, color: "var(--ink)" }} onClick={() => { feedback.tap(); void react({ code: room.code, text: r }); }}>
-              {r}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {floats.map((f) => (
-        <div key={f.id} className="reaction-float" style={{ left: `${f.left}%`, background: f.paint.face, boxShadow: `0 4px 0 ${f.paint.edge}` }}>{f.text}</div>
-      ))}
+      {room.players.length > 1 && <ReactionBar code={room.code} extra={coop ? REACTIONS : []} />}
+      <ReactionFloats room={room} paints={paints} />
 
       {counting && (
         <Countdown startAt={startAt} onDone={() => setCounting(false)} label={coop ? "Solve it together" : "First to finish wins"}>
           {room.players.map((p) => <Avatar key={p.id} name={p.name} paint={paints.get(p.id)!} size={44} />)}
         </Countdown>
       )}
+
+      <PeekSheet room={room} id={peekId} paints={paints} onClose={() => setPeekId(null)} />
 
       <Sheet open={quitOpen} onClose={() => setQuitOpen(false)} label="Leave game">
         <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, textAlign: "center" }}>{coop ? "Leave your team?" : "Give up this race?"}</h2>
@@ -210,5 +208,39 @@ function Countdown({ startAt, onDone, label, children }: { startAt: number; onDo
       <span key={left} className="countdown">{left > 3 ? "Ready" : left}</span>
       <div style={{ display: "flex", gap: 10 }}>{children}</div>
     </div>
+  );
+}
+
+/** Mistakes in a race: the first few are free, after that each one freezes the keypad for a moment. */
+function Mistakes({ n, free }: { n: number; free: number }) {
+  const over = n >= free;
+  return (
+    <span className={`mistakes${over ? " over" : n ? " some" : ""}`} aria-label={`${n} mistake${n === 1 ? "" : "s"}${over ? ", each new one freezes the keypad for 3 seconds" : `, ${free - n} before the keypad starts freezing`}`}>
+      <span aria-hidden="true">✕</span> {n}
+      {!over && <span className="of">/{free}</span>}
+    </span>
+  );
+}
+
+/** A rival's board: which cells they've filled, without the numbers. */
+function PeekSheet({ room, id, paints, onClose }: { room: RoomView; id: string | null; paints: Map<string, Paint>; onClose: () => void }) {
+  const p = room.players.find((x) => x.id === id);
+  return (
+    <Sheet open={!!p} onClose={onClose} label={p ? `${p.name}'s board` : "Board"}>
+      {p && room.puzzle && (
+        <>
+          <span style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center" }}>
+            <Avatar name={p.name} paint={paints.get(p.id)!} size={32} />
+            <span style={{ fontSize: 20, fontWeight: 900 }}>{p.name}</span>
+          </span>
+          <p style={{ margin: 0, textAlign: "center", fontSize: 15, fontWeight: 800, color: "var(--muted)" }}>
+            {p.finishedAt ? "Finished!" : p.gaveUp ? "Gave up" : `${room.empties - p.filled} cells left`} · {p.mistakes} mistake{p.mistakes === 1 ? "" : "s"}
+          </p>
+          <div style={{ width: "100%", maxWidth: 300, alignSelf: "center" }}><BoardView puzzle={room.puzzle} mask={p.mask} paint={paints.get(p.id)!} /></div>
+          <p style={{ margin: 0, textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--muted)" }}>Colored squares are cells they&apos;ve filled. No peeking at numbers!</p>
+          <button className="btn btn-white" onClick={onClose}>Back to my board</button>
+        </>
+      )}
+    </Sheet>
   );
 }

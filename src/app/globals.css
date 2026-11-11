@@ -597,3 +597,17 @@ a { text-decoration: none; }
 .nav-badge { position: absolute; top: 4px; right: calc(50% - 22px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--cherry); color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--cream-2); }
 .acct { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 22px; background: #fff; box-shadow: 0 3px 0 var(--cream-3); }
 .acct.guest { background: var(--sun-soft); box-shadow: 0 3px 0 var(--sun-line); }
+
+/* ---------- Sudoku race extras ---------- */
+.race-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px; margin: -4px; border: 0; border-radius: 12px; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: background 150ms; }
+.race-row:disabled { cursor: default; }
+.race-row:not(:disabled):active { background: var(--cream-2); }
+.mistakes { display: inline-flex; align-items: baseline; gap: 3px; padding: 5px 10px; border-radius: 12px; background: var(--mist); color: var(--muted); font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.mistakes.some { background: var(--cherry-soft); color: var(--cherry-edge); }
+.mistakes.over { background: var(--cherry); color: #fff; box-shadow: 0 3px 0 var(--cherry-edge); }
+.mistakes .of { font-size: 12px; opacity: .7; }
+.bv { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); aspect-ratio: 1; border: 3px solid var(--plum); border-radius: 12px; overflow: hidden; background: #fff; }
+.bv-cell { display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: clamp(11px, 3.6vw, 17px); font-weight: 900; color: var(--plum); transition: background 300ms; }
+.bv-cell.br { border-right: 2px solid var(--plum); }
+.bv-cell.bb { border-bottom: 2px solid var(--plum); }
+.bv-cell.last { animation: pop 400ms var(--spring); box-shadow: inset 0 0 0 2px var(--sun-edge); }

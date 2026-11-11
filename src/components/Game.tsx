@@ -132,7 +132,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
           if (r.lockMs) {
             setLocked(true);
             later(() => setLocked(false), r.lockMs);
-            showToast("Out of hearts! Keypad frozen", "bad");
+            showToast("Too many mistakes! Frozen for 3s", "bad");
           } else showToast("Oops! Not quite", "bad");
         }
       } catch (e) {
