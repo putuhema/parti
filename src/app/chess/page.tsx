@@ -15,7 +15,7 @@ import { ShellPage } from "@/components/shell";
 import { LESSONS } from "@/lib/lessons";
 
 export default function ChessHome() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const router = useRouter();
   const create = useMutation(api.chess.create);
   const joinAny = useMutation(api.chess.joinAny);
@@ -36,7 +36,7 @@ export default function ChessHome() {
     feedback.tap();
     setBusy(true);
     try {
-      const c = await create({ token, mode });
+      const c = await create({ mode });
       router.push(`/chess/room/${c}`);
     } finally {
       setBusy(false);
@@ -47,7 +47,7 @@ export default function ChessHome() {
     e.preventDefault();
     setError("");
     try {
-      const path = await joinAny({ token, code: code.trim().toUpperCase() });
+      const path = await joinAny({ code: code.trim().toUpperCase() });
       feedback.correct();
       router.push(path);
     } catch (err) {

@@ -8,7 +8,6 @@ import { BUZZ_CATS, COLS, tileValue } from "../../../convex/lib/buzz/board";
 import { Countdown, TimerBar, Toast } from "@/components/words/common";
 import { Avatar, Confetti, Icon, Mascot, Sheet, roomPaints, type Paint } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import { CatChip, GAME_NAME, fmtScore, useAct, type BuzzGameView, type BuzzView } from "./common";
 
 const PICK_MS = 20_000;
@@ -99,13 +98,12 @@ export function BuzzPlay({ room }: { room: BuzzView }) {
 }
 
 function Header({ room }: { room: BuzzView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const leave = useMutation(api.buzz.leave);
   const [ask, setAsk] = useState(false);
   const g = room.game!;
   const left = g.tiles.filter((t) => !t.used).length;
-  const go = async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/buzz"); };
+  const go = async () => { await leave({ code: room.code }).catch(() => {}); router.push("/buzz"); };
   return (
     <>
       <header className="topbar" style={{ gap: 8 }}>
@@ -263,7 +261,6 @@ function QuestionCard({ room, g, paints, nameOf, busy, act }: { room: BuzzView; 
 }
 
 function Done({ room, g, paints, nameOf }: { room: BuzzView; g: BuzzGameView; paints: Map<string, Paint>; nameOf: (id?: string | null) => string }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const rematch = useMutation(api.buzz.rematch);
   const leave = useMutation(api.buzz.leave);
@@ -303,11 +300,11 @@ function Done({ room, g, paints, nameOf }: { room: BuzzView; g: BuzzGameView; pa
         })}
       </div>
       {room.isHost ? (
-        <button className="btn btn-green" style={{ maxWidth: 380 }} onClick={() => { feedback.tap(); void rematch({ token, code: room.code }); }}>Play again</button>
+        <button className="btn btn-green" style={{ maxWidth: 380 }} onClick={() => { feedback.tap(); void rematch({ code: room.code }); }}>Play again</button>
       ) : (
         <p className="wait" style={{ margin: 0, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host…</p>
       )}
-      <button className="btn btn-white" style={{ maxWidth: 380 }} onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/buzz"); }}>Back home</button>
+      <button className="btn btn-white" style={{ maxWidth: 380 }} onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/buzz"); }}>Back home</button>
     </div>
   );
 }

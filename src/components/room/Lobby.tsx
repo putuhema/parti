@@ -8,8 +8,8 @@ import type { Difficulty } from "../../../convex/lib/sudoku";
 import { Avatar, Icon, TopBar, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import type { RoomView } from "./types";
+import { InviteFriends } from "@/components/InviteFriends";
 
 const LEVELS: { id: Difficulty; label: string }[] = [
   { id: "easy", label: "Easy" },
@@ -19,7 +19,6 @@ const LEVELS: { id: Difficulty; label: string }[] = [
 ];
 
 export function Lobby({ room }: { room: RoomView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const settings = useMutation(api.rooms.settings);
   const start = useMutation(api.rooms.start);
@@ -49,7 +48,7 @@ export function Lobby({ room }: { room: RoomView }) {
     setStarting(true);
     setError("");
     try {
-      await start({ token, code: room.code });
+      await start({ code: room.code });
     } catch (e) {
       setError(errorText(e));
       setStarting(false);
@@ -61,7 +60,7 @@ export function Lobby({ room }: { room: RoomView }) {
   return (
     <main className="screen">
       <TopBar
-        back={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/sudoku"); }}
+        back={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/sudoku"); }}
         title={host ? "New room" : "Room"}
       />
 
@@ -75,7 +74,7 @@ export function Lobby({ room }: { room: RoomView }) {
           ))}
         </div>
         <button className="btn btn-white btn-sm" onClick={share}>
-          <Icon.Share /> {copied ? "Link copied!" : "Share invite"}
+          <Icon.Share /> {copied ? "Link copied!" : "Share link"}
         </button>
       </section>
 
@@ -88,7 +87,7 @@ export function Lobby({ room }: { room: RoomView }) {
               className="select-card"
               aria-pressed={room.mode === m}
               disabled={!host}
-              onClick={() => { feedback.tap(); void settings({ token, code: room.code, mode: m }); }}
+              onClick={() => { feedback.tap(); void settings({ code: room.code, mode: m }); }}
             >
               <span style={{ width: 44, height: 44, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center", background: m === "race" ? "var(--sky)" : "var(--grape)", boxShadow: `0 3px 0 ${m === "race" ? "var(--sky-btn)" : "var(--grape-edge)"}` }}>
                 {m === "race" ? <Icon.Bolt /> : <Icon.People size={26} />}
@@ -111,7 +110,7 @@ export function Lobby({ room }: { room: RoomView }) {
               className="seg"
               aria-pressed={room.difficulty === l.id}
               disabled={!host}
-              onClick={() => { feedback.tap(); void settings({ token, code: room.code, difficulty: l.id }); }}
+              onClick={() => { feedback.tap(); void settings({ code: room.code, difficulty: l.id }); }}
             >
               {l.label}
             </button>
@@ -143,6 +142,7 @@ export function Lobby({ room }: { room: RoomView }) {
         </div>
       </section>
 
+      <InviteFriends kind="sudoku" code={room.code} />
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (

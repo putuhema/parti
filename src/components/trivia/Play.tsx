@@ -8,7 +8,6 @@ import { BOARD, CATS, cellOf, type Space } from "../../../convex/lib/trivia/boar
 import { Countdown, TimerBar, Toast } from "@/components/words/common";
 import { Avatar, Confetti, Icon, Mascot, Sheet, roomPaints, type Paint } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import { CatChip, Die, GAME_NAME, Gem, GemRow, useAct, type TriviaGameView, type TriviaView } from "./common";
 
 const ANSWER_MS = 20_000;
@@ -94,11 +93,10 @@ export function TriviaPlay({ room }: { room: TriviaView }) {
 }
 
 function Header({ room }: { room: TriviaView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const leave = useMutation(api.trivia.leave);
   const [ask, setAsk] = useState(false);
-  const go = async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/trivia"); };
+  const go = async () => { await leave({ code: room.code }).catch(() => {}); router.push("/trivia"); };
   return (
     <>
       <header className="topbar" style={{ gap: 8 }}>
@@ -297,7 +295,6 @@ function QuestionCard({ g, myTurn, turnName, busy, onAnswer }: { g: TriviaGameVi
 }
 
 function Done({ room, g, paints, nameOf }: { room: TriviaView; g: TriviaGameView; paints: Map<string, Paint>; nameOf: (id?: string | null) => string }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const rematch = useMutation(api.trivia.rematch);
   const leave = useMutation(api.trivia.leave);
@@ -335,11 +332,11 @@ function Done({ room, g, paints, nameOf }: { room: TriviaView; g: TriviaGameView
         })}
       </div>
       {room.isHost ? (
-        <button className="btn btn-green" style={{ maxWidth: 380 }} onClick={() => { feedback.tap(); void rematch({ token, code: room.code }); }}>Play again</button>
+        <button className="btn btn-green" style={{ maxWidth: 380 }} onClick={() => { feedback.tap(); void rematch({ code: room.code }); }}>Play again</button>
       ) : (
         <p className="wait" style={{ margin: 0, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host…</p>
       )}
-      <button className="btn btn-white" style={{ maxWidth: 380 }} onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/trivia"); }}>Back home</button>
+      <button className="btn btn-white" style={{ maxWidth: 380 }} onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/trivia"); }}>Back home</button>
     </div>
   );
 }

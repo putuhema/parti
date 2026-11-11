@@ -8,9 +8,9 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { Avatar, Icon, Sheet, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import { MODES, ModeIcon, modeInfo } from "./bits";
 import type { ChessView } from "./types";
+import { InviteFriends } from "@/components/InviteFriends";
 
 const CLOCKS = [
   { ms: 3 * 60_000, label: "3 min" },
@@ -25,7 +25,6 @@ const LEVELS = [
 ];
 
 export function ChessLobby({ room }: { room: ChessView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const settings = useMutation(api.chess.settings);
   const start = useMutation(api.chess.start);
@@ -46,7 +45,7 @@ export function ChessLobby({ room }: { room: ChessView }) {
   const set = (patch: { mode?: typeof room.mode; clockMs?: number; botLevel?: number; coachId?: Id<"players"> }) => {
     if (!host) return;
     feedback.tap();
-    void settings({ token, code: room.code, ...patch }).catch((e) => setError(errorText(e)));
+    void settings({ code: room.code, ...patch }).catch((e) => setError(errorText(e)));
   };
 
   async function share() {
@@ -68,7 +67,7 @@ export function ChessLobby({ room }: { room: ChessView }) {
     setStarting(true);
     setError("");
     try {
-      await start({ token, code: room.code });
+      await start({ code: room.code });
     } catch (e) {
       setError(errorText(e));
       setStarting(false);
@@ -78,7 +77,7 @@ export function ChessLobby({ room }: { room: ChessView }) {
   return (
     <main className="screen tight">
       <header className="topbar">
-        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/chess"); }}><Icon.Close /></button>
+        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/chess"); }}><Icon.Close /></button>
         <span style={{ display: "flex", flexDirection: "column", flex: 1 }}>
           <span className="label" style={{ fontSize: 12 }}>Room code</span>
           <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: ".14em" }}>{room.code}</span>
@@ -149,6 +148,7 @@ export function ChessLobby({ room }: { room: ChessView }) {
         </section>
       )}
 
+      <InviteFriends kind="chess" code={room.code} />
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (
@@ -158,7 +158,7 @@ export function ChessLobby({ room }: { room: ChessView }) {
       ) : (
         <p className="wait" style={{ margin: 0, textAlign: "center", fontSize: 17, fontWeight: 900, color: "var(--muted)", minHeight: 54, display: "flex", alignItems: "center", justifyContent: "center" }}>Waiting for the host to start</p>
       )}
-      {!ready && host && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Invite a friend"}</button>}
+      {!ready && host && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Share link"}</button>}
     </main>
   );
 }

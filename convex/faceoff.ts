@@ -155,9 +155,9 @@ function onDeadline(g: FaceGame, now: number) {
 
 // ---------- Lobby ----------
 export const create = mutation({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
-    const me = await requirePlayer(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const me = await requirePlayer(ctx);
     const code = await freeCode(ctx);
     await ctx.db.insert("faceRooms", { code, hostId: me._id, status: "lobby", gameNo: 0, members: [{ playerId: me._id, seat: 0, lastSeen: Date.now() }] });
     return code;
@@ -165,9 +165,9 @@ export const create = mutation({
 });
 
 export const join = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!room) throw new ConvexError("No room with that code");
     if (room.members.some((m) => m.playerId === me._id)) return room.code;
@@ -179,9 +179,9 @@ export const join = mutation({
 });
 
 export const start = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start");
     if (room.status === "playing") return;
@@ -198,9 +198,9 @@ export const start = mutation({
 });
 
 export const rematch = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start a rematch");
     await ctx.db.patch(room._id, { status: "lobby", game: undefined, startAt: undefined, endedAt: undefined });
@@ -208,9 +208,9 @@ export const rematch = mutation({
 });
 
 export const leave = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!room || !room.members.some((m) => m.playerId === me._id)) return;
     const rest = room.members.filter((m) => m.playerId !== me._id);
@@ -231,9 +231,9 @@ export const leave = mutation({
 });
 
 export const presence = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await findPlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!me || !room || !room.members.some((m) => m.playerId === me._id)) return;
     await ctx.db.patch(room._id, { members: room.members.map((m) => (m.playerId === me._id ? { ...m, lastSeen: Date.now() } : m)) });
@@ -243,12 +243,11 @@ export const presence = mutation({
 // ---------- Playing ----------
 export const act = mutation({
   args: {
-    token: v.string(),
     code: v.string(),
     move: v.union(v.object({ kind: v.literal("ask"), q: v.string() }), v.object({ kind: v.literal("guess"), char: v.number() })),
   },
-  handler: async (ctx, { token, code, move }) => {
-    const me = await requirePlayer(ctx, token);
+  handler: async (ctx, { code, move }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.status !== "playing" || !room.game) throw new ConvexError("The game isn't running");
     const g = room.game as FaceGame;
@@ -283,9 +282,9 @@ export const tick = internalMutation({
 
 // ---------- What each phone sees ----------
 export const view = query({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await findPlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!me || !room) return null;
     const members = await Promise.all(

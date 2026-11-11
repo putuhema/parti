@@ -7,7 +7,6 @@ import { api } from "../../../convex/_generated/api";
 import { CATS } from "../../../convex/lib/trivia/board";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 
 export type TriviaView = NonNullable<FunctionReturnType<typeof api.trivia.view>>;
 export type TriviaGameView = NonNullable<TriviaView["game"]>;
@@ -69,13 +68,12 @@ export function Die({ value, size = 56, rolling }: { value: number | null; size?
 
 /** Send a move. Errors show as a short toast and a buzz. */
 export function useAct(code: string) {
-  const { token } = useIdentity();
   const act = useMutation(api.trivia.act);
   const [toast, setToast] = useState<{ text: string; kind: "good" | "bad" | "info"; id: number } | null>(null);
   const say = (text: string, kind: "good" | "bad" | "info" = "info") => setToast({ text, kind, id: Date.now() + Math.random() });
   async function send(action: "roll" | "move" | "pick" | "answer", n?: number) {
     try {
-      return await act({ token, code, action, n });
+      return await act({ code, action, n });
     } catch (e) {
       feedback.wrong();
       say(errorText(e, "Not allowed"), "bad");

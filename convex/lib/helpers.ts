@@ -23,15 +23,18 @@ export function weekKey(ms: number) {
   return dateKey(d.getTime());
 }
 
-export async function findPlayer(ctx: QueryCtx, token: string) {
+/** The player for whoever is signed in (guest or account), or null. */
+export async function findPlayer(ctx: QueryCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return null;
   return await ctx.db
     .query("players")
-    .withIndex("by_token", (q) => q.eq("token", token))
+    .withIndex("by_user", (q) => q.eq("userId", identity.subject))
     .unique();
 }
 
-export async function requirePlayer(ctx: QueryCtx, token: string) {
-  const p = await findPlayer(ctx, token);
+export async function requirePlayer(ctx: QueryCtx) {
+  const p = await findPlayer(ctx);
   if (!p) throw new ConvexError("Player not found");
   return p;
 }

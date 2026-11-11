@@ -36,7 +36,8 @@ export const difficulty = v.union(
 export default defineSchema({
   players: defineTable({
     name: v.string(),
-    token: v.string(), // secret kept on the device; acts as a lightweight login
+    userId: v.optional(v.string()), // Better Auth user (a guest or a saved account)
+    token: v.optional(v.string()), // old device-only login; cleared once claimed by an account
     tier: v.number(), // league: 0 Bronze .. 4 Diamond
     weekKey: v.string(), // Monday (UTC) of the week the weekly numbers belong to
     weekXp: v.number(),
@@ -47,6 +48,7 @@ export default defineSchema({
     chessLessons: v.optional(v.record(v.string(), v.number())), // lesson id -> best stars
   })
     .index("by_token", ["token"])
+    .index("by_user", ["userId"])
     .index("by_tier_week_xp", ["tier", "weekKey", "weekXp"])
     .index("by_week_pts", ["weekKey", "weekPts"]),
 
@@ -222,6 +224,16 @@ export default defineSchema({
   })
     .index("by_player_date", ["playerId", "date"])
     .index("by_date_score", ["date", "score"]),
+
+  invites: defineTable({
+    from: v.id("players"),
+    to: v.id("players"),
+    game: v.string(), // e.g. "Scramble"
+    path: v.string(), // where accepting takes you, e.g. /scramble/room/K7Q2
+    code: v.string(),
+  })
+    .index("by_to", ["to"])
+    .index("by_from_to_code", ["from", "to", "code"]),
 
   chessReactions: defineTable({
     roomId: v.id("chessRooms"),

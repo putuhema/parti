@@ -8,9 +8,9 @@ import type { WordGame } from "./words";
 const mask = (word: string, shown: (ch: string, i: number) => boolean) => word.split("").map((ch, i) => (shown(ch, i) ? ch : "_")).join("");
 
 export const view = query({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await findPlayer(ctx);
     const room = await ctx.db
       .query("wordRooms")
       .withIndex("by_code", (q) => q.eq("code", code.trim().toUpperCase()))

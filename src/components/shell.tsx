@@ -1,7 +1,9 @@
 "use client";
 
+import { useQuery } from "convex/react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { api } from "../../convex/_generated/api";
 import { feedback } from "@/lib/feedback";
 
 /** The "pums party" wordmark. */
@@ -56,6 +58,7 @@ const TABS: { id: Tab; href: string; label: string; icon: (on: boolean) => React
 ];
 
 export function BottomNav({ current }: { current?: Tab }) {
+  const invites = useQuery(api.invites.mine)?.length ?? 0;
   return (
     <nav className="bottom-nav" aria-label="Main">
       {TABS.map((t) => {
@@ -64,6 +67,7 @@ export function BottomNav({ current }: { current?: Tab }) {
           <Link key={t.id} href={t.href} aria-current={on ? "page" : undefined} onClick={() => { feedback.unlock(); feedback.tap(); }}>
             {t.icon(on)}
             <span>{t.label}</span>
+            {t.id === "friends" && invites > 0 && <span className="nav-badge" aria-label={`${invites} game invite${invites > 1 ? "s" : ""}`}>{invites}</span>}
           </Link>
         );
       })}

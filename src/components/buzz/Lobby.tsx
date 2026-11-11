@@ -9,13 +9,12 @@ import { Avatar, Icon, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 import { GAME_NAME, RULE, type BuzzView } from "./common";
+import { InviteFriends } from "@/components/InviteFriends";
 
 const ROW_LABEL: Record<number, string> = { 3: "Quick", 4: "Classic", 5: "Long" };
 
 export function BuzzLobby({ room }: { room: BuzzView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const settings = useMutation(api.buzz.settings);
   const start = useMutation(api.buzz.start);
@@ -47,7 +46,7 @@ export function BuzzLobby({ room }: { room: BuzzView }) {
     setStarting(true);
     setError("");
     try {
-      await start({ token, code: room.code });
+      await start({ code: room.code });
     } catch (e) {
       setError(errorText(e));
       setStarting(false);
@@ -57,7 +56,7 @@ export function BuzzLobby({ room }: { room: BuzzView }) {
   return (
     <main className="screen tight">
       <header className="topbar">
-        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/buzz"); }}><Icon.Close /></button>
+        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/buzz"); }}><Icon.Close /></button>
         <span style={{ display: "flex", flexDirection: "column", flex: 1 }}>
           <span className="label" style={{ fontSize: 12 }}>Room code</span>
           <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: ".14em" }}>{room.code}</span>
@@ -76,7 +75,7 @@ export function BuzzLobby({ room }: { room: BuzzView }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
           {ROWS.map((r) => (
             <button key={r} className="seg" aria-pressed={room.rows === r} disabled={!host} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minHeight: 56 }}
-              onClick={() => { feedback.tap(); void settings({ token, code: room.code, rows: r }).catch((e) => setError(errorText(e))); }}>
+              onClick={() => { feedback.tap(); void settings({ code: room.code, rows: r }).catch((e) => setError(errorText(e))); }}>
               <span style={{ fontSize: 18 }}>{r * COLS} tiles</span>
               <span style={{ fontSize: 12 }}>{ROW_LABEL[r]}</span>
             </button>
@@ -97,6 +96,7 @@ export function BuzzLobby({ room }: { room: BuzzView }) {
         </div>
       </section>
 
+      <InviteFriends kind="buzz" code={room.code} />
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (
@@ -104,7 +104,7 @@ export function BuzzLobby({ room }: { room: BuzzView }) {
       ) : (
         <p className="wait" style={{ margin: 0, textAlign: "center", fontSize: 17, fontWeight: 900, color: "var(--muted)", minHeight: 54, display: "flex", alignItems: "center", justifyContent: "center" }}>Waiting for the host to start</p>
       )}
-      {host && room.members.length < BUZZ_MAX && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Invite friends"}</button>}
+      {host && room.members.length < BUZZ_MAX && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Share link"}</button>}
     </main>
   );
 }

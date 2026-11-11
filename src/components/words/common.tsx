@@ -9,7 +9,6 @@ import { Avatar, Confetti, Icon, Mascot, Sheet, roomPaints, type Paint } from "@
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 
 export type WordsView = NonNullable<FunctionReturnType<typeof api.wordsView.view>>;
 export type WordsGame = NonNullable<WordsView["game"]>;
@@ -40,13 +39,12 @@ export function ModeChip({ mode, size = 36 }: { mode: ModeMeta; size?: number })
 
 /** Send a move. Errors show as a short toast and a buzz. */
 export function useAct(code: string) {
-  const { token } = useIdentity();
   const act = useMutation(api.words.act);
   const [toast, setToast] = useState<{ text: string; kind: "good" | "bad" | "info"; id: number } | null>(null);
   const say = (text: string, kind: "good" | "bad" | "info" = "info") => setToast({ text, kind, id: Date.now() + Math.random() });
   async function send(action: string, args: { text?: string; n?: number; list?: string[] } = {}) {
     try {
-      return (await act({ token, code, action, ...args })) as Record<string, unknown> | null;
+      return (await act({ code, action, ...args })) as Record<string, unknown> | null;
     } catch (e) {
       feedback.wrong();
       say(errorText(e, "Not allowed"), "bad");
@@ -159,13 +157,12 @@ export function useNameOf(room: WordsView) {
 
 /** Header with leave button and the mode chip. */
 export function WordsHeader({ room, right }: { room: WordsView; right?: ReactNode }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const leave = useMutation(api.words.leave);
   const [ask, setAsk] = useState(false);
   const mode = wordMode(room.mode);
   const langLabel = room.lang === "mix" ? "EN + ID" : room.lang.toUpperCase();
-  const go = async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/words"); };
+  const go = async () => { await leave({ code: room.code }).catch(() => {}); router.push("/words"); };
   return (
     <>
       <header className="topbar" style={{ gap: 8 }}>
@@ -206,7 +203,6 @@ export function Countdown({ startAt, label }: { startAt: number; label: string }
 
 /** End of game screen with rematch. */
 export function DoneOverlay({ room, title, sub, happy }: { room: WordsView; title: string; sub: string; happy: boolean }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const rematch = useMutation(api.words.rematch);
   const leave = useMutation(api.words.leave);
@@ -223,11 +219,11 @@ export function DoneOverlay({ room, title, sub, happy }: { room: WordsView; titl
       <h2 style={{ margin: 0, fontSize: 34, fontWeight: 900, textAlign: "center", color: happy ? "var(--lime-dark)" : "var(--tangerine-ink)" }}>{title}</h2>
       <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>{sub}</p>
       {room.isHost ? (
-        <button className="btn btn-green" onClick={() => { feedback.tap(); void rematch({ token, code: room.code }); }}>Play again</button>
+        <button className="btn btn-green" onClick={() => { feedback.tap(); void rematch({ code: room.code }); }}>Play again</button>
       ) : (
         <p className="wait" style={{ margin: 0, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host…</p>
       )}
-      <button className="btn btn-white" onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/words"); }}>Back home</button>
+      <button className="btn btn-white" onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/words"); }}>Back home</button>
     </div>
   );
 }

@@ -54,9 +54,9 @@ async function addMember(ctx: MutationCtx, roomId: Id<"rooms">, playerId: Id<"pl
 }
 
 export const create = mutation({
-  args: { token: v.string(), mode, difficulty },
+  args: { mode, difficulty },
   handler: async (ctx, args) => {
-    const me = await requirePlayer(ctx, args.token);
+    const me = await requirePlayer(ctx);
     const code = await freeCode(ctx);
     const roomId = await ctx.db.insert("rooms", {
       code,
@@ -73,9 +73,9 @@ export const create = mutation({
 });
 
 export const join = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code.trim());
     if (!room) throw new ConvexError("No room with that code");
     if (await membership(ctx, room._id, me._id)) return room.code;
@@ -88,9 +88,9 @@ export const join = mutation({
 });
 
 export const view = query({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await findPlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!me || !room) return null;
     const all = await members(ctx, room._id);
@@ -163,9 +163,9 @@ export const view = query({
 });
 
 export const settings = mutation({
-  args: { token: v.string(), code: v.string(), mode: v.optional(mode), difficulty: v.optional(difficulty) },
+  args: { code: v.string(), mode: v.optional(mode), difficulty: v.optional(difficulty) },
   handler: async (ctx, args) => {
-    const me = await requirePlayer(ctx, args.token);
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, args.code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can change this");
     if (room.status === "playing") return;
@@ -177,9 +177,9 @@ export const settings = mutation({
 });
 
 export const start = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start");
     if (room.status === "playing") return;
@@ -226,8 +226,8 @@ async function maybeFinishRace(ctx: MutationCtx, room: Doc<"rooms">) {
 
 export const HINTS = 3;
 
-async function doPlace(ctx: MutationCtx, token: string, code: string, cell: number, digitIn: number | "hint") {
-    const me = await requirePlayer(ctx, token);
+async function doPlace(ctx: MutationCtx, code: string, cell: number, digitIn: number | "hint") {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     const seat = await membership(ctx, room._id, me._id);
     if (!seat) throw new ConvexError("You are not in this room");
@@ -291,19 +291,19 @@ async function doPlace(ctx: MutationCtx, token: string, code: string, cell: numb
 }
 
 export const place = mutation({
-  args: { token: v.string(), code: v.string(), cell: v.number(), digit: v.number() },
-  handler: (ctx, a) => doPlace(ctx, a.token, a.code, a.cell, a.digit),
+  args: { code: v.string(), cell: v.number(), digit: v.number() },
+  handler: (ctx, a) => doPlace(ctx, a.code, a.cell, a.digit),
 });
 
 export const hint = mutation({
-  args: { token: v.string(), code: v.string(), cell: v.number() },
-  handler: (ctx, a) => doPlace(ctx, a.token, a.code, a.cell, "hint"),
+  args: { code: v.string(), cell: v.number() },
+  handler: (ctx, a) => doPlace(ctx, a.code, a.cell, "hint"),
 });
 
 export const giveUp = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.status !== "playing" || room.mode !== "race") return;
     const board = (await boardsFor(ctx, room)).find((b) => b.playerId === me._id);
@@ -313,9 +313,9 @@ export const giveUp = mutation({
 });
 
 export const rematch = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start a rematch");
     await ctx.db.patch(room._id, {
@@ -326,9 +326,9 @@ export const rematch = mutation({
 });
 
 export const leave = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!room) return;
     const seat = await membership(ctx, room._id, me._id);
@@ -346,9 +346,9 @@ export const leave = mutation({
 
 /** Heartbeat + which cell I'm on (friends see it in co-op). */
 export const presence = mutation({
-  args: { token: v.string(), code: v.string(), cell: v.optional(v.number()) },
-  handler: async (ctx, { token, code, cell }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string(), cell: v.optional(v.number()) },
+  handler: async (ctx, { code, cell }) => {
+    const me = await findPlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!me || !room) return;
     const seat = await membership(ctx, room._id, me._id);
@@ -357,9 +357,9 @@ export const presence = mutation({
 });
 
 export const react = mutation({
-  args: { token: v.string(), code: v.string(), text: v.string() },
-  handler: async (ctx, { token, code, text }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string(), text: v.string() },
+  handler: async (ctx, { code, text }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (!(await membership(ctx, room._id, me._id))) return;
     await ctx.db.insert("reactions", { roomId: room._id, playerId: me._id, text: text.slice(0, 20) });

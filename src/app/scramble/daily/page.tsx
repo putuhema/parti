@@ -11,7 +11,6 @@ import { Avatar, Confetti, Mascot, TopBar, paintFor } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 
 type Daily = NonNullable<FunctionReturnType<typeof api.scramble.daily>>;
 
@@ -19,9 +18,8 @@ type Daily = NonNullable<FunctionReturnType<typeof api.scramble.daily>>;
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function ScrambleDaily() {
-  const { token } = useIdentity();
   const [date] = useState(today);
-  const daily = useQuery(api.scramble.daily, { token, date });
+  const daily = useQuery(api.scramble.daily, { date });
   if (!daily) return <main className="screen" style={{ alignItems: "center", justifyContent: "center" }}><Mascot size={80} className="bob" /></main>;
   if (!daily.run) return <Intro daily={daily} />;
   if (!daily.run.done) return daily.grid ? <Play daily={daily} /> : null;
@@ -46,7 +44,6 @@ function Board({ daily }: { daily: Daily }) {
 }
 
 function Intro({ daily }: { daily: Daily }) {
-  const { token } = useIdentity();
   const start = useMutation(api.scramble.dailyStart);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -55,7 +52,7 @@ function Intro({ daily }: { daily: Daily }) {
     feedback.tap();
     setBusy(true);
     try {
-      await start({ token });
+      await start({});
     } catch (e) {
       setError(errorText(e));
       setBusy(false);
@@ -81,7 +78,6 @@ function Intro({ daily }: { daily: Daily }) {
 }
 
 function Play({ daily }: { daily: Daily }) {
-  const { token } = useIdentity();
   const submit = useMutation(api.scramble.dailySubmit);
   const finish = useMutation(api.scramble.dailyFinish);
   const run = daily.run!;
@@ -91,12 +87,12 @@ function Play({ daily }: { daily: Daily }) {
   useEffect(() => {
     if (!over || sent.current) return;
     sent.current = true;
-    void finish({ token, date: daily.date }).catch(() => { sent.current = false; });
-  }, [over, finish, token, daily.date]);
+    void finish({ date: daily.date }).catch(() => { sent.current = false; });
+  }, [over, finish, daily.date]);
   return (
     <main className="screen tight" style={{ gap: 12 }}>
       <TopBar title={`Daily grid #${daily.number}`} right={<span className="chip chip-sun">{run.score} PTS</span>} />
-      <GridPlay grid={daily.grid!} endsAt={run.endsAt} found={run.found} disabled={over} submit={(path) => submit({ token, date: daily.date, path })} />
+      <GridPlay grid={daily.grid!} endsAt={run.endsAt} found={run.found} disabled={over} submit={(path) => submit({ date: daily.date, path })} />
       <Countdown startAt={run.endsAt - ROUND_MS} label={`Daily grid #${daily.number}`} />
       {over && <div className="overlay"><Mascot size={80} className="bob" /><span style={{ fontSize: 22, fontWeight: 900 }}>Time&apos;s up!</span></div>}
     </main>

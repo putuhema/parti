@@ -8,13 +8,11 @@ import { points } from "../../../convex/lib/scramble/board";
 import { Countdown } from "@/components/words/common";
 import { Avatar, Confetti, Icon, Mascot, Sheet, roomPaints, type Paint } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import { GAME_NAME, type GridGameView, type GridView } from "./common";
 import { GridPlay, Missed } from "./Grid";
 
 export function ScramblePlay({ room }: { room: GridView }) {
   const g = room.game!;
-  const { token } = useIdentity();
   const submit = useMutation(api.scramble.submit);
   const paints = roomPaints(room.members);
   const nameOf = (id: string) => {
@@ -31,7 +29,7 @@ export function ScramblePlay({ room }: { room: GridView }) {
         endsAt={g.endsAt}
         found={mine}
         disabled={!g.isPlayer || !!g.done}
-        submit={(path) => submit({ token, code: room.code, path })}
+        submit={(path) => submit({ code: room.code, path })}
         header={g.players.length > 1 ? <Scores g={g} paints={paints} nameOf={nameOf} /> : undefined}
       />
       {room.startAt && !g.done && <Countdown startAt={room.startAt} label="Find as many words as you can" />}
@@ -41,11 +39,10 @@ export function ScramblePlay({ room }: { room: GridView }) {
 }
 
 function Header({ room, g }: { room: GridView; g: GridGameView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const leave = useMutation(api.scramble.leave);
   const [ask, setAsk] = useState(false);
-  const go = async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/scramble"); };
+  const go = async () => { await leave({ code: room.code }).catch(() => {}); router.push("/scramble"); };
   return (
     <>
       <header className="topbar" style={{ gap: 8 }}>
@@ -80,7 +77,6 @@ function Scores({ g, paints, nameOf }: { g: GridGameView; paints: Map<string, Pa
 }
 
 function Done({ room, g, paints, nameOf }: { room: GridView; g: GridGameView; paints: Map<string, Paint>; nameOf: (id: string) => string }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const rematch = useMutation(api.scramble.rematch);
   const leave = useMutation(api.scramble.leave);
@@ -129,11 +125,11 @@ function Done({ room, g, paints, nameOf }: { room: GridView; g: GridGameView; pa
       </div>
       <div style={{ width: "100%", maxWidth: 420 }}><Missed words={g.missed} total={g.total} /></div>
       {room.isHost ? (
-        <button className="btn btn-green" style={{ maxWidth: 420, flexShrink: 0 }} onClick={() => { feedback.tap(); void rematch({ token, code: room.code }); }}>New grid</button>
+        <button className="btn btn-green" style={{ maxWidth: 420, flexShrink: 0 }} onClick={() => { feedback.tap(); void rematch({ code: room.code }); }}>New grid</button>
       ) : (
         <p className="wait" style={{ margin: 0, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host…</p>
       )}
-      <button className="btn btn-white" style={{ maxWidth: 420, flexShrink: 0 }} onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/scramble"); }}>Back home</button>
+      <button className="btn btn-white" style={{ maxWidth: 420, flexShrink: 0 }} onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/scramble"); }}>Back home</button>
     </div>
   );
 }

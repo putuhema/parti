@@ -18,10 +18,10 @@ const PODIUM = {
 } as const;
 
 export default function LeaderboardPage() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const [period, setPeriod] = useState<Period>("today");
   const [scope, setScope] = useState<Scope>("friends");
-  const data = useQuery(api.leaderboard.get, { token, period, scope });
+  const data = useQuery(api.leaderboard.get, { period, scope });
   const now = useNow(60_000);
   const league = period === "league";
 

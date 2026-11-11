@@ -19,7 +19,7 @@ const STEPS: [string, string][] = [
 ];
 
 export default function TriviaHome() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const router = useRouter();
   const create = useMutation(api.trivia.create);
   const joinAny = useMutation(api.chess.joinAny);
@@ -34,7 +34,7 @@ export default function TriviaHome() {
     feedback.tap();
     setBusy(true);
     try {
-      const c = await create({ token });
+      const c = await create({});
       router.push(`/trivia/room/${c}`);
     } catch (e) {
       setError(errorText(e));
@@ -46,7 +46,7 @@ export default function TriviaHome() {
     e.preventDefault();
     setError("");
     try {
-      const path = await joinAny({ token, code: code.trim().toUpperCase() });
+      const path = await joinAny({ code: code.trim().toUpperCase() });
       feedback.correct();
       router.push(path);
     } catch (err) {

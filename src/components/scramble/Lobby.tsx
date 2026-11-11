@@ -9,11 +9,10 @@ import { Avatar, Icon, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 import { GAME_NAME, RULE, type GridView } from "./common";
+import { InviteFriends } from "@/components/InviteFriends";
 
 export function GridLobby({ room }: { room: GridView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const start = useMutation(api.scramble.start);
   const settings = useMutation(api.scramble.settings);
@@ -45,7 +44,7 @@ export function GridLobby({ room }: { room: GridView }) {
     setStarting(true);
     setError("");
     try {
-      await start({ token, code: room.code });
+      await start({ code: room.code });
     } catch (e) {
       setError(errorText(e));
       setStarting(false);
@@ -55,7 +54,7 @@ export function GridLobby({ room }: { room: GridView }) {
   return (
     <main className="screen tight">
       <header className="topbar">
-        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/scramble"); }}><Icon.Close /></button>
+        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/scramble"); }}><Icon.Close /></button>
         <span style={{ display: "flex", flexDirection: "column", flex: 1 }}>
           <span className="label" style={{ fontSize: 12 }}>Room code</span>
           <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: ".14em" }}>{room.code}</span>
@@ -74,7 +73,7 @@ export function GridLobby({ room }: { room: GridView }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
           {([["en", "English"], ["id", "Bahasa Indonesia"]] as const).map(([l, label]) => (
             <button key={l} className="seg" aria-pressed={room.lang === l} disabled={!host} style={{ minHeight: 52 }}
-              onClick={() => { feedback.tap(); void settings({ token, code: room.code, lang: l }).catch((e) => setError(errorText(e))); }}>
+              onClick={() => { feedback.tap(); void settings({ code: room.code, lang: l }).catch((e) => setError(errorText(e))); }}>
               {label}
             </button>
           ))}
@@ -100,6 +99,7 @@ export function GridLobby({ room }: { room: GridView }) {
         </div>
       </section>
 
+      <InviteFriends kind="scramble" code={room.code} />
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (
@@ -107,7 +107,7 @@ export function GridLobby({ room }: { room: GridView }) {
       ) : (
         <p className="wait" style={{ margin: 0, textAlign: "center", fontSize: 17, fontWeight: 900, color: "var(--muted)", minHeight: 54, display: "flex", alignItems: "center", justifyContent: "center" }}>Waiting for the host to start</p>
       )}
-      {host && room.members.length < SCRAMBLE_MAX && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Invite friends"}</button>}
+      {host && room.members.length < SCRAMBLE_MAX && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Share link"}</button>}
     </main>
   );
 }

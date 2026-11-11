@@ -193,9 +193,9 @@ function scrambleRound(g: WordGame, round: number) {
 
 // ---------- Lobby ----------
 export const create = mutation({
-  args: { token: v.string(), mode: v.optional(wordMode), lang: v.optional(wordLang) },
-  handler: async (ctx, { token, mode, lang }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { mode: v.optional(wordMode), lang: v.optional(wordLang) },
+  handler: async (ctx, { mode, lang }) => {
+    const me = await requirePlayer(ctx);
     const code = await freeCode(ctx);
     await ctx.db.insert("wordRooms", { code, hostId: me._id, mode: mode ?? "chain", lang: lang ?? "en", status: "lobby", gameNo: 0, members: [{ playerId: me._id, seat: 0, lastSeen: Date.now() }] });
     return code;
@@ -203,9 +203,9 @@ export const create = mutation({
 });
 
 export const join = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!room) throw new ConvexError("No room with that code");
     if (room.members.some((m) => m.playerId === me._id)) return room.code;
@@ -219,9 +219,9 @@ export const join = mutation({
 });
 
 export const settings = mutation({
-  args: { token: v.string(), code: v.string(), mode: v.optional(wordMode), lang: v.optional(wordLang) },
+  args: { code: v.string(), mode: v.optional(wordMode), lang: v.optional(wordLang) },
   handler: async (ctx, a) => {
-    const me = await requirePlayer(ctx, a.token);
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, a.code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can change this");
     if (room.status === "playing") return;
@@ -230,9 +230,9 @@ export const settings = mutation({
 });
 
 export const start = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start");
     if (room.status === "playing") return;
@@ -250,9 +250,9 @@ export const start = mutation({
 });
 
 export const rematch = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start a rematch");
     await ctx.db.patch(room._id, { status: "lobby", game: undefined, startAt: undefined, endedAt: undefined });
@@ -260,9 +260,9 @@ export const rematch = mutation({
 });
 
 export const leave = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!room || !room.members.some((m) => m.playerId === me._id)) return;
     const rest = room.members.filter((m) => m.playerId !== me._id);
@@ -282,9 +282,9 @@ export const leave = mutation({
 });
 
 export const presence = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await findPlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!me || !room || !room.members.some((m) => m.playerId === me._id)) return;
     await ctx.db.patch(room._id, { members: room.members.map((m) => (m.playerId === me._id ? { ...m, lastSeen: Date.now() } : m)) });
@@ -293,9 +293,9 @@ export const presence = mutation({
 
 // ---------- Playing: one entry point for every mode ----------
 export const act = mutation({
-  args: { token: v.string(), code: v.string(), action: v.string(), text: v.optional(v.string()), n: v.optional(v.number()), list: v.optional(v.array(v.string())) },
+  args: { code: v.string(), action: v.string(), text: v.optional(v.string()), n: v.optional(v.number()), list: v.optional(v.array(v.string())) },
   handler: async (ctx, a) => {
-    const me = await requirePlayer(ctx, a.token);
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, a.code);
     if (room.status !== "playing" || !room.game) throw new ConvexError("The game isn't running");
     const g = room.game as WordGame;

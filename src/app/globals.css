@@ -90,7 +90,7 @@ a { text-decoration: none; }
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 6px;
   background: var(--cream-2); border-radius: 999px; box-shadow: 0 4px 0 var(--cream-3), 0 10px 24px rgba(74, 63, 85, .12);
 }
-.bottom-nav a { min-height: 52px; border-radius: 999px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--plum-soft); font-size: 13px; font-weight: 800; transition: background 160ms, color 160ms, transform var(--press); }
+.bottom-nav a { position: relative; min-height: 52px; border-radius: 999px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--plum-soft); font-size: 13px; font-weight: 800; transition: background 160ms, color 160ms, transform var(--press); }
 .bottom-nav a[aria-current="page"] { color: var(--plum); background: #fff; box-shadow: 0 2px 0 var(--cream-3); }
 .bottom-nav a:active { transform: scale(.94); }
 .game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -590,3 +590,10 @@ a { text-decoration: none; }
 .sg-daily:active { transform: translateY(4px); box-shadow: none; }
 .overlay.sg-results { justify-content: flex-start; overflow-y: auto; padding-top: 40px; gap: 14px; }
 .sg-results > * { flex-shrink: 0; }
+
+/* ---------- Friends hub ---------- */
+.fr-invite { display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px; border-radius: 20px; background: var(--sun-soft); border: 2px solid var(--sun-line); box-shadow: 0 3px 0 var(--sun-line); }
+.fr-join { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 22px; background: var(--cream-2); box-shadow: 0 4px 0 var(--cream-3); }
+.nav-badge { position: absolute; top: 4px; right: calc(50% - 22px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--cherry); color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--cream-2); }
+.acct { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 22px; background: #fff; box-shadow: 0 3px 0 var(--cream-3); }
+.acct.guest { background: var(--sun-soft); box-shadow: 0 3px 0 var(--sun-line); }

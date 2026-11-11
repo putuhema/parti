@@ -7,7 +7,6 @@ import { api } from "../../../convex/_generated/api";
 import { CHARACTERS, type Character, type Hair, type Shirt } from "../../../convex/lib/faceoff/roster";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 
 export type FaceView = NonNullable<FunctionReturnType<typeof api.faceoff.view>>;
 export type FaceGameView = NonNullable<FaceView["game"]>;
@@ -26,13 +25,12 @@ export function useNameOf(room: FaceView) {
 
 /** Send a move. Errors show as a short toast and a buzz. */
 export function useAct(code: string) {
-  const { token } = useIdentity();
   const act = useMutation(api.faceoff.act);
   const [toast, setToast] = useState<{ text: string; kind: "good" | "bad" | "info"; id: number } | null>(null);
   const say = (text: string, kind: "good" | "bad" | "info" = "info") => setToast({ text, kind, id: Date.now() + Math.random() });
   async function send(move: { kind: "ask"; q: string } | { kind: "guess"; char: number }) {
     try {
-      await act({ token, code, move });
+      await act({ code, move });
       return true;
     } catch (e) {
       feedback.wrong();

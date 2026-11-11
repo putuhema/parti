@@ -8,13 +8,11 @@ import { Game } from "@/components/Game";
 import { Avatar, Hearts, Icon, Sheet, formatTime, roomPaints, type Paint } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 import type { RoomView } from "./types";
 
 const REACTIONS = ["Nice!", "Help?", "On it!"];
 
 export function RoomGame({ room }: { room: RoomView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const place = useMutation(api.rooms.place);
   const hint = useMutation(api.rooms.hint);
@@ -29,11 +27,11 @@ export function RoomGame({ room }: { room: RoomView }) {
   const startAt = room.startAt ?? 0;
   const [counting, setCounting] = useState(() => Date.now() < startAt);
 
-  const onPlace = useCallback((cell: number, digit: number) => place({ token, code: room.code, cell, digit }), [place, token, room.code]);
-  const onSelect = useCallback((cell: number) => { if (coop) void presence({ token, code: room.code, cell }).catch(() => {}); }, [coop, presence, token, room.code]);
+  const onPlace = useCallback((cell: number, digit: number) => place({ code: room.code, cell, digit }), [place, room.code]);
+  const onSelect = useCallback((cell: number) => { if (coop) void presence({ code: room.code, cell }).catch(() => {}); }, [coop, presence, room.code]);
   const hints = useMemo(
-    () => ({ left: room.hintsLeft, use: (cell: number) => hint({ token, code: room.code, cell }) }),
-    [room.hintsLeft, hint, token, room.code],
+    () => ({ left: room.hintsLeft, use: (cell: number) => hint({ code: room.code, cell }) }),
+    [room.hintsLeft, hint, room.code],
   );
 
   // Announcements: teammates' moves (co-op) and the first finisher (race).
@@ -142,7 +140,7 @@ export function RoomGame({ room }: { room: RoomView }) {
       {coop && room.players.length > 1 && (
         <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
           {REACTIONS.map((r) => (
-            <button key={r} className="btn btn-white btn-sm" style={{ minHeight: 36, fontSize: 14, color: "var(--ink)" }} onClick={() => { feedback.tap(); void react({ token, code: room.code, text: r }); }}>
+            <button key={r} className="btn btn-white btn-sm" style={{ minHeight: 36, fontSize: 14, color: "var(--ink)" }} onClick={() => { feedback.tap(); void react({ code: room.code, text: r }); }}>
               {r}
             </button>
           ))}
@@ -171,9 +169,9 @@ export function RoomGame({ room }: { room: RoomView }) {
           onClick={async () => {
             setQuitOpen(false);
             if (coop) {
-              await leave({ token, code: room.code });
+              await leave({ code: room.code });
               router.push("/sudoku");
-            } else await giveUp({ token, code: room.code });
+            } else await giveUp({ code: room.code });
           }}
         >
           {coop ? "Leave" : "Give up"}

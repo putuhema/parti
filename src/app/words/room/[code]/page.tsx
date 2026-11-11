@@ -9,13 +9,11 @@ import { WordsLobby } from "@/components/words/Lobby";
 import { WordsPlay } from "@/components/words/Play";
 import { Mascot } from "@/components/ui";
 import { errorText } from "@/lib/errors";
-import { useIdentity } from "@/lib/identity";
 
 export default function WordsRoomPage() {
   const { code: raw } = useParams<{ code: string }>();
   const code = raw.toUpperCase();
-  const { token } = useIdentity();
-  const room = useQuery(api.wordsView.view, { token, code });
+  const room = useQuery(api.wordsView.view, { code });
   const join = useMutation(api.words.join);
   const presence = useMutation(api.words.presence);
   const [joinError, setJoinError] = useState("");
@@ -27,17 +25,17 @@ export default function WordsRoomPage() {
     if (room?.isMember) wasMember.current = true;
   }, [room?.isMember]);
   useEffect(() => {
-    if (needsJoin && !wasMember.current) join({ token, code }).catch((e) => setJoinError(errorText(e, "Couldn't join")));
-  }, [needsJoin, token, code, join]);
+    if (needsJoin && !wasMember.current) join({ code }).catch((e) => setJoinError(errorText(e, "Couldn't join")));
+  }, [needsJoin, code, join]);
 
   const isMember = room?.isMember;
   useEffect(() => {
     if (!isMember) return;
-    const beat = () => void presence({ token, code }).catch(() => {});
+    const beat = () => void presence({ code }).catch(() => {});
     beat();
     const t = setInterval(beat, 15_000);
     return () => clearInterval(t);
-  }, [isMember, token, code, presence]);
+  }, [isMember, code, presence]);
 
   if (room === undefined) return <Center><Mascot size={80} className="bob" /></Center>;
   if (room === null) return <Message title="Room not found" text={`There's no word room with the code ${code}.`} />;

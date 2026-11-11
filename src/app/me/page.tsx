@@ -8,10 +8,11 @@ import { ShellPage } from "@/components/shell";
 import { Avatar, Icon, ME, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
+import { authClient } from "@/lib/auth-client";
 import { useIdentity } from "@/lib/identity";
 
 export default function MePage() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const rename = useMutation(api.players.rename);
   const [muted, setMuted] = useState(feedback.isMuted());
   const [editing, setEditing] = useState(false);
@@ -29,7 +30,7 @@ export default function MePage() {
     e.preventDefault();
     setError("");
     try {
-      await rename({ token, name });
+      await rename({ name });
       feedback.correct();
       setEditing(false);
     } catch (err) {
@@ -55,6 +56,8 @@ export default function MePage() {
         ))}
       </div>
 
+      <Account />
+
       <Link href="/leaderboard" className="pill-btn" onClick={() => feedback.tap()} style={{ fontSize: 18 }}>
         <Icon.Trophy /> Leaderboard
       </Link>
@@ -77,5 +80,90 @@ export default function MePage() {
         </form>
       </Sheet>
     </ShellPage>
+  );
+}
+
+type Mode = "create" | "signin";
+
+/** Guest or saved account. Saving keeps your stats and friends and lets you sign in on another phone. */
+function Account() {
+  const { me } = useIdentity();
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [leaving, setLeaving] = useState(false);
+
+  if (me.account) {
+    return (
+      <section className="acct">
+        <span className="label" style={{ color: "var(--plum-soft)" }}>Account</span>
+        <span style={{ fontSize: 16, fontWeight: 800, color: "var(--plum)", overflowWrap: "anywhere" }}>Signed in as {me.account.email}</span>
+        <button className="btn btn-white btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => { feedback.tap(); setLeaving(true); }}>Sign out</button>
+        <Sheet open={leaving} onClose={() => setLeaving(false)} label="Sign out">
+          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, textAlign: "center" }}>Sign out?</h2>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>This phone starts over as a new guest. Sign back in any time to get your stats and friends back.</p>
+          <button className="btn btn-green" onClick={() => setLeaving(false)}>Stay signed in</button>
+          <button className="btn btn-white" style={{ color: "var(--cherry-edge)" }} onClick={() => { feedback.tap(); void authClient.signOut(); }}>Sign out</button>
+        </Sheet>
+      </section>
+    );
+  }
+
+  return (
+    <section className="acct guest">
+      <span className="label" style={{ color: "var(--sun-ink)" }}>Playing as a guest</span>
+      <span style={{ fontSize: 15, fontWeight: 700, color: "var(--plum)", lineHeight: 1.35 }}>Save your account to keep your stats and friends, and to play on another phone.</span>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <button className="btn btn-green btn-sm" onClick={() => { feedback.unlock(); feedback.tap(); setMode("create"); }}>Sign up</button>
+        <button className="btn btn-white btn-sm" onClick={() => { feedback.unlock(); feedback.tap(); setMode("signin"); }}>Sign in</button>
+      </div>
+      <Sheet open={mode !== null} onClose={() => setMode(null)} label={mode === "signin" ? "Sign in" : "Save your account"}>
+        {mode && <AccountForm key={mode} mode={mode} setMode={setMode} />}
+      </Sheet>
+    </section>
+  );
+}
+
+function AccountForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+  const { me } = useIdentity();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const create = mode === "create";
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const r = create
+      ? await authClient.signUp.email({ email: email.trim(), password, name: me.name })
+      : await authClient.signIn.email({ email: email.trim(), password });
+    if (r.error) {
+      feedback.wrong();
+      setError(r.error.message ?? (create ? "Couldn't create the account" : "Wrong email or password"));
+      setBusy(false);
+      return;
+    }
+    feedback.correct();
+    // The session switches over and the app reloads its data by itself.
+  }
+
+  return (
+    <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, textAlign: "center" }}>{create ? "Save your account" : "Sign in"}</h2>
+      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
+        {create ? `Everything you've done as ${me.name} comes with you.` : "Your account's stats and friends replace this guest's on this phone."}
+      </p>
+      <label htmlFor="acct-email" className="label">Email</label>
+      <input id="acct-email" className="input" type="email" autoComplete="email" autoFocus required value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} />
+      <label htmlFor="acct-pass" className="label">Password</label>
+      <input id="acct-pass" className="input" type="password" autoComplete={create ? "new-password" : "current-password"} required minLength={8} value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} />
+      {create && <span style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)" }}>At least 8 characters.</span>}
+      {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
+      <button className="btn btn-green" disabled={busy || !email.trim() || password.length < 8}>{create ? "Save account" : "Sign in"}</button>
+      <button type="button" className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={() => setMode(create ? "signin" : "create")}>
+        {create ? "I already have an account" : "Make a new account instead"}
+      </button>
+    </form>
   );
 }

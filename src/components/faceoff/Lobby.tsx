@@ -8,11 +8,10 @@ import { Avatar, Icon, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 import { GAME_NAME, RULE, type FaceView } from "./common";
+import { InviteFriends } from "@/components/InviteFriends";
 
 export function FaceLobby({ room }: { room: FaceView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const start = useMutation(api.faceoff.start);
   const leave = useMutation(api.faceoff.leave);
@@ -43,7 +42,7 @@ export function FaceLobby({ room }: { room: FaceView }) {
     setStarting(true);
     setError("");
     try {
-      await start({ token, code: room.code });
+      await start({ code: room.code });
     } catch (e) {
       setError(errorText(e));
       setStarting(false);
@@ -53,7 +52,7 @@ export function FaceLobby({ room }: { room: FaceView }) {
   return (
     <main className="screen tight">
       <header className="topbar">
-        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/faceoff"); }}><Icon.Close /></button>
+        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/faceoff"); }}><Icon.Close /></button>
         <span style={{ display: "flex", flexDirection: "column", flex: 1 }}>
           <span className="label" style={{ fontSize: 12 }}>Room code</span>
           <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: ".14em" }}>{room.code}</span>
@@ -86,6 +85,7 @@ export function FaceLobby({ room }: { room: FaceView }) {
         </div>
       </section>
 
+      <InviteFriends kind="faceoff" code={room.code} />
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (
@@ -93,7 +93,7 @@ export function FaceLobby({ room }: { room: FaceView }) {
       ) : (
         <p className="wait" style={{ margin: 0, textAlign: "center", fontSize: 17, fontWeight: 900, color: "var(--muted)", minHeight: 54, display: "flex", alignItems: "center", justifyContent: "center" }}>Waiting for the host to start</p>
       )}
-      {host && solo && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Invite a friend"}</button>}
+      {host && solo && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Share link"}</button>}
     </main>
   );
 }

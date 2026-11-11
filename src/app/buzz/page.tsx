@@ -19,7 +19,7 @@ const STEPS: [string, string][] = [
 ];
 
 export default function BuzzHome() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const router = useRouter();
   const create = useMutation(api.buzz.create);
   const joinAny = useMutation(api.chess.joinAny);
@@ -34,7 +34,7 @@ export default function BuzzHome() {
     feedback.tap();
     setBusy(true);
     try {
-      const c = await create({ token });
+      const c = await create({});
       router.push(`/buzz/room/${c}`);
     } catch (e) {
       setError(errorText(e));
@@ -46,7 +46,7 @@ export default function BuzzHome() {
     e.preventDefault();
     setError("");
     try {
-      const path = await joinAny({ token, code: code.trim().toUpperCase() });
+      const path = await joinAny({ code: code.trim().toUpperCase() });
       feedback.correct();
       router.push(path);
     } catch (err) {

@@ -24,7 +24,6 @@ import { Avatar, Confetti, FRIENDS, Icon, ME, Mascot, Sheet, roomPaints, type Pa
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 import { Board, PIECE_NAMES, Piece, type Arrow, type Mark } from "./Board";
 import { Captured, Clock, Energy, PlayerBar, capturedFrom, modeInfo } from "./bits";
 import type { ChessView } from "./types";
@@ -53,7 +52,6 @@ const REASONS: Record<string, string> = {
 
 export function ChessPlay({ room }: { room: ChessView }) {
   const g = room.game!;
-  const { token } = useIdentity();
   const router = useRouter();
   const now = useNow(g.clock ? 200 : 1000);
   const rules = rulesFor(room.mode);
@@ -164,7 +162,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
     setPending({ seq: g.seq, state: { ...res.state, cells: mergeFog(state.cells, res.state.cells) }, last: [from, to] });
     setSel(null);
     if (res.captured) feedback.capture(); else feedback.move();
-    api_.move({ token, code: room.code, from, to, promo: m.promo }).catch(fail);
+    api_.move({ code: room.code, from, to, promo: m.promo }).catch(fail);
   }
 
   function tapBoard(i: number) {
@@ -181,7 +179,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
       cells[i] = "*";
       setPending({ seq: g.seq, state: { ...state, cells: cells.join(""), duckPending: false }, last: last ?? [i, i] });
       feedback.correct();
-      api_.duck({ token, code: room.code, sq: i }).catch(fail);
+      api_.duck({ code: room.code, sq: i }).catch(fail);
       return;
     }
     if (cardMode) {
@@ -190,7 +188,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
       const c = cardMode.card;
       setCardMode(null);
       feedback.clear();
-      api_.card({ token, code: room.code, card: c, a: cardMode.first ?? i, b: cardMode.first !== undefined ? i : undefined }).catch(fail);
+      api_.card({ code: room.code, card: c, a: cardMode.first ?? i, b: cardMode.first !== undefined ? i : undefined }).catch(fail);
       return;
     }
     if (sel != null && targets.includes(i)) return tryMove(sel, i);
@@ -210,7 +208,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
   const shownMarks: Mark[] = draft && draft.seq === g.seq ? draft.marks : ((coach?.marks as Mark[]) ?? []);
   function sendMarks(arrows: [number, number][], marks: Mark[]) {
     setDraft({ seq: g.seq, arrows, marks });
-    api_.marks({ token, code: room.code, arrows, marks }).catch(fail);
+    api_.marks({ code: room.code, arrows, marks }).catch(fail);
   }
   function coachTap(i: number) {
     if (result) return;
@@ -308,7 +306,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
     else { title = `${sideName(w)} wins`; sub = `Won ${reason}.`; }
   }
 
-  const leaveRoom = async () => { await api_.leave({ token, code: room.code }).catch(() => {}); router.push("/chess"); };
+  const leaveRoom = async () => { await api_.leave({ code: room.code }).catch(() => {}); router.push("/chess"); };
   const cards = room.mode === "powerups" && state.power ? state.power : null;
   const cardPlayed = cards ? cards.cardPly === state.ply : false;
 
@@ -320,7 +318,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
         <span className="grow" />
         {coach && !isCoach && <span className="chip" style={{ background: "#FFF0DB", color: "#9A5200" }}>YOU LEARN</span>}
         {coach && isCoach && (
-          <button className="icon-btn" style={{ width: "auto", gap: 6, fontSize: 12, fontWeight: 900, color: "var(--muted)" }} role="switch" aria-checked={coach.takebacks} aria-label="Allow take-backs" onClick={() => api_.coachSettings({ token, code: room.code, takebacks: !coach.takebacks }).catch(fail)}>
+          <button className="icon-btn" style={{ width: "auto", gap: 6, fontSize: 12, fontWeight: 900, color: "var(--muted)" }} role="switch" aria-checked={coach.takebacks} aria-label="Allow take-backs" onClick={() => api_.coachSettings({ code: room.code, takebacks: !coach.takebacks }).catch(fail)}>
             <span className={`switch${coach.takebacks ? " on" : ""}`} />TAKE-BACKS
           </button>
         )}
@@ -387,7 +385,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
               {["p", "n", "b", "r", "q", "k"].map((t) => {
                 const ok = legalMoves(playable, rules).some((m) => typeOf(playable.cells[m.from]) === t);
                 return (
-                  <button key={t} className="key" style={{ minHeight: 52, padding: 4 }} disabled={!ok} aria-label={`Pick ${PIECE_NAMES[t]}`} onClick={() => { feedback.tap(); api_.pick({ token, code: room.code, piece: t }).catch(fail); }}>
+                  <button key={t} className="key" style={{ minHeight: 52, padding: 4 }} disabled={!ok} aria-label={`Pick ${PIECE_NAMES[t]}`} onClick={() => { feedback.tap(); api_.pick({ code: room.code, piece: t }).catch(fail); }}>
                     <Piece code={t.toUpperCase()} size={34} />
                   </button>
                 );
@@ -451,15 +449,15 @@ export function ChessPlay({ room }: { room: ChessView }) {
             ))}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }} aria-label="Quick tips">
-            {COACH_TIPS.map((t) => <button key={t} className="pchip" onClick={() => { feedback.tap(); void api_.react({ token, code: room.code, text: t }); say(`Sent: ${t}`, "info"); }}>{t}</button>)}
+            {COACH_TIPS.map((t) => <button key={t} className="pchip" onClick={() => { feedback.tap(); void api_.react({ code: room.code, text: t }); say(`Sent: ${t}`, "info"); }}>{t}</button>)}
           </div>
         </>
       )}
 
       {coach && !isCoach && !result && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-          <button className="btn btn-white" style={{ color: "#9A5200", fontSize: 16 }} onClick={() => { feedback.tap(); void api_.react({ token, code: room.code, text: "Help? ✋" }); say("Your coach got the message", "info"); }}>Ask coach</button>
-          <button className="btn btn-white" style={{ fontSize: 16 }} disabled={!coach.takebacks || coach.undos <= 0 || !coach.canUndo} onClick={() => { feedback.tap(); setPending(null); api_.takeback({ token, code: room.code }).catch(fail); }}>
+          <button className="btn btn-white" style={{ color: "#9A5200", fontSize: 16 }} onClick={() => { feedback.tap(); void api_.react({ code: room.code, text: "Help? ✋" }); say("Your coach got the message", "info"); }}>Ask coach</button>
+          <button className="btn btn-white" style={{ fontSize: 16 }} disabled={!coach.takebacks || coach.undos <= 0 || !coach.canUndo} onClick={() => { feedback.tap(); setPending(null); api_.takeback({ code: room.code }).catch(fail); }}>
             <Icon.Undo size={20} color="#1899D6" />Undo · {coach.undos}
           </button>
         </div>
@@ -467,7 +465,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
 
       {!coach && !result && myColor && (
         <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-          {(team ? TEAM_CHIPS : REACTIONS).map((r) => <button key={r} className="btn btn-white btn-sm" style={{ color: "var(--ink)", minHeight: 40 }} onClick={() => { feedback.tap(); void api_.react({ token, code: room.code, text: r }); }}>{r}</button>)}
+          {(team ? TEAM_CHIPS : REACTIONS).map((r) => <button key={r} className="btn btn-white btn-sm" style={{ color: "var(--ink)", minHeight: 40 }} onClick={() => { feedback.tap(); void api_.react({ code: room.code, text: r }); }}>{r}</button>)}
         </div>
       )}
 
@@ -477,7 +475,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
         <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, textAlign: "center" }}>{myColor || isCoach ? "Resign this game?" : "Stop watching?"}</h2>
         <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>{myColor ? "Your opponent gets the win." : isCoach ? "The learner's game ends too." : "You can come back with the code."}</p>
         <button className="btn btn-green" onClick={() => setQuit(false)}>Keep playing</button>
-        {(myColor || isCoach) && <button className="btn btn-white" style={{ color: "var(--cherry-edge)" }} onClick={() => { setQuit(false); api_.resign({ token, code: room.code }).catch(fail); }}>Resign</button>}
+        {(myColor || isCoach) && <button className="btn btn-white" style={{ color: "var(--cherry-edge)" }} onClick={() => { setQuit(false); api_.resign({ code: room.code }).catch(fail); }}>Resign</button>}
         <button className="btn btn-white" onClick={leaveRoom}>Leave room</button>
       </Sheet>
 
@@ -488,7 +486,7 @@ export function ChessPlay({ room }: { room: ChessView }) {
           <h2 style={{ margin: 0, fontSize: 36, fontWeight: 900, textAlign: "center", color: happy ? "var(--lime-dark)" : result.winner === "draw" ? "var(--sky-btn)" : "var(--tangerine-ink)" }}>{title}</h2>
           <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>{sub}</p>
           {room.isHost ? (
-            <button className="btn btn-green" onClick={() => { feedback.tap(); api_.rematch({ token, code: room.code }).catch(fail); }}>Rematch</button>
+            <button className="btn btn-green" onClick={() => { feedback.tap(); api_.rematch({ code: room.code }).catch(fail); }}>Rematch</button>
           ) : (
             <p className="wait" style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host to start a rematch</p>
           )}

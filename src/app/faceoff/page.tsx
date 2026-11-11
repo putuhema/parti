@@ -18,7 +18,7 @@ const STEPS: [string, string][] = [
 ];
 
 export default function FaceHome() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const router = useRouter();
   const create = useMutation(api.faceoff.create);
   const joinAny = useMutation(api.chess.joinAny);
@@ -33,7 +33,7 @@ export default function FaceHome() {
     feedback.tap();
     setBusy(true);
     try {
-      const c = await create({ token });
+      const c = await create({});
       router.push(`/faceoff/room/${c}`);
     } catch (e) {
       setError(errorText(e));
@@ -45,7 +45,7 @@ export default function FaceHome() {
     e.preventDefault();
     setError("");
     try {
-      const path = await joinAny({ token, code: code.trim().toUpperCase() });
+      const path = await joinAny({ code: code.trim().toUpperCase() });
       feedback.correct();
       router.push(path);
     } catch (err) {

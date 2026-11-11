@@ -23,7 +23,7 @@ function readLang(): Lang {
 }
 
 export default function WordsHome() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const router = useRouter();
   const create = useMutation(api.words.create);
   const joinAny = useMutation(api.chess.joinAny);
@@ -46,7 +46,7 @@ export default function WordsHome() {
     feedback.tap();
     setBusy(true);
     try {
-      const c = await create({ token, mode, lang });
+      const c = await create({ mode, lang });
       router.push(`/words/room/${c}`);
     } finally {
       setBusy(false);
@@ -57,7 +57,7 @@ export default function WordsHome() {
     e.preventDefault();
     setError("");
     try {
-      const path = await joinAny({ token, code: code.trim().toUpperCase() });
+      const path = await joinAny({ code: code.trim().toUpperCase() });
       feedback.correct();
       router.push(path);
     } catch (err) {

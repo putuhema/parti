@@ -7,12 +7,11 @@ type Row = { id: string; name: string; value: number; isMe: boolean };
 
 export const get = query({
   args: {
-    token: v.string(),
     period: v.union(v.literal("today"), v.literal("week"), v.literal("league")),
     scope: v.union(v.literal("friends"), v.literal("world")),
   },
-  handler: async (ctx, { token, period, scope }) => {
-    const me = await findPlayer(ctx, token);
+  handler: async (ctx, { period, scope }) => {
+    const me = await findPlayer(ctx);
     if (!me) return null;
     const now = Date.now();
     const date = dateKey(now);

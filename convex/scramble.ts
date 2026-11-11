@@ -87,9 +87,9 @@ function finish(g: GridGame) {
 
 // ---------- Lobby ----------
 export const create = mutation({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
-    const me = await requirePlayer(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const me = await requirePlayer(ctx);
     const code = await freeCode(ctx);
     await ctx.db.insert("gridRooms", { code, hostId: me._id, lang: "en", status: "lobby", gameNo: 0, members: [{ playerId: me._id, seat: 0, lastSeen: Date.now() }] });
     return code;
@@ -97,9 +97,9 @@ export const create = mutation({
 });
 
 export const join = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!room) throw new ConvexError("No room with that code");
     if (room.members.some((m) => m.playerId === me._id)) return room.code;
@@ -113,9 +113,9 @@ export const join = mutation({
 });
 
 export const settings = mutation({
-  args: { token: v.string(), code: v.string(), lang },
-  handler: async (ctx, { token, code, lang }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string(), lang },
+  handler: async (ctx, { code, lang }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can change this");
     if (room.status === "playing") return;
@@ -124,9 +124,9 @@ export const settings = mutation({
 });
 
 export const start = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start");
     if (room.status === "playing") return;
@@ -153,9 +153,9 @@ export const start = mutation({
 });
 
 export const rematch = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start a rematch");
     await ctx.db.patch(room._id, { status: "lobby", game: undefined, startAt: undefined, endedAt: undefined });
@@ -163,9 +163,9 @@ export const rematch = mutation({
 });
 
 export const leave = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!room || !room.members.some((m) => m.playerId === me._id)) return;
     const rest = room.members.filter((m) => m.playerId !== me._id);
@@ -178,9 +178,9 @@ export const leave = mutation({
 });
 
 export const presence = mutation({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await findPlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!me || !room || !room.members.some((m) => m.playerId === me._id)) return;
     await ctx.db.patch(room._id, { members: room.members.map((m) => (m.playerId === me._id ? { ...m, lastSeen: Date.now() } : m)) });
@@ -189,9 +189,9 @@ export const presence = mutation({
 
 // ---------- Playing ----------
 export const submit = mutation({
-  args: { token: v.string(), code: v.string(), path: v.array(v.number()) },
-  handler: async (ctx, { token, code, path }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { code: v.string(), path: v.array(v.number()) },
+  handler: async (ctx, { code, path }) => {
+    const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.status !== "playing" || !room.game) throw new ConvexError("The round isn't running");
     const g = room.game as GridGame;
@@ -221,9 +221,9 @@ export const tick = internalMutation({
 });
 
 export const view = query({
-  args: { token: v.string(), code: v.string() },
-  handler: async (ctx, { token, code }) => {
-    const me = await findPlayer(ctx, token);
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await findPlayer(ctx);
     const room = await roomByCode(ctx, code);
     if (!me || !room) return null;
     const members = await Promise.all(
@@ -285,9 +285,9 @@ async function runFor(ctx: QueryCtx, playerId: PId, date: string) {
 
 /** Today's grid and your run. The grid stays hidden until you start; the word list until you finish. */
 export const daily = query({
-  args: { token: v.string(), date: v.string() },
-  handler: async (ctx, { token, date }) => {
-    const me = await findPlayer(ctx, token);
+  args: { date: v.string() },
+  handler: async (ctx, { date }) => {
+    const me = await findPlayer(ctx);
     if (!me) return null;
     const run = await runFor(ctx, me._id, date);
     const day = run ? await dailyFor(ctx, date) : null;
@@ -309,9 +309,9 @@ export const daily = query({
 });
 
 export const dailyStart = mutation({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
-    const me = await requirePlayer(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const me = await requirePlayer(ctx);
     const now = Date.now();
     const date = dateKey(now);
     if (!(await dailyFor(ctx, date))) {
@@ -326,9 +326,9 @@ export const dailyStart = mutation({
 });
 
 export const dailySubmit = mutation({
-  args: { token: v.string(), date: v.string(), path: v.array(v.number()) },
-  handler: async (ctx, { token, date, path }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { date: v.string(), path: v.array(v.number()) },
+  handler: async (ctx, { date, path }) => {
+    const me = await requirePlayer(ctx);
     const run = await runFor(ctx, me._id, date);
     const day = await dailyFor(ctx, date);
     if (!run || !day) throw new ConvexError("Start today's grid first");
@@ -344,9 +344,9 @@ export const dailySubmit = mutation({
 
 /** Close today's run once its time is up, and pay out XP. Safe to call more than once. */
 export const dailyFinish = mutation({
-  args: { token: v.string(), date: v.string() },
-  handler: async (ctx, { token, date }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { date: v.string() },
+  handler: async (ctx, { date }) => {
+    const me = await requirePlayer(ctx);
     const run = await runFor(ctx, me._id, date);
     if (!run || run.awarded) return;
     if (Date.now() < run.endsAt - 500) throw new ConvexError("Keep going, there's still time");

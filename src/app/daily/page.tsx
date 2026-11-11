@@ -17,8 +17,7 @@ const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 export default function DailyPage() {
-  const { token } = useIdentity();
-  const daily = useQuery(api.daily.today, { token });
+  const daily = useQuery(api.daily.today, {});
   if (!daily) return <main className="screen" style={{ alignItems: "center", justifyContent: "center" }}><Mascot size={80} className="bob" /></main>;
   if (!daily.run) return <Intro daily={daily} />;
   if (daily.run.timeMs === undefined) return daily.puzzle ? <Play daily={daily} /> : null;
@@ -32,7 +31,7 @@ function share(text: string) {
 }
 
 function Intro({ daily }: { daily: Daily }) {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const start = useMutation(api.daily.start);
   const now = useNow(1000);
   const [busy, setBusy] = useState(false);
@@ -116,7 +115,7 @@ function Intro({ daily }: { daily: Daily }) {
             feedback.unlock();
             feedback.go();
             setBusy(true);
-            try { await start({ token }); } catch (e) { setError(errorText(e)); setBusy(false); }
+            try { await start({}); } catch (e) { setError(errorText(e)); setBusy(false); }
           }}
         >
           Play today&apos;s duel
@@ -158,11 +157,10 @@ function WeekRow({ week }: { week: Daily["week"] }) {
 }
 
 function Play({ daily }: { daily: Daily }) {
-  const { token } = useIdentity();
   const place = useMutation(api.daily.place);
   const now = useNow(1000);
   const run = daily.run!;
-  const onPlace = useCallback((cell: number, digit: number) => place({ token, cell, digit }), [place, token]);
+  const onPlace = useCallback((cell: number, digit: number) => place({ cell, digit }), [place]);
   const elapsed = now - run.startedAt + run.mistakes * daily.penaltyMs;
   return (
     <main className="screen tight">

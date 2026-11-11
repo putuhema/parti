@@ -9,7 +9,6 @@ import { applyMove, findMove, fromFen, inCheck, legalMoves, movesFrom, typeOf, V
 import { Board } from "@/components/chess/Board";
 import { Confetti, Heart, Icon, Mascot } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import { LESSONS, bestMoves, parseStars, starTargets, type FenStep, type StarStep, type TapStep } from "@/lib/lessons";
 
 const HEARTS = 5;
@@ -20,7 +19,6 @@ export default function LessonPage() {
   const { id } = useParams<{ id: string }>();
   const lesson = LESSONS.find((l) => l.id === id);
   const router = useRouter();
-  const { token } = useIdentity();
   const done = useMutation(api.chess.lessonDone);
   const [step, setStep] = useState(0);
   const [run, setRun] = useState(0); // bump to restart
@@ -60,7 +58,7 @@ export default function LessonPage() {
     }
     const stars = penalty === 0 ? 3 : penalty <= 2 ? 2 : 1;
     feedback.win();
-    const xp = await done({ token, lesson: lesson!.id, stars }).catch(() => 0);
+    const xp = await done({ lesson: lesson!.id, stars }).catch(() => 0);
     setFinished({ stars, xp });
   }
   const restart = () => { setStep(0); setHearts(HEARTS); setPenalty(0); setSolved(null); setRun((r) => r + 1); };

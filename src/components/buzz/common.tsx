@@ -7,7 +7,6 @@ import { api } from "../../../convex/_generated/api";
 import { BUZZ_CATS } from "../../../convex/lib/buzz/board";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 
 export type BuzzView = NonNullable<FunctionReturnType<typeof api.buzz.view>>;
 export type BuzzGameView = NonNullable<BuzzView["game"]>;
@@ -30,13 +29,12 @@ export function CatChip({ cat, label }: { cat: number; label?: string }) {
 
 /** Send a move. Errors show as a short toast and a buzz. */
 export function useAct(code: string) {
-  const { token } = useIdentity();
   const act = useMutation(api.buzz.act);
   const [toast, setToast] = useState<{ text: string; kind: "good" | "bad" | "info"; id: number } | null>(null);
   const say = (text: string, kind: "good" | "bad" | "info" = "info") => setToast({ text, kind, id: Date.now() + Math.random() });
   async function send(action: "pick" | "wager" | "answer", n: number) {
     try {
-      await act({ token, code, action, n });
+      await act({ code, action, n });
       return true;
     } catch (e) {
       feedback.wrong();

@@ -14,9 +14,9 @@ import { ShellPage } from "@/components/shell";
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 export default function Home() {
-  const { token, me } = useIdentity();
+  const { me } = useIdentity();
   const router = useRouter();
-  const daily = useQuery(api.daily.today, { token });
+  const daily = useQuery(api.daily.today, {});
   const createRoom = useMutation(api.rooms.create);
   const joinRoom = useMutation(api.chess.joinAny);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -31,7 +31,7 @@ export default function Home() {
     feedback.tap();
     setBusy(true);
     try {
-      const c = await createRoom({ token, mode, difficulty: "medium" });
+      const c = await createRoom({ mode, difficulty: "medium" });
       router.push(`/room/${c}`);
     } finally {
       setBusy(false);
@@ -42,7 +42,7 @@ export default function Home() {
     e.preventDefault();
     setError("");
     try {
-      const path = await joinRoom({ token, code: code.trim().toUpperCase() });
+      const path = await joinRoom({ code: code.trim().toUpperCase() });
       feedback.correct();
       router.push(path);
     } catch (err) {

@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { addDays, dateKey, findPlayer, TIERS, weekKey, weekly } from "./lib/helpers";
+import { internalMutation, mutation, query } from "./_generated/server";
+import { authComponent } from "./auth";
+import { addDays, dateKey, findPlayer, requirePlayer, TIERS, weekKey, weekly } from "./lib/helpers";
 
 function cleanName(name: string) {
   const n = name.trim().replace(/\s+/g, " ").slice(0, 16);
@@ -8,15 +9,21 @@ function cleanName(name: string) {
   return n;
 }
 
+async function userId(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new ConvexError("Not signed in");
+  return identity.subject;
+}
+
 export const create = mutation({
-  args: { token: v.string(), name: v.string() },
-  handler: async (ctx, { token, name }) => {
-    if (token.length < 20) throw new ConvexError("Bad token");
-    const existing = await findPlayer(ctx, token);
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const uid = await userId(ctx);
+    const existing = await findPlayer(ctx);
     if (existing) return existing._id;
     return await ctx.db.insert("players", {
       name: cleanName(name),
-      token,
+      userId: uid,
       tier: 0,
       weekKey: weekKey(Date.now()),
       weekXp: 0,
@@ -27,20 +34,54 @@ export const create = mutation({
   },
 });
 
+/**
+ * Bring over a player from before accounts existed. Their phone still holds the
+ * old secret token; the first time they open the app signed in, it attaches to them.
+ */
+export const claim = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const uid = await userId(ctx);
+    if (await findPlayer(ctx)) return false;
+    if (token.length < 20) return false;
+    const old = await ctx.db.query("players").withIndex("by_token", (q) => q.eq("token", token)).unique();
+    if (!old || old.userId) return false;
+    await ctx.db.patch(old._id, { userId: uid, token: undefined });
+    return true;
+  },
+});
+
+/**
+ * A guest just signed up or signed in. A new account takes the guest's player;
+ * an account that already has one keeps its own, and the guest player is retired.
+ */
+export const relink = internalMutation({
+  args: { from: v.string(), to: v.string() },
+  handler: async (ctx, { from, to }) => {
+    const byUser = (u: string) => ctx.db.query("players").withIndex("by_user", (q) => q.eq("userId", u)).unique();
+    const guest = await byUser(from);
+    const account = await byUser(to);
+    if (!guest) return;
+    if (!account) await ctx.db.patch(guest._id, { userId: to });
+    else await ctx.db.patch(guest._id, { userId: undefined });
+  },
+});
+
 export const rename = mutation({
-  args: { token: v.string(), name: v.string() },
-  handler: async (ctx, { token, name }) => {
-    const p = await findPlayer(ctx, token);
-    if (!p) throw new ConvexError("Player not found");
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const p = await requirePlayer(ctx);
     await ctx.db.patch(p._id, { name: cleanName(name) });
   },
 });
 
 export const me = query({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
-    const p = await findPlayer(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const p = await findPlayer(ctx);
     if (!p) return null;
+    // If the account can't be read (e.g. an odd token), still show the player, as a guest.
+    const user = await authComponent.safeGetAuthUser(ctx).catch(() => undefined);
     const now = Date.now();
     const w = weekly(p, now);
     const today = dateKey(now);
@@ -55,6 +96,8 @@ export const me = query({
       tierName: TIERS[p.tier],
       weekXp: w.xp,
       chessLessons: p.chessLessons ?? {},
+      // A guest has no email to show; a saved account does.
+      account: user && !user.isAnonymous ? { email: user.email } : null,
     };
   },
 });

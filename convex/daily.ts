@@ -76,9 +76,9 @@ function publicRun(run: Doc<"dailyRuns"> | null) {
 }
 
 export const today = query({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
-    const me = await findPlayer(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const me = await findPlayer(ctx);
     if (!me) return null;
     const now = Date.now();
     const i = info(now);
@@ -130,9 +130,9 @@ export const today = query({
 });
 
 export const start = mutation({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
-    const me = await requirePlayer(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const me = await requirePlayer(ctx);
     const now = Date.now();
     const p = await ensurePuzzle(ctx, now);
     const existing = await runFor(ctx, me._id, p.date);
@@ -144,9 +144,9 @@ export const start = mutation({
 });
 
 export const place = mutation({
-  args: { token: v.string(), cell: v.number(), digit: v.number() },
-  handler: async (ctx, { token, cell, digit }) => {
-    const me = await requirePlayer(ctx, token);
+  args: { cell: v.number(), digit: v.number() },
+  handler: async (ctx, { cell, digit }) => {
+    const me = await requirePlayer(ctx);
     const now = Date.now();
     const date = info(now).date;
     // A run started just before midnight belongs to yesterday's puzzle.

@@ -6,11 +6,9 @@ import { useEffect, useMemo } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Avatar, Confetti, Mascot, formatTime, roomPaints } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import type { RoomView } from "./types";
 
 export function RoomResults({ room }: { room: RoomView }) {
-  const { token } = useIdentity();
   const rematch = useMutation(api.rooms.rematch);
   const paints = useMemo(() => roomPaints(room.players), [room.players]);
   const coop = room.mode === "coop";
@@ -95,7 +93,7 @@ export function RoomResults({ room }: { room: RoomView }) {
       <div className="grow" />
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {room.isHost ? (
-          <button className="btn btn-green" onClick={() => { feedback.tap(); void rematch({ token, code: room.code }); }} disabled={stillPlaying && !coop}>
+          <button className="btn btn-green" onClick={() => { feedback.tap(); void rematch({ code: room.code }); }} disabled={stillPlaying && !coop}>
             {stillPlaying && !coop ? "Rematch when everyone's done" : "Rematch"}
           </button>
         ) : (

@@ -8,7 +8,6 @@ import { CHARACTERS, QUESTIONS, TURN_MS, questionById } from "../../../convex/li
 import { Countdown, TimerBar, Toast } from "@/components/words/common";
 import { Avatar, Confetti, FRIENDS, Icon, Mascot, Sheet, roomPaints, type Paint } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
-import { useIdentity } from "@/lib/identity";
 import { BOT, GAME_NAME, Portrait, useAct, useNameOf, type FaceGameView, type FaceView } from "./common";
 
 const GROUPS = ["Hair", "Shirt", "Face & style"] as const;
@@ -200,11 +199,10 @@ function LastEvent({ g, me, nameOf }: { g: FaceGameView; me: string; nameOf: (id
 }
 
 function Header({ room, g }: { room: FaceView; g: FaceGameView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const leave = useMutation(api.faceoff.leave);
   const [ask, setAsk] = useState(false);
-  const go = async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/faceoff"); };
+  const go = async () => { await leave({ code: room.code }).catch(() => {}); router.push("/faceoff"); };
   return (
     <>
       <header className="topbar" style={{ gap: 8 }}>
@@ -224,7 +222,6 @@ function Header({ room, g }: { room: FaceView; g: FaceGameView }) {
 }
 
 function Done({ room, g, me, them, nameOf }: { room: FaceView; g: FaceGameView; me: string; them: string; nameOf: (id?: string | null) => string }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const rematch = useMutation(api.faceoff.rematch);
   const leave = useMutation(api.faceoff.leave);
@@ -263,11 +260,11 @@ function Done({ room, g, me, them, nameOf }: { room: FaceView; g: FaceGameView; 
         })}
       </div>
       {room.isHost ? (
-        <button className="btn btn-green" style={{ maxWidth: 380 }} onClick={() => { feedback.tap(); void rematch({ token, code: room.code }); }}>Play again</button>
+        <button className="btn btn-green" style={{ maxWidth: 380 }} onClick={() => { feedback.tap(); void rematch({ code: room.code }); }}>Play again</button>
       ) : (
         <p className="wait" style={{ margin: 0, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host…</p>
       )}
-      <button className="btn btn-white" style={{ maxWidth: 380 }} onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/faceoff"); }}>Back home</button>
+      <button className="btn btn-white" style={{ maxWidth: 380 }} onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/faceoff"); }}>Back home</button>
     </div>
   );
 }

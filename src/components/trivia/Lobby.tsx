@@ -9,13 +9,12 @@ import { Avatar, Icon, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 import { GAME_NAME, GemRow, RULE, type TriviaView } from "./common";
+import { InviteFriends } from "@/components/InviteFriends";
 
 const GOAL_LABEL: Record<number, string> = { 3: "Quick", 4: "Classic", 6: "Marathon" };
 
 export function TriviaLobby({ room }: { room: TriviaView }) {
-  const { token } = useIdentity();
   const router = useRouter();
   const settings = useMutation(api.trivia.settings);
   const start = useMutation(api.trivia.start);
@@ -47,7 +46,7 @@ export function TriviaLobby({ room }: { room: TriviaView }) {
     setStarting(true);
     setError("");
     try {
-      await start({ token, code: room.code });
+      await start({ code: room.code });
     } catch (e) {
       setError(errorText(e));
       setStarting(false);
@@ -57,7 +56,7 @@ export function TriviaLobby({ room }: { room: TriviaView }) {
   return (
     <main className="screen tight">
       <header className="topbar">
-        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/trivia"); }}><Icon.Close /></button>
+        <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/trivia"); }}><Icon.Close /></button>
         <span style={{ display: "flex", flexDirection: "column", flex: 1 }}>
           <span className="label" style={{ fontSize: 12 }}>Room code</span>
           <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: ".14em" }}>{room.code}</span>
@@ -76,7 +75,7 @@ export function TriviaLobby({ room }: { room: TriviaView }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
           {GOALS.map((g) => (
             <button key={g} className="seg" aria-pressed={room.goal === g} disabled={!host} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minHeight: 56 }}
-              onClick={() => { feedback.tap(); void settings({ token, code: room.code, goal: g }).catch((e) => setError(errorText(e))); }}>
+              onClick={() => { feedback.tap(); void settings({ code: room.code, goal: g }).catch((e) => setError(errorText(e))); }}>
               <span style={{ fontSize: 18 }}>{g}</span>
               <span style={{ fontSize: 12 }}>{GOAL_LABEL[g]}</span>
             </button>
@@ -98,6 +97,7 @@ export function TriviaLobby({ room }: { room: TriviaView }) {
         <span style={{ display: "flex", justifyContent: "center", paddingTop: 4 }}><GemRow gems={[]} goal={room.goal} size={22} /></span>
       </section>
 
+      <InviteFriends kind="trivia" code={room.code} />
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (
@@ -105,7 +105,7 @@ export function TriviaLobby({ room }: { room: TriviaView }) {
       ) : (
         <p className="wait" style={{ margin: 0, textAlign: "center", fontSize: 17, fontWeight: 900, color: "var(--muted)", minHeight: 54, display: "flex", alignItems: "center", justifyContent: "center" }}>Waiting for the host to start</p>
       )}
-      {host && room.members.length < 4 && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Invite friends"}</button>}
+      {host && room.members.length < 4 && <button className="btn btn-white btn-sm" style={{ alignSelf: "center" }} onClick={share}><Icon.Share /> {copied ? "Link copied!" : "Share link"}</button>}
     </main>
   );
 }

@@ -9,7 +9,6 @@ import { Avatar, Confetti, Icon, Mascot, Sheet, formatTime, roomPaints } from "@
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
-import { useIdentity } from "@/lib/identity";
 import { Board } from "./Board";
 import { modeInfo } from "./bits";
 import type { ChessView } from "./types";
@@ -17,7 +16,6 @@ import type { ChessView } from "./types";
 export function PuzzleRace({ room }: { room: ChessView }) {
   const g = room.game!;
   const p = g.puzzles!;
-  const { token } = useIdentity();
   const router = useRouter();
   const now = useNow(250);
   const move = useMutation(api.chess.puzzleMove);
@@ -59,7 +57,7 @@ export function PuzzleRace({ room }: { room: ChessView }) {
       setShown({ fen: p.fen!, cells: res.state.cells, last: [sel, i] });
       setSel(null);
       if (res.captured) feedback.capture(); else feedback.move();
-      move({ token, code: room.code, from: m.from, to: m.to, promo: m.promo })
+      move({ code: room.code, from: m.from, to: m.to, promo: m.promo })
         .then((r) => {
           if (!r.solved) {
             feedback.wrong();
@@ -77,7 +75,7 @@ export function PuzzleRace({ room }: { room: ChessView }) {
   const runs = [...p.runs].sort((a, b) => (b.index - a.index) || ((a.finishedAt ?? Infinity) - (b.finishedAt ?? Infinity)));
   const winner = p.winnerId;
   const iWon = winner === room.meId;
-  const leaveRoom = async () => { await leave({ token, code: room.code }).catch(() => {}); router.push("/chess"); };
+  const leaveRoom = async () => { await leave({ code: room.code }).catch(() => {}); router.push("/chess"); };
 
   return (
     <main className="screen tight" style={{ position: "relative" }}>
@@ -143,7 +141,7 @@ export function PuzzleRace({ room }: { room: ChessView }) {
       <Sheet open={quit} onClose={() => setQuit(false)} label="Leave race">
         <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, textAlign: "center" }}>Stop racing?</h2>
         <button className="btn btn-green" onClick={() => setQuit(false)}>Keep going</button>
-        <button className="btn btn-white" style={{ color: "var(--cherry-edge)" }} onClick={() => { setQuit(false); void resign({ token, code: room.code }); }}>Give up</button>
+        <button className="btn btn-white" style={{ color: "var(--cherry-edge)" }} onClick={() => { setQuit(false); void resign({ code: room.code }); }}>Give up</button>
       </Sheet>
 
       {over && (
@@ -154,7 +152,7 @@ export function PuzzleRace({ room }: { room: ChessView }) {
           <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
             {mine?.finishedAt ? `You solved all ${p.total} in ${formatTime(elapsed)}${mine.mistakes ? ` with ${mine.mistakes} miss${mine.mistakes > 1 ? "es" : ""}` : ", no misses"}. ${iWon ? "+45 XP" : "+20 XP"}` : "Try again in a rematch!"}
           </p>
-          {room.isHost ? <button className="btn btn-green" onClick={() => void rematch({ token, code: room.code })}>Rematch</button> : <p className="wait" style={{ margin: 0, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host…</p>}
+          {room.isHost ? <button className="btn btn-green" onClick={() => void rematch({ code: room.code })}>Rematch</button> : <p className="wait" style={{ margin: 0, fontWeight: 900, color: "var(--muted)" }}>Waiting for the host…</p>}
           <button className="btn btn-white" onClick={leaveRoom}>Back home</button>
         </div>
       )}
