@@ -1,5 +1,6 @@
 // Raja Silat run map: rows of nodes joined by paths. You pick where to go next.
-// Row 0 is the Warm-up fight, the last row is the boss, the row before it is always a campfire.
+// One map is one tier of the tower: ten floors. Row 0 is the way in, the last row is the tier's
+// guardian, and the row before it is always a campfire.
 
 export type NodeKind = "fight" | "elite" | "camp" | "shop" | "event" | "treasure" | "boss";
 
@@ -15,7 +16,7 @@ export interface RunMap {
   edges: [string, string][];
 }
 
-export const MAP_ROWS = 7; // rows 0..6, row 6 = boss
+export const MAP_ROWS = 10; // rows 0..9 = ten floors, row 9 = the guardian
 export const MAP_LANES = 4;
 
 export const NODE_INFO: Record<NodeKind, { name: string; sub: string; color: string; edge: string }> = {
@@ -25,7 +26,7 @@ export const NODE_INFO: Record<NodeKind, { name: string; sub: string; color: str
   shop: { name: "Warung", sub: "Buy cards and Pusaka, heal, remove a card", color: "#2BB673", edge: "#1E7A4C" },
   event: { name: "Mystery", sub: "Something happens. You choose", color: "#CE82FF", edge: "#8A4FB5" },
   treasure: { name: "Treasure", sub: "Pick a Pusaka", color: "#FFC800", edge: "#B88A00" },
-  boss: { name: "Boss", sub: "The prison's warden. Beat it to escape", color: "#3C3C3C", edge: "#1A1A1A" },
+  boss: { name: "Boss", sub: "This tier's guardian. Beat it to climb on", color: "#3C3C3C", edge: "#1A1A1A" },
 };
 
 function rng(seed: number) {
@@ -44,8 +45,8 @@ function kindFor(row: number, r: () => number, depth: number): NodeKind {
   if (row === MAP_ROWS - 2) return "camp";
   const roll = r();
   if (row === 1) return roll < 0.75 ? "fight" : "event";
-  if (row === 3 && roll < 0.2) return "treasure";
-  // Deeper prisons swap some plain fights for elites.
+  if ((row === 3 || row === 6) && roll < 0.2) return "treasure";
+  // Higher tiers swap some plain fights for elites.
   const elite = Math.min(0.12, 0.03 * (depth - 1));
   if (roll < 0.45 - elite) return "fight";
   if (roll < 0.62) return "elite";
@@ -54,7 +55,7 @@ function kindFor(row: number, r: () => number, depth: number): NodeKind {
   return "camp";
 }
 
-/** One prison's map. Each depth of an endless run gets its own. */
+/** One tier's map. Each tier (depth) of the tower gets its own. */
 export function makeMap(seed: number, depth = 1): RunMap {
   const r = rng(seed * 31 + 7 + (depth - 1) * 104_729);
   const nodes = new Map<string, MapNode>();

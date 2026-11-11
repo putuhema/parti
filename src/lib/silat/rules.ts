@@ -4,6 +4,7 @@ import { BALANCE, ENEMIES, fillText, type BossKit, type MoveDef, type Variant } 
 // Squares are numbered r * n + c, with row 0 at the top (the enemy's side)
 // and the last row at the bottom (your side). See docs/raja-silat-design.md.
 
+import type { Env } from "./tower";
 export type Kind = "p" | "n" | "b" | "r" | "q" | "k";
 
 /** Where a fight happens. You start locked in a cell and fight your way out to the gate. */
@@ -210,6 +211,8 @@ export interface Fight {
   /** Where in the prison this fight is (only changes the look of the board). */
   scene?: Scene;
   tint?: string;
+  /** Where in the tower this fight is (only changes how the board is drawn). */
+  env?: Env;
   /** The way out: a square on the bottom row. Locked until the King (who holds the key) is knocked out;
    *  then step onto it to escape and win. Fights without a gate are won by knocking out the King. */
   gate?: number;
@@ -1556,6 +1559,7 @@ export interface Setup {
   survive?: number;
   relics?: string[];
   scene?: Scene;
+  env?: Env;
   /** A colour wash over the board: each prison in an endless run looks a little different. */
   tint?: string;
   /** Lines to put in the log at the start (boss powers, elite traits). */
@@ -1622,6 +1626,7 @@ export function makeFight(o: Setup, guarantee?: (id: string) => boolean): Fight 
     dice: (o.seed * 2654435761) >>> 0,
     scene: o.scene,
     tint: o.tint,
+    env: o.env,
     gate: o.gate,
     gateOpen: false,
     luck: freshLuck(),

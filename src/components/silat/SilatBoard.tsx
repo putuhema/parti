@@ -11,13 +11,13 @@ import { DIRS, TRAITS, type Scene, chargeEnd, col, intentValid, isGuarded, moveD
 const FILES = "abcdefgh";
 
 /** Intent badge colour and icon for each kind of signature move. */
-const SPECIAL_COLOR: Record<MoveKind, string> = {
+export const SPECIAL_COLOR: Record<MoveKind, string> = {
   kick: "#FF4B4B", beam: "#FF4B4B", whirl: "#FF4B4B", pounce: "#FF4B4B", slam: "#FF4B4B",
   block: "#1899D6", heal: "#46A302", summon: "#8A4FB5", command: "#CE82FF", decree: "#CE82FF", curse: "#3C3C3C",
 };
 /** Moves that hit you (red badge with damage, red danger squares). */
-const ATTACK_KINDS = new Set<MoveKind>(["kick", "beam", "whirl", "pounce", "slam"]);
-const SPECIAL_ICON: Record<MoveKind, string> = {
+export const ATTACK_KINDS = new Set<MoveKind>(["kick", "beam", "whirl", "pounce", "slam"]);
+export const SPECIAL_ICON: Record<MoveKind, string> = {
   kick: "M2 2 L5 5 L2 8 M5 2 L8 5 L5 8",
   beam: "M5 9 V1.5 M2.5 4 L5 1.5 L7.5 4 M3.5 6.5 H6.5",
   whirl: "M8 5 A3 3 0 1 1 5 2 M5 2 L6.8 1 M5 2 L6.4 3.6",
@@ -84,7 +84,7 @@ function Boulder() {
   return <img src="/silat/pixel/obj-batu.png" alt="" className="sl-obj px" />;
 }
 
-const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
+export const FX_TEXT: Partial<Record<Fx["t"], (f: Fx) => [string, string]>> = {
   dmg: (f) => [`-${"n" in f ? f.n : ""}`, "hero" in f && f.hero ? "#FF4B4B" : "#FF9600"],
   block: (f) => [`${"n" in f ? f.n : ""} blocked`, "#2F6E00"],
   ko: () => ["KO!", "#FFC800"],

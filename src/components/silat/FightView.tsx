@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { SilatBoard } from "@/components/silat/SilatBoard";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { SilatBoard3D } from "@/components/silat/SilatBoard3D";
 import { CardInfo, UnitInfo } from "@/components/silat/Inspect";
 import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
@@ -47,6 +47,23 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   const [hover, setHover] = useState<Peek | null>(null);
   const loop = useRef(0);
   const shakeRef = useRef<HTMLDivElement>(null);
+  /** The board is the whole screen: the HUD floats over it. These measure how much of the top and
+   *  bottom the HUD covers, so the board is fitted in between. `flat` = no WebGL, the old layout. */
+  const topRef = useRef<HTMLDivElement>(null);
+  const handRef = useRef<HTMLDivElement>(null);
+  const [inset, setInset] = useState({ top: 120, bottom: 300 });
+  const [flat, setFlat] = useState(false);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const t = topRef.current?.getBoundingClientRect(), b = handRef.current?.getBoundingClientRect();
+      if (!t || !b) return;
+      const next = { top: Math.round(t.bottom), bottom: Math.round(window.innerHeight - b.top) + 44 }; // + the tray above the hand
+      setInset((cur) => (cur.top === next.top && cur.bottom === next.bottom ? cur : next));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
 
   // Shake the board on big hits.
   useEffect(() => {
@@ -322,7 +339,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
   turns.reverse();
 
   return (
-    <main className="screen sl-fight">
+    <main className={`screen sl-fight${flat ? "" : " s3"}`} style={{ ["--s3-top" as string]: `${inset.top}px`, ["--s3-bottom" as string]: `${inset.bottom}px` } as CSSProperties}>
       <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <Link href="/silat" className="icon-btn" aria-label="Leave fight (your run is saved)" style={{ background: "#fff", boxShadow: "0 3px 0 var(--cream-3)" }}><Icon.Close /></Link>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.15 }}>
@@ -360,7 +377,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
             <span className={`sl-gatechip${f.gateOpen ? " open" : ""}`}>
               {/* eslint-disable-next-line @next/next/no-img-element -- pixel sprite */}
               <img src={f.gateOpen ? "/silat/pixel/key.png" : "/silat/pixel/gate-locked.png"} alt="" className="px" />
-              {f.gateOpen ? "Gate open: reach it to escape!" : "Gate locked: the King has the key"}
+              {f.gateOpen ? "Stairs open: reach them to climb!" : "Stairs locked: the King has the key"}
             </span>
           )}
           {f.survive && f.status !== "won" && (
@@ -374,7 +391,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
         </button>
       </header>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div ref={topRef} className="sl-vitals" style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }} aria-label={`Health ${display.hero.hp} of ${f.hero.max}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
           <img src="/silat/pixel/ui-heart.png" alt="" className="px" style={{ width: 22, height: 22 }} />
@@ -400,7 +417,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
 
       <div className="sl-stage">
         <div className="sl-stage-in" ref={shakeRef}>
-          <SilatBoard
+          <SilatBoard3D
             fight={f}
             preview={display !== f ? display : undefined}
             hl={{ targets, steps, danger, jab: jabChance(q), captures, pending: capturing?.sq ?? null, combo: combo.map((it, n) => ({ sq: it.sq, n: n + 1 })), inspect: peekUnit?.sq, cover: peekUnit ? coverSquares(f, peekUnit) : undefined }}
@@ -410,6 +427,8 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
               setHover((cur) => (!u ? (cur?.k === "unit" ? null : cur) : cur?.k === "unit" && cur.id === u.id ? cur : { k: "unit", id: u.id }));
             }}
             fxKey={fxKey}
+            inset={inset}
+            onFlat={() => setFlat(true)}
             combo={f.status === "play" && display === f ? f.combo : 0}
           />
 
@@ -495,7 +514,7 @@ export function FightView({ fight, floorLabel, onChange }: { fight: Fight; floor
         )}
       </div>
 
-      <div className="sl-hand">
+      <div className="sl-hand" ref={handRef}>
         {f.hand.map((id, i) => {
           const mid = (f.hand.length - 1) / 2;
           const off = i - mid;

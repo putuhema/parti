@@ -1,5 +1,5 @@
-// Raja Silat: a run is a path through a map of fights, elites, campfires, shops, mystery
-// events and treasure, ending with a boss. You collect cards, gold and Pusaka (relics).
+// Raja Silat: a run climbs the tower (tower.ts): 100 floors in ten tiers. Each tier is a map of
+// branching rooms (fights, elites, campfires, shops, mystery events, treasure) with a guardian on top. You collect cards, gold and Pusaka (relics).
 // Saved on the device.
 import { CARDS, POOL, STARTER, STYLE_CARDS, TIER_NAMES, isAttack, tierOf, type Style } from "./cards";
 import { MAP_ROWS, makeMap, nextNodes, nodeById, type MapNode, type RunMap } from "./map";
@@ -7,6 +7,7 @@ import { ALL_RELICS, RELICS } from "./relics";
 import { BALANCE } from "./config";
 import { bossFor, generateBossFight, generateFight, generateWarmup, prisonFor } from "./endless";
 import { KO_GOLD, makeFight, type Fight, type Scene, type Setup } from "./rules";
+import { TOWER_TIERS, tierFor, towerFloor } from "./tower";
 
 export const FLOORS = MAP_ROWS; // the last row is the boss
 export const HEAL_AFTER_FIGHT = BALANCE.hero.healAfterFight;
@@ -20,7 +21,7 @@ export interface Reward {
   gold: number;
   cards: string[];
   relics: string[];
-  /** You beat the boss: taking it moves you to the next prison. */
+  /** You beat the tier's guardian: taking it moves you up to the next tier. */
   escape?: boolean;
   /** A new tier of cards just started showing up (its name, for the notice). */
   unlocked?: string;
@@ -29,7 +30,7 @@ export interface ShopItem { id: string; price: number; sold: boolean }
 export interface Shop { cards: ShopItem[]; relic: ShopItem | null; removePrice: number; removed: boolean; healPrice: number; healed: boolean }
 
 export interface Run {
-  v: 2;
+  v: 3;
   seed: number;
   /** The row of the map you're on (0 = Warm-up, last = boss). */
   floor: number;
@@ -51,13 +52,13 @@ export interface Run {
   treasure: string[] | null;
   ringOuts: number;
   bestCombo: number;
-  /** Endless runs: which prison you're in (1 = Raja Hitam's). Older saves have none: 1. */
+  /** Which tier of the tower you're in (1 = the bottom, 10 = the top). */
   depth?: number;
   /** The highest card tier you've been told about (for the "new cards unlocked" notice). */
   tierSeen?: number;
 }
 
-export interface Best { floor: number; wins: number; runs: number; /** Deepest prison reached. */ depth?: number }
+export interface Best { floor: number; wins: number; runs: number; /** Highest tier reached. */ depth?: number }
 
 export const depthOf = (run: Pick<Run, "depth">) => run.depth ?? 1;
 
@@ -73,25 +74,23 @@ function rng(seed: number) {
 }
 const pickOne = <T,>(r: () => number, list: T[]) => list[Math.floor(r() * list.length)];
 
-/** The escape route: each floor of the map is a part of Raja Hitam's prison. */
-export const AREAS: Record<Scene, string> = { cell: "The Cells", corridor: "Cell Block", yard: "Prison Yard", wall: "The Wall", gate: "The Gate" };
+/** The kind of room a floor is (it decides which objects turn up: see endless.ts). */
 export function sceneFor(floor: number): Scene {
   if (floor >= FLOORS - 1) return "gate";
   if (floor <= 0) return "cell";
-  if (floor <= 2) return "corridor";
-  if (floor <= 4) return "yard";
+  if (floor <= 3) return "corridor";
+  if (floor <= 6) return "yard";
   return "wall";
 }
-/** "Prison Yard · Floor 4", or the boss's name on the last floor. Pass the run for the boss name. */
+/** The floor of the tower the run is on: 1 to 100. */
+export const floorOf = (run: Pick<Run, "depth" | "floor">) => towerFloor(depthOf(run), run.floor);
+/** "Floor 34", or "Floor 40 · Raja Hitam" on a tier's top floor. Pass the run for the right tier. */
 export function floorName(floor: number, run?: Pick<Run, "seed" | "depth">) {
-  if (floor >= FLOORS - 1) return run ? `Boss: ${bossFor(run.seed, depthOf(run)).name}` : "Boss";
-  return `${AREAS[sceneFor(floor)]} · Floor ${floor + 1}`;
+  const n = `Floor ${towerFloor(run ? depthOf(run) : 1, floor)}`;
+  return floor >= FLOORS - 1 && run ? `${n} · ${bossFor(run.seed, depthOf(run)).name}` : n;
 }
-/** "Penjara Raja Hitam", "Penjara Kabut · Depth 3"... */
-export function prisonName(run: Pick<Run, "seed" | "depth">) {
-  const d = depthOf(run);
-  return d > 1 ? `${prisonFor(run.seed, d).name} · Depth ${d}` : prisonFor(run.seed, 1).name;
-}
+/** The tier of the tower the run is in: "Green Meadow", "Hill Village"... */
+export const tierName = (run: Pick<Run, "depth">) => tierFor(depthOf(run)).name;
 
 /** Every fight is generated from the run's seed (src/lib/silat/endless.ts), the Warm-up included. */
 function fightSetup(run: Run, node: MapNode): Setup {
@@ -102,8 +101,12 @@ function fightSetup(run: Run, node: MapNode): Setup {
       ? generateBossFight(run.seed, depth, hero)
       : node.row === 0 && depth === 1
         ? generateWarmup(run.seed, hero)
-        : generateFight({ depth, row: node.row, kind: node.kind === "elite" ? "elite" : "fight", scene: sceneFor(node.row), seed: node.seed }, hero);
-  return { ...base, relics: run.relics, scene: base.scene ?? sceneFor(node.kind === "boss" ? FLOORS - 1 : node.row), tint: prisonFor(run.seed, depth).tint ?? undefined };
+        // Fights were tuned for six floors a tier: the ten floors are spread over the same range.
+        : generateFight({ depth, row: Math.round((node.row * 5) / (FLOORS - 2)), kind: node.kind === "elite" ? "elite" : "fight", scene: sceneFor(node.row), seed: node.seed }, hero);
+  return {
+    ...base, relics: run.relics, scene: base.scene ?? sceneFor(node.kind === "boss" ? FLOORS - 1 : node.row), tint: prisonFor(run.seed, depth).tint ?? undefined,
+    env: { biome: tierFor(depth).biome, arena: node.kind === "boss" || node.kind === "elite", floor: towerFloor(depth, node.row) },
+  };
 }
 
 export function fightFor(run: Run, node: MapNode): Fight {
@@ -126,7 +129,7 @@ export function newRun(seed = Math.floor(Math.random() * 2 ** 31)): Run {
   // Every run starts with a random common Pusaka, so runs differ from the first fight.
   const starter = pickOne(r, ALL_RELICS.filter((x) => !x.rare)).id;
   return {
-    v: 2, seed, floor: 0, hp: START_HP, max: START_HP, gold: BALANCE.hero.startGold, deck: [...STARTER], relics: [starter],
+    v: 3, seed, floor: 0, hp: START_HP, max: START_HP, gold: BALANCE.hero.startGold, deck: [...STARTER], relics: [starter],
     map: makeMap(seed, 1), at: null, path: [], status: "style", depth: 1,
     fight: null, reward: null, shop: null, event: null, treasure: null, ringOuts: 0, bestCombo: 0,
   };
@@ -208,7 +211,9 @@ export function settle(run: Run): Run {
   const done: Run = { ...run, ...stats, hp: Math.min(run.max, f.hero.hp + heal) };
   const r = rng((node?.seed ?? run.seed) + 99);
   if (node?.kind === "boss") {
-    // Escaped! A big reward, then on to the next prison.
+    // The top of the tower: the run is won.
+    if (depthOf(done) >= TOWER_TIERS) return { ...done, status: "won", fight: null };
+    // The guardian is down: a big reward, then up to the next tier.
     const gold = 40 + (f.kos ?? 0) * KO_GOLD;
     const opened = (run.tierSeen ?? 1) < 3 ? TIER_NAMES[3] : undefined;
     return { ...done, tierSeen: 3, status: "reward", fight: null, reward: { gold, cards: cardChoices({ ...done, depth: depthOf(done) + 1, floor: 0 }, r), relics: relicChoices(done, r, 3), escape: true, unlocked: opened } };
@@ -225,7 +230,7 @@ export function settle(run: Run): Run {
 export function takeReward(run: Run, card: string | null, relic: string | null): Run {
   if (!run.reward) return run;
   if (run.reward.escape) {
-    return nextPrison({
+    return nextTier({
       ...run,
       gold: run.gold + run.reward.gold,
       deck: card ? [...run.deck, card] : run.deck,
@@ -240,9 +245,9 @@ export function takeReward(run: Run, card: string | null, relic: string | null):
   });
 }
 
-/** You escaped one prison and are thrown into the next, deeper one: a new map, new fights, a new boss.
+/** Up to the next tier of the tower: a new map, new fights, a new guardian.
  *  You heal half of what you're missing on the way. */
-export function nextPrison(run: Run): Run {
+export function nextTier(run: Run): Run {
   const depth = depthOf(run) + 1;
   return backToMap({
     ...run,
@@ -337,7 +342,7 @@ export const EVENTS: Record<string, GameEvent> = {
   },
   brawl: {
     title: "Yard Brawl",
-    text: "Two gangs square off in the prison yard. Whoever wins takes the other side's stash.",
+    text: "Two gangs square off in the courtyard. Whoever wins takes the other side's stash.",
     choices: [
       { id: "fight", label: "Jump in", detail: "d20 10+. Win: a rare card and 20 gold. Lose: 7 HP.",
         check: { dc: 10, bonus: { keris: 3, gelang: 2, keris_api: 2 }, win: "You drop three of them before the guards arrive. The stash is yours.", lose: "Someone hits you with a tray. Then everyone does. You take 7." } },
@@ -345,8 +350,8 @@ export const EVENTS: Record<string, GameEvent> = {
     ],
   },
   dadu: {
-    title: "Prisoners' Dice",
-    text: "In a corner of the cell block, prisoners are throwing dice for gold. \"One game?\"",
+    title: "Stairwell Dice",
+    text: "On a landing of the stairs, climbers are throwing dice for gold. \"One game?\"",
     choices: [
       { id: "bet", label: "Bet 15 gold", detail: "d20 11+. Win: +30 gold. Lose: the 15 is gone.", cost: 15,
         check: { dc: 11, bonus: { akik: 2, tasbih: 2 }, win: "The dice love you tonight. +30 gold.", lose: "Snake eyes, more or less. Your 15 gold is gone." } },
@@ -428,7 +433,7 @@ export function loadRun(): Run | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const r = JSON.parse(raw) as Run;
-    return r?.v === 2 ? r : null; // older runs (no map) are dropped
+    return r?.v === 3 ? r : null; // older runs (prison maps) are dropped
   } catch {
     return null;
   }
@@ -451,7 +456,7 @@ export function loadBest(): Best {
 
 export function recordEnd(run: Run) {
   const b = loadBest();
-  // Deepest prison first, then the furthest floor in it. `wins` counts prisons escaped.
+  // Highest tier first, then the furthest floor in it. `wins` counts tiers cleared.
   const deeper = depthOf(run) > (b.depth ?? 1);
   const same = depthOf(run) === (b.depth ?? 1);
   const next: Best = {

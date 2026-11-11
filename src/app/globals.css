@@ -781,3 +781,69 @@ a { text-decoration: none; }
 .bz-choice.dim { opacity: .5; }
 .bz-letter { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; flex-shrink: 0; background: rgba(255,255,255,.3); }
 @media (prefers-reduced-motion: reduce) { .bz-tile.open { animation: none; } }
+
+/* Raja Silat in 3D: the three.js stage and the labels pinned to it. */
+/* The board is the game: it fills the whole view and the HUD (header, health, hand, buttons) floats on top.
+   --s3-top / --s3-bottom are how much of the view the HUD covers (measured in FightView). */
+.sl-fight.s3 > * { position: relative; z-index: 1; }
+.sl-fight.s3 > .sl-stage { position: fixed; inset: 0; z-index: 0; display: block; }
+.sl-fight.s3 .sl-stage-in { position: absolute; inset: 0; width: auto; }
+.sl-fight.s3 .sl-tray { align-self: center; max-width: 100%; padding: 0 12px; border-radius: 16px; background: rgba(255, 253, 247, .86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 2px 0 rgba(60, 40, 20, .12); margin-top: auto; }
+.sl-fight.s3 .sl-hand { margin-top: 0; }
+.sl-fight.s3 .sl-vitals { padding: 5px 10px; border-radius: 16px; background: rgba(255, 253, 247, .86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 2px 0 rgba(60, 40, 20, .12); }
+.sl-fight.s3 .sl-inspect, .sl-fight.s3 .sl-logfloat { left: max(8px, calc(50% - 290px)); right: max(8px, calc(50% - 290px)); }
+.sl-fight.s3 .sl-logfloat, .sl-fight.s3 .sl-inspect.top { top: calc(var(--s3-top) + 8px); }
+.sl-fight.s3 .sl-inspect.bottom { bottom: calc(var(--s3-bottom) + 44px); }
+.sl-fight.s3 .sl-inspect { max-height: calc((100% - var(--s3-top) - var(--s3-bottom)) / 2 - 10px); }
+.sl-fight.s3 .sl-logfloat { max-height: calc((100% - var(--s3-top) - var(--s3-bottom)) * .7); }
+.sl-fight.s3 .sl-rangkai, .sl-fight.s3 .sl-combo { top: calc(var(--s3-top) + (100% - var(--s3-top) - var(--s3-bottom)) * .42); }
+.s3-stage { position: relative; width: 100%; height: 100%; background: linear-gradient(#8fd3f4, #d8f3ff); touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.s3-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
+.s3-layer, .s3-flash, .s3-hurt { position: absolute; inset: 0; pointer-events: none; }
+.s3-flash { background: #fff; opacity: 0; z-index: 6; }
+.s3-hurt { opacity: 0; z-index: 6; background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 40, 40, .7) 100%); }
+.s3-pin, .s3-tag { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.s3-pin > *, .s3-tag > * { flex-shrink: 0; }
+.s3-pin { display: flex; align-items: center; justify-content: center; }
+.s3-tag { display: flex; justify-content: center; gap: 2px; }
+.s3-tag.head { align-items: flex-end; }
+.s3-tag.foot { align-items: center; }
+.s3-chip { height: 17px; min-width: 17px; padding: 0 4px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 2px; color: #fff; font-size: 11px; font-weight: 900; line-height: 1; white-space: nowrap; box-shadow: 0 2px 0 rgba(0, 0, 0, .22); }
+.s3-chip.hp { background: #fff; color: #262626; box-shadow: 0 0 0 2px #4b4b4b; }
+.s3-chip.hp.boss { box-shadow: 0 0 0 2px #b81f1f; }
+.s3-chip.intent { animation: slreaim 360ms cubic-bezier(.34, 1.56, .64, 1); }
+.s3-chip.q { background: #1899d6; box-shadow: 0 2px 0 #1478a8; animation: dotin 200ms var(--spring) both; }
+.s3-chip.mark { background: #ff9600; font-size: 12px; animation: dotin 200ms var(--spring) both; }
+.s3-chip.mark.gone { background: #3c3c3c; color: #ffc800; }
+.s3-num { font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 0 3px #a01212, 0 1px 0 #a01212, 0 -1px 0 #a01212, 1px 0 0 #a01212, -1px 0 0 #a01212; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.s3-num.risk { font-size: 13px; }
+.s3-num i { font-style: normal; font-size: 9px; }
+.s3-coord { font-size: 10px; font-weight: 900; color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 0 3px rgba(0, 0, 0, .4); }
+.s3-float { font-size: 16px; font-weight: 900; white-space: nowrap; text-shadow: 0 2px 0 rgba(0, 0, 0, .4), 0 0 4px rgba(0, 0, 0, .3); animation: slfloat 1200ms ease-out both; }
+.s3-float.dmg { font-size: 28px; font-family: var(--font-display), "Fredoka", sans-serif; animation: s3dmg 900ms cubic-bezier(.2, .9, .3, 1) both; }
+.s3-float.big { font-size: 26px; font-family: var(--font-display), "Fredoka", sans-serif; animation: slstamp 1100ms cubic-bezier(.34, 1.56, .64, 1) both; }
+.s3-float.die { font-size: 15px; color: #262626; animation: s3die 900ms ease-out both; }
+@keyframes s3dmg { 0% { opacity: 0; transform: translateY(8px) scale(2.2); } 14% { opacity: 1; transform: translateY(-4px) scale(.9); } 26% { transform: translateY(-8px) scale(1.1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-40px) scale(.9); } }
+@keyframes s3die { 0% { opacity: 0; transform: scale(.3); } 20% { opacity: 1; transform: scale(1.3); } 35% { transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .s3-float, .s3-chip { animation: none; } }
+
+/* The map: one tier of the tower, with its rooms as little islands. */
+.sl-tower { position: relative; border-radius: 24px; overflow: hidden; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .08); }
+.sl-tower-body { position: absolute; left: 30%; width: 40%; top: 22px; bottom: 0; border-radius: 10px 10px 0 0; background-image: linear-gradient(90deg, rgba(0, 0, 0, .14), transparent 22%, transparent 70%, rgba(0, 0, 0, .2)), repeating-linear-gradient(0deg, transparent 0 21px, rgba(0, 0, 0, .13) 21px 23px) !important; background-blend-mode: multiply; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .1); }
+.sl-tower-body::before, .sl-tower-ring::before { content: ""; position: absolute; left: -8%; right: -8%; top: -14px; height: 16px; background: inherit; background-image: none; -webkit-mask: repeating-linear-gradient(90deg, #000 0 16px, transparent 16px 26px); mask: repeating-linear-gradient(90deg, #000 0 16px, transparent 16px 26px); filter: brightness(.9); }
+.sl-tower-ring { position: absolute; left: -8%; right: -8%; height: 14px; border-radius: 3px; filter: brightness(.86); box-shadow: 0 3px 0 rgba(0, 0, 0, .16); }
+.sl-tower-ring::before { left: 0; right: 0; filter: none; }
+.sl-tower-door { position: absolute; left: calc(50% - 20px); width: 40px; height: 60px; border-radius: 20px 20px 0 0; background: #5a3a24; box-shadow: inset 0 0 0 4px rgba(0, 0, 0, .25); }
+.sl-tower-floor { position: absolute; left: 6px; min-width: 24px; height: 18px; padding: 0 5px; border-radius: 9px; background: rgba(255, 255, 255, .8); color: #3c3c3c; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+.sl-cloud { position: absolute; width: 96px; height: 30px; border-radius: 30px; background: #fff; pointer-events: none; }
+.sl-cloud::before, .sl-cloud::after { content: ""; position: absolute; border-radius: 50%; background: #fff; }
+.sl-cloud::before { left: 16px; top: -16px; width: 38px; height: 38px; }
+.sl-cloud::after { left: 44px; top: -10px; width: 30px; height: 30px; }
+.sl-isle { position: absolute; height: 60px; border: 0; padding: 0; background: none; cursor: pointer; display: flex; justify-content: center; }
+.sl-isle .land { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; border-radius: 50% 50% 50% 50% / 34% 34% 66% 66%; background: linear-gradient(var(--isle) 0 42%, var(--dirt) 42%); box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .18), 0 6px 8px rgba(0, 0, 0, .18); }
+.sl-isle img { position: relative; margin-top: 2px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .25)); }
+.sl-isle.past { filter: grayscale(.85); opacity: .7; }
+.sl-isle.can .land { box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .18), 0 0 0 3px #fff, 0 6px 10px rgba(0, 0, 0, .25); }
+.sl-isle.here .land { box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .18), 0 0 0 3px #3c3c3c; }
+.sl-isle .you { position: absolute; top: -12px; padding: 1px 7px; border-radius: 8px; background: #3c3c3c; color: #fff; font-size: 10px; font-weight: 900; }
+.sl-fight.s3 > header > div { flex: 0 1 auto !important; margin: 0 auto; padding: 4px 14px; border-radius: 16px; background: rgba(255, 253, 247, .86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 2px 0 rgba(60, 40, 20, .12); }

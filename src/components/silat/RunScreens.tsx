@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SilatCard } from "@/components/silat/SilatCard";
 import { Icon, Sheet } from "@/components/ui";
 import { feedback } from "@/lib/feedback";
@@ -9,8 +9,9 @@ import { CARDS, STYLES, type Style } from "@/lib/silat/cards";
 import { MAP_LANES, MAP_ROWS, NODE_INFO, nextNodes, type MapNode } from "@/lib/silat/map";
 import { bossFor } from "@/lib/silat/endless";
 import { RELICS } from "@/lib/silat/relics";
+import { LOOKS, TOWER_FLOORS, TOWER_TIERS, tierFor, towerFloor } from "@/lib/silat/tower";
 import {
-  EVENTS, REST_HEAL, depthOf, prisonName, SHOP_HEAL, STYLE_STARTER, buyCard, checkBonus, chooseStyle, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, rollEvent, takeReward, takeTreasure, train, type RollResult, type Run,
+  EVENTS, REST_HEAL, depthOf, floorOf, tierName, SHOP_HEAL, STYLE_STARTER, buyCard, checkBonus, chooseStyle, buyHeal, buyRelic, buyRemove, chooseEvent, enter, leave, rest, rollEvent, takeReward, takeTreasure, train, type RollResult, type Run,
 } from "@/lib/silat/run";
 
 
@@ -109,10 +110,10 @@ function Screen({ children, dark }: { children: ReactNode; dark?: boolean }) {
   return <main className="screen" style={{ gap: 14, ...(dark ? { background: "#2B1A12", color: "#FFF8EC", maxWidth: "none" } : {}) }}>{children}</main>;
 }
 
-// ---------- Map ----------
+// ---------- Map: one tier of the tower ----------
 
-const ROW_H = 84;
-const PAD = 46;
+const ROW_H = 82;
+const PAD = 64;
 
 function spot(n: MapNode) {
   const wobble = ((n.seed % 100) / 100 - 0.5) * 8;
@@ -121,17 +122,38 @@ function spot(n: MapNode) {
   return { x, y };
 }
 
+/** The tower runs up the middle. Every room is a little island: the inner ones hang on the tower's
+ *  wall, the outer ones float beside it. You climb from the door at the bottom to the guardian on top. */
 export function MapScreen({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
   const reach = new Set(nextNodes(run.map, run.at));
   const visited = new Set(run.path);
   const height = PAD * 2 + (MAP_ROWS - 1) * ROW_H;
   const pos = new Map(run.map.nodes.map((n) => [n.id, spot(n)]));
   const [peek, setPeek] = useState<MapNode | null>(null);
+  const depth = depthOf(run);
+  const look = LOOKS[tierFor(depth).biome];
+  const night = look.day < 0.9;
+  // Start with the rooms you can go to in view.
+  const focus = useRef<HTMLButtonElement>(null);
+  useEffect(() => { focus.current?.scrollIntoView({ block: "center" }); }, [run.at]);
+  const focusId = [...reach][0] ?? run.at;
   return (
     <Screen>
-      <RunHeader run={run} title={prisonName(run)} />
-      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>Choose your path out. {bossFor(run.seed, depthOf(run)).name} guards the gate at the top.</p>
-      <div style={{ position: "relative", height, borderRadius: 24, background: "#EAF3DE", border: "2px solid #D2E6BC" }} aria-label="Run map">
+      <RunHeader run={run} title={`${tierName(run)} · ${floorOf(run)}/${TOWER_FLOORS}`} />
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--plum-soft)", textAlign: "center" }}>
+        Tier {depth} of {TOWER_TIERS}. Pick your way up: {bossFor(run.seed, depth).name} guards floor {towerFloor(depth, MAP_ROWS - 1)}.
+      </p>
+      <div className="sl-tower" style={{ height, background: `linear-gradient(${look.sky[0]}, ${look.sky[1]})` }} aria-label="This tier of the tower">
+        {[[8, 70, 0.9], [72, 210, 0.7], [-6, 390, 0.8], [78, 520, 0.9], [4, 650, 0.7]].map(([x, y, o], i) => (
+          <span key={i} className="sl-cloud" style={{ left: `${x}%`, top: y, opacity: night ? o * 0.25 : o }} aria-hidden="true" />
+        ))}
+        <div className="sl-tower-body" style={{ background: look.brick }} aria-hidden="true">
+          {[0, 3, 6].map((r) => <span key={r} className="sl-tower-ring" style={{ top: PAD + (MAP_ROWS - 1 - r) * ROW_H - ROW_H * 0.52 - (r === 0 ? 300 : 0), display: r === 0 ? "none" : undefined, background: look.brick }} />)}
+          <span className="sl-tower-door" style={{ top: PAD + (MAP_ROWS - 1) * ROW_H - 34 }} />
+        </div>
+        {Array.from({ length: MAP_ROWS }, (_, r) => (
+          <span key={r} className="sl-tower-floor" style={{ top: PAD + (MAP_ROWS - 1 - r) * ROW_H - 9 }} aria-hidden="true">{towerFloor(depth, r)}</span>
+        ))}
         <svg width="100%" height={height} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
           {run.map.edges.map(([f, t]) => {
             const a = pos.get(f)!, b = pos.get(t)!;
@@ -139,7 +161,7 @@ export function MapScreen({ run, onChange }: { run: Run; onChange: (r: Run) => v
             const next = f === run.at && reach.has(t);
             return (
               <line key={`${f}>${t}`} x1={`${a.x}%`} y1={a.y} x2={`${b.x}%`} y2={b.y}
-                stroke={walked ? "#46A302" : next ? "#3C3C3C" : "#B9CDA3"} strokeWidth={walked || next ? 4 : 3} strokeDasharray={walked ? undefined : "2 9"} strokeLinecap="round" />
+                stroke={walked ? "#FFC800" : next ? "#FFFFFF" : "rgba(255,255,255,.55)"} strokeWidth={walked || next ? 4 : 3} strokeDasharray={walked ? undefined : "2 9"} strokeLinecap="round" />
             );
           })}
         </svg>
@@ -149,24 +171,21 @@ export function MapScreen({ run, onChange }: { run: Run; onChange: (r: Run) => v
           const can = reach.has(n.id);
           const here = n.id === run.at;
           const past = visited.has(n.id) && !here;
-          const size = n.kind === "boss" ? 58 : 44;
+          const w = n.kind === "boss" ? 84 : 62;
           return (
             <button
               key={n.id}
+              ref={n.id === focusId ? focus : undefined}
               type="button"
               onClick={() => { feedback.tap(); setPeek(n); }}
-              aria-label={`${info.name}${can ? ", you can go here" : ""}${here ? ", you are here" : ""}`}
-              className={can ? "sl-node-can" : undefined}
-              style={{
-                position: "absolute", left: `calc(${p.x}% - ${size / 2}px)`, top: p.y - size / 2, width: size, height: size, borderRadius: n.kind === "boss" ? 18 : "50%",
-                border: here ? "3px solid #3C3C3C" : 0, padding: 0, cursor: "pointer",
-                background: past ? "#C7D6B5" : can || here ? info.color : "#FFFFFF",
-                boxShadow: `0 4px 0 ${past ? "#A8BC92" : can || here ? info.edge : "#D2E6BC"}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
+              aria-label={`Floor ${towerFloor(depth, n.row)}: ${info.name}${can ? ", you can go here" : ""}${here ? ", you are here" : ""}`}
+              className={`sl-isle${can ? " can sl-node-can" : ""}${here ? " here" : ""}${past ? " past" : ""}`}
+              style={{ left: `calc(${p.x}% - ${w / 2}px)`, top: p.y - 34, width: w, ["--isle" as string]: can || here ? info.color : look.grass, ["--dirt" as string]: look.dirt }}
             >
+              <span className="land" />
               {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite */}
-              <img src={`/silat/pixel/map-${n.kind}.png`} alt="" className="px" style={{ width: size * 0.66, height: size * 0.66, opacity: past && !here ? 0.55 : 1 }} />
+              <img src={`/silat/pixel/map-${n.kind}.png`} alt="" className="px" style={{ width: n.kind === "boss" ? 46 : 32, height: n.kind === "boss" ? 46 : 32 }} />
+              {here && <span className="you">You</span>}
             </button>
           );
         })}
@@ -197,18 +216,18 @@ export function RewardScreen({ run, onChange }: { run: Run; onChange: (r: Run) =
   const needRelic = rw.relics.length > 0 && !relic;
   return (
     <Screen dark>
-      <span className="stamp" style={{ alignSelf: "center", marginTop: 12, padding: "8px 20px", borderRadius: 14, background: "#FFC800", color: "#4A3200", fontSize: 26, fontWeight: 900, boxShadow: "0 5px 0 #E5A800" }}>{rw.escape ? "LOLOS!" : "MENANG!"}</span>
+      <span className="stamp" style={{ alignSelf: "center", marginTop: 12, padding: "8px 20px", borderRadius: 14, background: "#FFC800", color: "#4A3200", fontSize: 26, fontWeight: 900, boxShadow: "0 5px 0 #E5A800" }}>{rw.escape ? "NAIK!" : "MENANG!"}</span>
       {rw.escape && (
         <span style={{ textAlign: "center", fontSize: 15, fontWeight: 700, color: "#E8D6C0", lineHeight: 1.4 }}>
-          You broke out of {prisonName(run)}. Outside, the Black King&apos;s guards are waiting: next stop,{" "}
-          <b style={{ color: "#FFC800" }}>{prisonName({ ...run, depth: depthOf(run) + 1 })}</b>. Tougher pieces, a bigger board, a new warden.
+          {tierName(run)} is cleared: {floorOf(run)} floors down. The stairs lead up to{" "}
+          <b style={{ color: "#FFC800" }}>{tierName({ depth: depthOf(run) + 1 })}</b>. Tougher pieces, a bigger board, a new guardian.
         </span>
       )}
       <span style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: "#E8D6C0" }}>+{rw.gold} gold · HP {run.hp}/{run.max}</span>
 
       {rw.relics.length > 0 && (
         <>
-          <span className="label" style={{ textAlign: "center", color: "#C9B49C", marginTop: 6 }}>{rw.escape ? "Escape reward: pick a Pusaka" : "Elite reward: pick a Pusaka"}</span>
+          <span className="label" style={{ textAlign: "center", color: "#C9B49C", marginTop: 6 }}>{rw.escape ? "Guardian reward: pick a Pusaka" : "Elite reward: pick a Pusaka"}</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {rw.relics.map((id) => (
               <button key={id} type="button" onClick={() => { feedback.tap(); setRelic(id); }} aria-pressed={relic === id}
