@@ -235,7 +235,7 @@ a { text-decoration: none; }
 .toast.bad { background: var(--cherry); color: #fff; box-shadow: 0 4px 0 var(--cherry-edge); }
 .toast.info { background: #fff; color: var(--ink); border: 2px solid var(--line); box-shadow: 0 4px 0 var(--line); }
 
-.tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tools { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .tool { background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
 .tool .face {
   position: relative; width: 52px; height: 46px; border-radius: 14px; background: #fff; border: 2px solid var(--line);
@@ -611,3 +611,17 @@ a { text-decoration: none; }
 .bv-cell.br { border-right: 2px solid var(--plum); }
 .bv-cell.bb { border-bottom: 2px solid var(--plum); }
 .bv-cell.last { animation: pop 400ms var(--spring); box-shadow: inset 0 0 0 2px var(--sun-edge); }
+
+/* ---------- Coach ---------- */
+.cell.co-area { background: #FFF6D6; }
+.cell.co-focus { background: #FFE38A; }
+.cell.co-clue { background: #D7F5C0; color: var(--lime-dark); }
+.cell.co-target { background: var(--lime); color: #fff; box-shadow: inset 0 0 0 3px var(--lime-edge); animation: tqpulse 1.2s ease-in-out infinite; }
+.cell .co-notes span { font-size: 3.5cqw; line-height: 1; color: var(--plum); font-weight: 900; }
+.cell .co-notes span.strike { color: var(--cherry-edge); text-decoration: line-through; text-decoration-thickness: 2px; background: rgba(255, 75, 75, .14); border-radius: 4px; }
+.coach-card { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px calc(env(safe-area-inset-bottom) + 14px); border-radius: 24px 24px 0 0; background: #fff; box-shadow: 0 -6px 24px rgba(74, 63, 85, .18); animation: sheet 300ms var(--spring) both; }
+.coach-card p { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--ink); }
+.coach-card details { border-radius: 14px; background: var(--cream-2); padding: 8px 12px; }
+.coach-card summary { cursor: pointer; font-size: 14px; font-weight: 900; color: var(--plum); }
+.coach-card details p { margin-top: 6px; font-size: 14px; color: var(--plum); }
+@media (prefers-reduced-motion: reduce) { .cell.co-target { animation: none; } }

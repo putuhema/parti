@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { completedGroups, generatePuzzle, setAt, type Difficulty } from "../../../convex/lib/sudoku";
-import { Game } from "@/components/Game";
+import { CoachCard } from "@/components/Coach";
+import { Game, type CoachMarks } from "@/components/Game";
 import { Confetti, Hearts, Mascot, TopBar, formatTime } from "@/components/ui";
+import { nextLesson, type Lesson } from "@/lib/coach";
 import { feedback } from "@/lib/feedback";
 import { useNow } from "@/lib/hooks";
 
@@ -43,6 +45,10 @@ function SoloGame({ level, onAgain, onChange }: { level: Difficulty; onAgain: ()
   const [startedAt] = useState(() => Date.now());
   const [doneAt, setDoneAt] = useState<number | null>(null);
   const now = useNow(1000);
+  // Coach: eliminations already worked out stay known, so later lessons build on them.
+  const known = useRef(new Set<string>());
+  const [lesson, setLesson] = useState<{ lesson: Lesson; index: number } | null>(null);
+  const [focus, setFocus] = useState<{ cell: number; id: number } | null>(null);
 
   const apply = useCallback(
     (cell: number, digit: number) => {
@@ -59,8 +65,33 @@ function SoloGame({ level, onAgain, onChange }: { level: Difficulty; onAgain: ()
     [solution, values],
   );
 
-  const onPlace = useCallback(async (cell: number, digit: number) => apply(cell, digit), [apply]);
+  const onPlace = useCallback(async (cell: number, digit: number) => {
+    setLesson(null); // the board changed, so the lesson is stale
+    return apply(cell, digit);
+  }, [apply]);
   const hintApi = { left: hints, use: async (cell: number) => { setHints((h) => h - 1); return apply(cell, Number(solution[cell])); } };
+
+  const step = lesson?.lesson.steps[lesson.index];
+  const marks: CoachMarks | null = step ? { area: step.area, focus: step.focus, clues: step.clues, marks: step.marks, target: step.place?.cell } : null;
+  const askCoach = () => {
+    if (lesson) { setLesson(null); return; }
+    const l = nextLesson(values, known.current, 12);
+    setLesson({ lesson: l, index: 0 });
+    const first = l.steps[0];
+    if (first) setFocus({ cell: first.place?.cell ?? first.focus[0], id: Date.now() });
+  };
+  const placeFromCoach = () => {
+    const p = step?.place;
+    if (!p) return;
+    setLesson(null);
+    if (apply(p.cell, p.digit).correct) feedback.correct();
+  };
+  const reveal = () => {
+    // Stuck: fill one empty cell from the solution, preferring one the lesson was looking at.
+    const cell = step?.focus.find((i) => values[i] === "0") ?? values.indexOf("0");
+    setLesson(null);
+    if (cell >= 0) { setFocus({ cell, id: Date.now() }); apply(cell, Number(solution[cell])); feedback.correct(); }
+  };
 
   return (
     <main className="screen tight">
@@ -69,7 +100,24 @@ function SoloGame({ level, onAgain, onChange }: { level: Difficulty; onAgain: ()
         title={<span className="chip chip-mist">SOLO · {level.toUpperCase()}</span>}
         right={<span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={{ fontSize: 18, fontWeight: 900, color: "var(--muted)" }}>{formatTime((doneAt ?? now) - startedAt)}</span><Hearts left={Math.max(0, 3 - mistakes)} total={3} /></span>}
       />
-      <Game puzzle={puzzle} values={values} onPlace={onPlace} hints={hintApi} disabled={!!doneAt} />
+      <Game puzzle={puzzle} values={values} onPlace={onPlace} hints={hintApi} disabled={!!doneAt}
+        coach={marks} focusCell={focus} coachTool={doneAt ? undefined : { onClick: askCoach, active: !!lesson }} />
+      {lesson && !doneAt && (
+        <CoachCard
+          lesson={lesson.lesson}
+          index={lesson.index}
+          onNext={() => {
+            const i = lesson.index + 1;
+            setLesson({ ...lesson, index: i });
+            const s = lesson.lesson.steps[i];
+            if (s) setFocus({ cell: s.place?.cell ?? s.focus[0], id: Date.now() });
+          }}
+          onPlace={placeFromCoach}
+          onTry={() => { if (step?.place) setFocus({ cell: step.place.cell, id: Date.now() }); setLesson(null); }}
+          onReveal={reveal}
+          onClose={() => setLesson(null)}
+        />
+      )}
       {doneAt && (
         <div className="overlay">
           <Confetti />

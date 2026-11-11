@@ -20,14 +20,32 @@ type Props = {
   disabled?: boolean;
   /** Extra line shown in the toast slot, e.g. "Maya placed a 6". */
   announce?: { id: string | number; text: string; kind?: ToastKind } | null;
+  /** Coach overlay: what to highlight on the board for the current lesson step. */
+  coach?: CoachMarks | null;
+  /** A "Coach" button in the tools row. */
+  coachTool?: { onClick: () => void; active: boolean };
+  /** Move the selection to this cell (the id makes repeat requests count). */
+  focusCell?: { cell: number; id: number } | null;
+};
+
+export type CoachMarks = {
+  area: number[];
+  focus: number[];
+  clues: number[];
+  target?: number;
+  marks: Record<number, { show: number[]; strike: number[] }>;
 };
 
 type ToastKind = "combo" | "clear" | "bad" | "info";
 type Undo = { cell: number; notes?: number[]; wrong?: string };
 
 const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+/** The board is rounded (16px with a 2px border), so its four corner cells are too. */
+const CORNER_RADIUS: Record<number, "borderTopLeftRadius" | "borderTopRightRadius" | "borderBottomLeftRadius" | "borderBottomRightRadius"> = {
+  0: "borderTopLeftRadius", 8: "borderTopRightRadius", 72: "borderBottomLeftRadius", 80: "borderBottomRightRadius",
+};
 
-export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, announce }: Props) {
+export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, hints, disabled, announce, coach, coachTool, focusCell }: Props) {
   const firstEmpty = useMemo(() => Math.max(0, values.indexOf("0")), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [sel, setSel] = useState<number>(firstEmpty);
   const [notesMode, setNotesMode] = useState(false);
@@ -54,6 +72,13 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
   useEffect(() => {
     if (announce) showToast(announce.text, announce.kind ?? "info");
   }, [announce?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Jump the selection when asked (e.g. the coach points at a cell).
+  const [seenFocus, setSeenFocus] = useState<number | null>(null);
+  if (focusCell && focusCell.id !== seenFocus) {
+    setSeenFocus(focusCell.id);
+    setSel(focusCell.cell);
+  }
 
   // Wrong digits and notes only show on empty cells, so a cell a teammate fills just hides them.
   const [locked, setLocked] = useState(false);
@@ -219,17 +244,26 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
             const cur = cursorAt.get(i);
             const cls = ["cell"];
             if (given) cls.push("given");
-            if (i === sel) cls.push("sel");
+            if (i === sel && !(coach && coach.target === i)) cls.push("sel");
             else if (isWrong) cls.push("err");
-            else if (selDigit && values[i] === selDigit) cls.push("same");
-            else if (peerSet.has(i)) cls.push("peer");
+            // While the coach is explaining, only its highlights show.
+            else if (!coach && selDigit && values[i] === selDigit) cls.push("same");
+            else if (!coach && peerSet.has(i)) cls.push("peer");
             if (isWrong && i === sel) cls.push("err");
+            if (coach) {
+              if (coach.target === i) cls.push("co-target");
+              else if (coach.focus.includes(i)) cls.push("co-focus");
+              else if (coach.clues.includes(i)) cls.push("co-clue");
+              else if (coach.area.includes(i)) cls.push("co-area");
+            }
             if (pending[i]) cls.push("pending");
             const sw = sweep?.cells.get(i);
             if (sw !== undefined) cls.push(sweep!.id % 2 ? "sweep" : "sweep2");
             const style: CSSProperties = {
               borderRight: c === 8 ? 0 : c % 3 === 2 ? "2px solid var(--line-2)" : "1px solid var(--line)",
               borderBottom: r === 8 ? 0 : r % 3 === 2 ? "2px solid var(--line-2)" : "1px solid var(--line)",
+              // Corner cells follow the board's rounded corner, so their highlight does too.
+              ...(CORNER_RADIUS[i] ? { [CORNER_RADIUS[i]]: 14 } : {}),
             };
             if (sw !== undefined) style.animationDelay = `${sw * 40}ms`;
             const dc = !given && values[i] !== "0" ? digitColor?.(i) : undefined;
@@ -239,6 +273,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
               style.boxShadow = `inset 0 0 0 3px ${cur.paint.face}`;
             }
             const n = values[i] === "0" && !v ? notes[i] : undefined;
+            const cm = coach && values[i] === "0" && !v ? coach.marks[i] : undefined;
             const animCls = anim?.cell === i ? anim.kind : "";
             return (
               <button
@@ -250,7 +285,11 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
                 aria-selected={i === sel}
                 role="gridcell"
               >
-                {n?.length ? (
+                {cm ? (
+                  <span className="notes co-notes" aria-hidden="true">
+                    {DIGITS.map((d) => <span key={d} className={cm.strike.includes(d) ? "strike" : ""}>{cm.show.includes(d) ? d : ""}</span>)}
+                  </span>
+                ) : n?.length ? (
                   <span className="notes" aria-hidden="true">
                     {DIGITS.map((d) => <span key={d}>{n.includes(d) ? d : ""}</span>)}
                   </span>
@@ -285,6 +324,12 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
           <span className="face"><Icon.Pencil color={notesMode ? "#fff" : "#6F6F6F"} /></span>
           <span className="name">NOTES {notesMode ? "ON" : "OFF"}</span>
         </button>
+        {coachTool && (
+          <button className={`tool ${coachTool.active ? "on" : ""}`} onClick={() => { feedback.unlock(); feedback.tap(); coachTool.onClick(); }} aria-pressed={coachTool.active} aria-label="Coach: explain the next move">
+            <span className="face">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/mascot.png" alt="" width={20} height={25} /></span>
+            <span className="name">COACH</span>
+          </button>
+        )}
         {hints ? (
           <button className="tool" onClick={useHint} disabled={hints.left <= 0 || disabled} aria-label={`Hint, ${hints.left} left`}>
             <span className="face"><Icon.Bulb /><span className="badge">{hints.left}</span></span>
