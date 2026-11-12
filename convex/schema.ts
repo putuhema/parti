@@ -208,6 +208,26 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  tileRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    lang: v.union(v.literal("en"), v.literal("id")),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see TileGame in convex/tiles.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // Word meanings from Wiktionary, cached so each word is fetched once.
+  wordDefs: defineTable({
+    lang: v.union(v.literal("en"), v.literal("id")),
+    word: v.string(),
+    defs: v.array(v.object({ pos: v.string(), text: v.string() })),
+    fetchedAt: v.number(),
+  }).index("by_lang_and_word", ["lang", "word"]),
+
   gridDailies: defineTable({
     date: v.string(),
     number: v.number(),

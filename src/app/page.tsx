@@ -121,6 +121,22 @@ const GAMES: Game[] = [
       </span>
     ),
   },
+  {
+    href: "/tiles",
+    name: "Tile Town",
+    sub: "Cross words, score big",
+    face: "#14A38B",
+    edge: "#0E7D6A",
+    ink: "#0E7D6A",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gridTemplateRows: "repeat(3, 28px)", gap: 3, transform: "rotate(-6deg)" }} aria-hidden="true">
+        {["", "W", "", "T", "O", "P", "", "N", ""].map((l, i) => (
+          <span key={i} style={{ borderRadius: 7, background: l ? "#F4CE78" : "rgba(255,255,255,.18)", color: "#4a3200", fontSize: 15, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: l ? "inset 0 -3px 0 #DFB257, 0 3px 0 rgba(0,0,0,.14)" : "none" }}>{l}</span>
+        ))}
+      </span>
+    ),
+  },
 ];
 
 export default function Home() {

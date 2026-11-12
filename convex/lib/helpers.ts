@@ -88,7 +88,7 @@ export async function friendIds(ctx: QueryCtx, playerId: Id<"players">) {
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-/** A 4-character room code not used by any open Sudoku or chess room. */
+/** A 4-character room code not used by any open room in any game. */
 export async function freeCode(ctx: QueryCtx) {
   let code = "";
   for (let tries = 0; tries < 30; tries++) {
@@ -100,7 +100,8 @@ export async function freeCode(ctx: QueryCtx) {
     const e = await ctx.db.query("buzzRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
     const f = await ctx.db.query("faceRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
     const g = await ctx.db.query("gridRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
-    if ([a, b, c, d, e, f, g].every((r) => !r || r.status === "finished")) break;
+    const h = await ctx.db.query("tileRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
+    if ([a, b, c, d, e, f, g, h].every((r) => !r || r.status === "finished")) break;
   }
   return code;
 }

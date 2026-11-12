@@ -28,6 +28,7 @@ import { addXp, befriend, findPlayer, freeCode, requirePlayer } from "./lib/help
 import { chessMode } from "./schema";
 import { BUZZ_MAX } from "./lib/buzz/board";
 import { SCRAMBLE_MAX } from "./lib/scramble/board";
+import { TILES_MAX } from "./lib/tiles/rules";
 
 type PId = Id<"players">;
 type Room = Doc<"chessRooms">;
@@ -234,7 +235,18 @@ export const joinAny = mutation({
     const buzz = await ctx.db.query("buzzRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const face = await ctx.db.query("faceRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const grid = await ctx.db.query("gridRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
-    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0);
+    const tile = await ctx.db.query("tileRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0);
+    if (tile && tile._creationTime === newest) {
+      if (!tile.members.some((m) => m.playerId === me._id)) {
+        if (tile.members.length >= TILES_MAX) throw new ConvexError("This room is full");
+        const taken = new Set(tile.members.map((m) => m.seat));
+        let seat = 0;
+        while (taken.has(seat)) seat++;
+        await ctx.db.patch(tile._id, { members: [...tile.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/tiles/room/${tile.code}`;
+    }
     if (grid && grid._creationTime === newest) {
       if (!grid.members.some((m) => m.playerId === me._id)) {
         if (grid.members.length >= SCRAMBLE_MAX) throw new ConvexError("This room is full");
