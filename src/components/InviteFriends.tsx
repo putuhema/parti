@@ -8,7 +8,7 @@ import { Avatar, Icon, Sheet, paintFor } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 
-type Kind = "sudoku" | "chess" | "words" | "trivia" | "buzz" | "faceoff" | "scramble" | "tiles";
+type Kind = "sudoku" | "chess" | "words" | "trivia" | "buzz" | "faceoff" | "scramble" | "tiles" | "boom";
 
 /** "Invite friends" for a lobby: pick friends and they get a live invite in their Friends tab. */
 export function InviteFriends({ kind, code }: { kind: Kind; code: string }) {

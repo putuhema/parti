@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as boom from "../boom.js";
 import type * as buzz from "../buzz.js";
 import type * as chess from "../chess.js";
 import type * as crons from "../crons.js";
@@ -18,6 +19,7 @@ import type * as faceoff from "../faceoff.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as leaderboard from "../leaderboard.js";
+import type * as lib_boom_rules from "../lib/boom/rules.js";
 import type * as lib_buzz_board from "../lib/buzz/board.js";
 import type * as lib_buzz_questions from "../lib/buzz/questions.js";
 import type * as lib_chess from "../lib/chess.js";
@@ -53,6 +55,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  boom: typeof boom;
   buzz: typeof buzz;
   chess: typeof chess;
   crons: typeof crons;
@@ -62,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   invites: typeof invites;
   leaderboard: typeof leaderboard;
+  "lib/boom/rules": typeof lib_boom_rules;
   "lib/buzz/board": typeof lib_buzz_board;
   "lib/buzz/questions": typeof lib_buzz_questions;
   "lib/chess": typeof lib_chess;

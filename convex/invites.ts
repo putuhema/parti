@@ -13,6 +13,7 @@ export const GAMES = {
   faceoff: { name: "Face Off", path: "/faceoff/room/" },
   scramble: { name: "Scramble", path: "/scramble/room/" },
   tiles: { name: "Tile Town", path: "/tiles/room/" },
+  boom: { name: "Juragan Nusantara", path: "/boom/room/" },
 } as const;
 
 export const gameKind = v.union(...(Object.keys(GAMES) as (keyof typeof GAMES)[]).map((k) => v.literal(k)));

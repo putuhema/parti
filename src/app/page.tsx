@@ -122,6 +122,22 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/boom",
+    name: "Juragan Nusantara",
+    sub: "Buy up Indonesia, collect rent",
+    face: "#C8362E",
+    edge: "#9A2620",
+    ink: "#9A2620",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gridTemplateRows: "repeat(3, 28px)", gap: 3, transform: "rotate(-6deg)" }} aria-hidden="true">
+        {["#3DB6F2", "#F06CB4", "#FF9A1F", "#8B5BD6", "", "#EE4B4B", "#3DAE4A", "#F2C200", "#B0764A"].map((c, i) => (
+          <span key={i} style={{ borderRadius: 7, background: c ? "#fff" : "transparent", borderTop: c ? `8px solid ${c}` : "none", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: c ? "0 3px 0 rgba(0,0,0,.2)" : "none" }}>{i === 4 ? "🎲" : i === 2 ? "🛖" : i === 6 ? "🏨" : ""}</span>
+        ))}
+      </span>
+    ),
+  },
+  {
     href: "/tiles",
     name: "Tile Town",
     sub: "Cross words, score big",

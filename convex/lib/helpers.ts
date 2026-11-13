@@ -101,7 +101,8 @@ export async function freeCode(ctx: QueryCtx) {
     const f = await ctx.db.query("faceRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
     const g = await ctx.db.query("gridRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
     const h = await ctx.db.query("tileRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
-    if ([a, b, c, d, e, f, g, h].every((r) => !r || r.status === "finished")) break;
+    const i = await ctx.db.query("boomRooms").withIndex("by_code", (q) => q.eq("code", code)).first();
+    if ([a, b, c, d, e, f, g, h, i].every((r) => !r || r.status === "finished")) break;
   }
   return code;
 }
