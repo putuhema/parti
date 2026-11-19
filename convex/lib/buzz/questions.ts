@@ -194,8 +194,246 @@ const BANK: Tiers[] = [
   ],
 ];
 
+/**
+ * More questions, same shape and category order as BANK. Kept as a separate list that is
+ * appended after BANK so the ids of the original questions (stored in live games) never shift.
+ * Always add new questions at the END of this file's lists, never in the middle of BANK.
+ */
+const MORE: Tiers[] = [
+  // Animals
+  [
+    [
+      ["Which animal is famous for its long neck?", "Giraffe", "Zebra", "Camel", "Horse"],
+      ["What do bees make?", "Honey", "Milk", "Silk", "Wax paper"],
+      ["Which animal says \"moo\"?", "Cow", "Sheep", "Goat", "Pig"],
+    ],
+    [
+      ["What is the largest animal that has ever lived?", "Blue whale", "T. rex", "African elephant", "Megalodon"],
+      ["Which animal is known for changing its skin color?", "Chameleon", "Iguana", "Gecko", "Frog"],
+      ["What is a baby frog called?", "A tadpole", "A froglet egg", "A pup", "A nymph"],
+    ],
+    [
+      ["Which big cat is the fastest land animal?", "Cheetah", "Leopard", "Lion", "Jaguar"],
+      ["Komodo dragons live wild in which country?", "Indonesia", "Australia", "Brazil", "Madagascar"],
+      ["How many legs does a spider have?", "8", "6", "10", "12"],
+    ],
+    [
+      ["What is the only bird that can fly backward?", "Hummingbird", "Swallow", "Kingfisher", "Sparrow"],
+      ["Which animal sleeps the most, up to 22 hours a day?", "Koala", "Cat", "Sloth", "Owl"],
+      ["A group of lions is called a…", "Pride", "Pack", "Herd", "School"],
+    ],
+    [
+      ["What shape is wombat poop?", "Cube", "Sphere", "Pyramid", "Ring"],
+      ["How many stomach chambers does a cow have?", "4", "1", "2", "6"],
+      ["Which animal has blue blood?", "Octopus", "Shark", "Crocodile", "Dolphin"],
+    ],
+  ],
+  // Space & Earth
+  [
+    [
+      ["Which planet do we live on?", "Earth", "Mars", "Venus", "Saturn"],
+      ["What is frozen water called?", "Ice", "Steam", "Fog", "Dew"],
+      ["Which is the largest ocean?", "Pacific", "Atlantic", "Indian", "Arctic"],
+    ],
+    [
+      ["Which planet is known as the Red Planet?", "Mars", "Jupiter", "Venus", "Mercury"],
+      ["What is the largest planet in our solar system?", "Jupiter", "Saturn", "Neptune", "Earth"],
+      ["What do we call molten rock once it erupts from a volcano?", "Lava", "Magma", "Basalt", "Ash"],
+    ],
+    [
+      ["Who was the first person to walk on the Moon?", "Neil Armstrong", "Buzz Aldrin", "Yuri Gagarin", "John Glenn"],
+      ["Which gas do plants take in from the air?", "Carbon dioxide", "Oxygen", "Nitrogen", "Helium"],
+      ["Which planet is famous for its bright rings?", "Saturn", "Mars", "Mercury", "Venus"],
+    ],
+    [
+      ["Which is the closest star to Earth after the Sun?", "Proxima Centauri", "Sirius", "Betelgeuse", "Polaris"],
+      ["What is the deepest known point in the ocean?", "Challenger Deep", "Puerto Rico Trench", "Java Trench", "Tonga Trench"],
+      ["The Ring of Fire mostly circles which ocean?", "Pacific", "Atlantic", "Indian", "Arctic"],
+    ],
+    [
+      ["About how long does sunlight take to reach Earth?", "8 minutes", "8 seconds", "8 hours", "1 minute"],
+      ["Which element makes up most of the Sun?", "Hydrogen", "Helium", "Oxygen", "Carbon"],
+      ["Krakatoa's huge 1883 eruption happened in which country?", "Indonesia", "Philippines", "Japan", "Italy"],
+    ],
+  ],
+  // World Map
+  [
+    [
+      ["What is the capital of Japan?", "Tokyo", "Kyoto", "Osaka", "Seoul"],
+      ["The Statue of Liberty stands in which city?", "New York", "Washington", "Boston", "Chicago"],
+      ["The island of Bali belongs to which country?", "Indonesia", "Malaysia", "Thailand", "Philippines"],
+    ],
+    [
+      ["What is the capital of Indonesia?", "Jakarta", "Surabaya", "Bandung", "Medan"],
+      ["Which country is home to the Great Pyramid of Giza?", "Egypt", "Mexico", "Peru", "Sudan"],
+      ["Which is the largest country by area?", "Russia", "Canada", "China", "USA"],
+    ],
+    [
+      ["Machu Picchu is in which country?", "Peru", "Bolivia", "Mexico", "Chile"],
+      ["What is the capital of Brazil?", "Brasília", "Rio de Janeiro", "São Paulo", "Salvador"],
+      ["Which river flows through London?", "Thames", "Seine", "Danube", "Rhine"],
+    ],
+    [
+      ["Which country has the most islands, over 17,000?", "Indonesia", "Philippines", "Japan", "Norway"],
+      ["What is the capital of New Zealand?", "Wellington", "Auckland", "Christchurch", "Queenstown"],
+      ["Which strait separates Europe from Africa?", "Strait of Gibraltar", "Bosphorus", "Strait of Malacca", "Bering Strait"],
+    ],
+    [
+      ["Which country completely surrounds the kingdom of Lesotho?", "South Africa", "Namibia", "Botswana", "Mozambique"],
+      ["Lake Baikal, the world's deepest lake, is in which country?", "Russia", "Mongolia", "Kazakhstan", "China"],
+      ["Which country has the capital Ulaanbaatar?", "Mongolia", "Kazakhstan", "Kyrgyzstan", "Nepal"],
+    ],
+  ],
+  // Food
+  [
+    [
+      ["What fruit is yellow and curved?", "Banana", "Apple", "Grape", "Cherry"],
+      ["Which food is made from milk and often has holes?", "Cheese", "Bread", "Tofu", "Butter"],
+      ["Which country is pizza originally from?", "Italy", "France", "USA", "Greece"],
+    ],
+    [
+      ["Sushi comes from which country?", "Japan", "China", "Korea", "Thailand"],
+      ["Nasi goreng means what in English?", "Fried rice", "Fried noodles", "Chicken soup", "Grilled fish"],
+      ["What is the main ingredient of hummus?", "Chickpeas", "Lentils", "Peanuts", "Potatoes"],
+    ],
+    [
+      ["Which nut is used to make Indonesian satay sauce?", "Peanut", "Almond", "Cashew", "Walnut"],
+      ["Croissants are most associated with which country?", "France", "Italy", "Germany", "Belgium"],
+      ["Chocolate is made from the beans of which plant?", "Cacao", "Coffee", "Vanilla", "Carob"],
+    ],
+    [
+      ["Paella is a rice dish from which country?", "Spain", "Mexico", "Portugal", "Italy"],
+      ["Which fruit has its seeds on the outside?", "Strawberry", "Raspberry", "Kiwi", "Blueberry"],
+      ["Which country produces the most coffee?", "Brazil", "Colombia", "Vietnam", "Ethiopia"],
+    ],
+    [
+      ["Kopi luwak coffee involves which animal?", "Civet", "Monkey", "Bat", "Bird"],
+      ["Which spice is the most expensive by weight?", "Saffron", "Vanilla", "Cardamom", "Nutmeg"],
+      ["Botanically speaking, which of these is a berry?", "Banana", "Strawberry", "Raspberry", "Cherry"],
+    ],
+  ],
+  // Music & Film
+  [
+    [
+      ["Which instrument do you play by hitting it with sticks?", "Drum", "Flute", "Harp", "Violin"],
+      ["Which instrument do you blow into?", "Trumpet", "Drum", "Guitar", "Piano"],
+      ["What color is the cartoon sponge SpongeBob?", "Yellow", "Blue", "Pink", "Green"],
+    ],
+    [
+      ["Which instrument has 4 strings and is played with a bow under the chin?", "Violin", "Cello", "Harp", "Ukulele"],
+      ["In \"The Lion King\", what is the young lion's name?", "Simba", "Mufasa", "Scar", "Nala"],
+      ["Which band sang \"Hey Jude\"?", "The Beatles", "Queen", "ABBA", "The Rolling Stones"],
+    ],
+    [
+      ["The angklung, made of bamboo, comes from which country?", "Indonesia", "Japan", "Vietnam", "India"],
+      ["Which country does K-pop come from?", "South Korea", "Japan", "China", "Thailand"],
+      ["Which film studio created \"Toy Story\"?", "Pixar", "DreamWorks", "Ghibli", "Illumination"],
+    ],
+    [
+      ["Who composed \"The Four Seasons\"?", "Vivaldi", "Mozart", "Handel", "Haydn"],
+      ["What does \"tempo\" describe in music?", "Speed", "Volume", "Pitch", "Mood"],
+      ["Which Studio Ghibli film features a giant forest spirit called Totoro?", "My Neighbor Totoro", "Spirited Away", "Ponyo", "Princess Mononoke"],
+    ],
+    [
+      ["How many lines are in a standard music staff?", "5", "4", "6", "7"],
+      ["What was the first full-length feature film with synchronized talking?", "The Jazz Singer", "Metropolis", "King Kong", "Steamboat Willie"],
+      ["Which country does the didgeridoo come from?", "Australia", "New Zealand", "South Africa", "Peru"],
+    ],
+  ],
+  // Sports
+  [
+    [
+      ["In which sport do you score a touchdown?", "American football", "Soccer", "Basketball", "Golf"],
+      ["What color is the center of an archery target?", "Gold/yellow", "Red", "Blue", "Black"],
+      ["Which sport is played at Wimbledon?", "Tennis", "Cricket", "Golf", "Rugby"],
+    ],
+    [
+      ["How many points is a basketball shot from far beyond the arc?", "3", "2", "4", "1"],
+      ["Sepak takraw is like volleyball, but played with your…", "Feet", "Hands", "Head only", "Paddles"],
+      ["How often are the Summer Olympics held?", "Every 4 years", "Every 2 years", "Every year", "Every 5 years"],
+    ],
+    [
+      ["In which sport would you perform a slam dunk?", "Basketball", "Volleyball", "Tennis", "Handball"],
+      ["Which country has won the most men's football World Cups?", "Brazil", "Germany", "Italy", "Argentina"],
+      ["Badminton is hugely popular in which Southeast Asian country, a frequent Olympic gold winner?", "Indonesia", "Vietnam", "Cambodia", "Laos"],
+    ],
+    [
+      ["How many players are on a volleyball team on court?", "6", "5", "7", "9"],
+      ["In cricket, how many balls are in an over?", "6", "5", "8", "10"],
+      ["What is the maximum score with three darts?", "180", "150", "160", "200"],
+    ],
+    [
+      ["Which country hosted the first FIFA World Cup in 1930?", "Uruguay", "Brazil", "Italy", "England"],
+      ["How long is an Olympic swimming pool?", "50 m", "25 m", "100 m", "75 m"],
+      ["In bowling, what is three strikes in a row called?", "A turkey", "A hat-trick", "A triple", "An eagle"],
+    ],
+  ],
+  // Inventions
+  [
+    [
+      ["What do you use a light bulb for?", "Light", "Heat food", "Make music", "Tell time"],
+      ["What has wheels and pedals and you ride it?", "A bicycle", "A boat", "A plane", "A ladder"],
+      ["What device do you use to take photos?", "A camera", "A radio", "A microphone", "A printer"],
+    ],
+    [
+      ["Which company made the iPhone?", "Apple", "Samsung", "Nokia", "Google"],
+      ["What does a thermometer measure?", "Temperature", "Weight", "Speed", "Distance"],
+      ["What does \"PC\" stand for?", "Personal computer", "Power cable", "Private chip", "Public computer"],
+    ],
+    [
+      ["Who is famous for the theory of relativity?", "Albert Einstein", "Isaac Newton", "Galileo", "Stephen Hawking"],
+      ["Which ancient people built the first known wheel-based vehicles?", "Mesopotamians", "Romans", "Vikings", "Aztecs"],
+      ["Who developed the first practical steam engine improvements in the 1760s?", "James Watt", "Henry Ford", "Thomas Edison", "Karl Benz"],
+    ],
+    [
+      ["What does \"HTML\" stand for?", "HyperText Markup Language", "High Tech Modern Language", "Hyperlink Text Machine Language", "Home Tool Markup Language"],
+      ["Who invented the World Wide Web?", "Tim Berners-Lee", "Bill Gates", "Steve Jobs", "Alan Turing"],
+      ["What did Marie Curie discover along with Pierre Curie?", "Radium and polonium", "Penicillin", "X-rays", "Electrons"],
+    ],
+    [
+      ["Which code of dots and dashes did Samuel Morse help create?", "Morse code", "Braille", "Binary", "Semaphore"],
+      ["What was the name of the first programmable electronic general-purpose computer, finished in 1945?", "ENIAC", "UNIVAC", "Apple I", "Colossus II"],
+      ["Who wrote what is often called the first computer program, for Babbage's engine?", "Ada Lovelace", "Grace Hopper", "Alan Turing", "Charles Babbage"],
+    ],
+  ],
+  // Words
+  [
+    [
+      ["What is the opposite of \"hot\"?", "Cold", "Warm", "Wet", "Dry"],
+      ["Which word rhymes with \"cat\"?", "Hat", "Dog", "Cup", "Car"],
+      ["How many vowels are in the English alphabet (not counting Y)?", "5", "4", "6", "7"],
+    ],
+    [
+      ["What do you call a word that means the opposite of another?", "Antonym", "Synonym", "Homonym", "Pronoun"],
+      ["What is the plural of \"mouse\"?", "Mice", "Mouses", "Meese", "Mousen"],
+      ["Which of these is a verb?", "Run", "Blue", "Happy", "Table"],
+    ],
+    [
+      ["A word made by rearranging another word's letters is an…", "Anagram", "Acronym", "Antonym", "Alliteration"],
+      ["\"Laser\" was originally what kind of word?", "Acronym", "Palindrome", "Loanword", "Onomatopoeia"],
+      ["Words like \"buzz\" and \"sizzle\" that sound like their meaning are…", "Onomatopoeia", "Metaphors", "Idioms", "Similes"],
+    ],
+    [
+      ["The word \"ketchup\" likely comes from which language family?", "Chinese (Hokkien)", "Spanish", "Hindi", "Arabic"],
+      ["What does \"bon voyage\" mean?", "Have a good trip", "Good morning", "Enjoy your meal", "Good luck"],
+      ["Which word means fear of spiders?", "Arachnophobia", "Claustrophobia", "Acrophobia", "Agoraphobia"],
+    ],
+    [
+      ["The English word \"orangutan\" comes from Malay words meaning…", "Person of the forest", "Red monkey", "Tree climber", "Big hands"],
+      ["A haiku's three lines usually have how many syllables?", "5, 7, 5", "7, 5, 7", "3, 5, 3", "5, 5, 5"],
+      ["A sentence using every letter of the alphabet is called a…", "Pangram", "Palindrome", "Lipogram", "Tautogram"],
+    ],
+  ],
+];
+
 export type BuzzQuestion = { id: number; cat: number; tier: number; text: string; choices: string[] };
 
-export const BUZZ_QUESTIONS: BuzzQuestion[] = BANK.flatMap((tiers, cat) =>
-  tiers.flatMap((list, tier) => list.map(([text, ...choices]) => ({ cat, tier, text, choices }))),
-).map((q, id) => ({ id, ...q }));
+const flatten = (bank: Tiers[]) =>
+  bank.flatMap((tiers, cat) =>
+    tiers.flatMap((list, tier) => list.map(([text, ...choices]) => ({ cat, tier, text, choices }))),
+  );
+
+export const BUZZ_QUESTIONS: BuzzQuestion[] = [...flatten(BANK), ...flatten(MORE)].map((q, id) => ({
+  id,
+  ...q,
+}));
