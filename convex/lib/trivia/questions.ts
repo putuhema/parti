@@ -176,7 +176,95 @@ const FOOD: Q[] = [
 /** Same order as CATS in ./board. */
 const BY_CAT: Q[][] = [SCIENCE, PLACES, HISTORY, ARTS, SPORTS, FOOD];
 
+/**
+ * More questions, same category order as BY_CAT. Appended after the originals so the ids
+ * stored in live games (g.used, g.q.id) never shift. Add new questions to the END of these lists.
+ */
+const MORE_BY_CAT: Q[][] = [
+  // Science
+  [
+    ["Which planet is closest to the Sun?", "Mercury", "Venus", "Earth", "Mars"],
+    ["What do we call animals that eat only plants?", "Herbivores", "Carnivores", "Omnivores", "Insectivores"],
+    ["What is the chemical symbol for oxygen?", "O", "Ox", "Om", "Og"],
+    ["What is the largest organ of the human body?", "Skin", "Liver", "Brain", "Lungs"],
+    ["How many teeth does an adult usually have?", "32", "28", "30", "36"],
+    ["Which metal is a liquid at room temperature?", "Mercury", "Iron", "Lead", "Silver"],
+    ["Which part of a plant makes food from sunlight?", "Leaves", "Roots", "Stem", "Flowers"],
+    ["What is the center of an atom called?", "The nucleus", "The electron", "The orbit", "The shell"],
+    ["Which organ do you use to breathe?", "Lungs", "Liver", "Stomach", "Kidneys"],
+    ["What is a baby frog called?", "Tadpole", "Froglet egg", "Cub", "Nymph"],
+  ],
+  // Places
+  [
+    ["What is the capital of Italy?", "Rome", "Milan", "Venice", "Naples"],
+    ["Mount Fuji is in which country?", "Japan", "China", "South Korea", "Nepal"],
+    ["What is the capital of Malaysia?", "Kuala Lumpur", "Penang", "Johor Bahru", "Malacca"],
+    ["Which is the coldest continent?", "Antarctica", "Europe", "Asia", "North America"],
+    ["Lake Toba is on which Indonesian island?", "Sumatra", "Java", "Sulawesi", "Borneo"],
+    ["The Eiffel Tower is in which city?", "Paris", "London", "Rome", "Berlin"],
+    ["What is the capital of Egypt?", "Cairo", "Alexandria", "Luxor", "Giza"],
+    ["Which sea lies between Java and Borneo?", "Java Sea", "Banda Sea", "Arafura Sea", "Celebes Sea"],
+    ["What is the capital of Germany?", "Berlin", "Munich", "Hamburg", "Frankfurt"],
+    ["Kangaroos live in the wild in which country?", "Australia", "New Zealand", "South Africa", "Brazil"],
+  ],
+  // History
+  [
+    ["Which empire built the Colosseum?", "Roman", "Greek", "Ottoman", "Persian"],
+    ["Gajah Mada was the famous prime minister of which kingdom?", "Majapahit", "Srivijaya", "Mataram", "Singhasari"],
+    ["Which explorer reached the Americas in 1492?", "Christopher Columbus", "Vasco da Gama", "Ferdinand Magellan", "James Cook"],
+    ["Who was the first woman to fly solo across the Atlantic?", "Amelia Earhart", "Bessie Coleman", "Valentina Tereshkova", "Harriet Quimby"],
+    ["Nelson Mandela became president of which country?", "South Africa", "Kenya", "Zimbabwe", "Nigeria"],
+    ["Which of the Seven Wonders of the Ancient World still stands?", "The Great Pyramid", "The Hanging Gardens", "The Colossus", "The Lighthouse"],
+    ["Vikings came mainly from which region?", "Scandinavia", "Spain", "Greece", "North Africa"],
+    ["Kartini, honored every 21 April in Indonesia, fought for what?", "Girls' education", "The spice trade", "Railways", "A stronger navy"],
+    ["In which year did humans first land on the Moon?", "1969", "1959", "1972", "1965"],
+    ["Which Roman city was buried by Mount Vesuvius in 79 AD?", "Pompeii", "Athens", "Carthage", "Sparta"],
+  ],
+  // Arts
+  [
+    ["Who painted the ceiling of the Sistine Chapel?", "Michelangelo", "Leonardo da Vinci", "Raphael", "Botticelli"],
+    ["Who wrote The Little Prince?", "Antoine de Saint-Exupéry", "Victor Hugo", "Jules Verne", "Albert Camus"],
+    ["A play where most of the words are sung is called…", "An opera", "A mime", "A sitcom", "A monologue"],
+    ["Which Dutch artist painted Girl with a Pearl Earring?", "Johannes Vermeer", "Rembrandt", "Vincent van Gogh", "Piet Mondrian"],
+    ["The Kecak \"monkey chant\" dance comes from which island?", "Bali", "Java", "Lombok", "Sumatra"],
+    ["The Mona Lisa hangs in which museum?", "The Louvre", "The British Museum", "The Prado", "The Uffizi"],
+    ["Who wrote Charlie and the Chocolate Factory?", "Roald Dahl", "Dr. Seuss", "Enid Blyton", "Beatrix Potter"],
+    ["How many lines does a sonnet have?", "14", "12", "10", "16"],
+    ["Which instrument has dozens of strings and is plucked while standing upright?", "Harp", "Cello", "Sitar", "Banjo"],
+    ["Which Disney film has the song \"Let It Go\"?", "Frozen", "Moana", "Tangled", "Encanto"],
+  ],
+  // Sports
+  [
+    ["How many players are on a cricket team?", "11", "9", "10", "12"],
+    ["Taekwondo comes from which country?", "South Korea", "Japan", "China", "Thailand"],
+    ["Pencak silat is a martial art from which country?", "Indonesia", "Brazil", "Japan", "India"],
+    ["In which sport do players hit a puck?", "Ice hockey", "Polo", "Lacrosse", "Curling"],
+    ["How many points is a touchdown worth in American football?", "6", "7", "3", "2"],
+    ["How long is a regular soccer match, not counting extra time?", "90 minutes", "80 minutes", "100 minutes", "60 minutes"],
+    ["What card does a referee show to send a soccer player off?", "Red", "Yellow", "Blue", "Green"],
+    ["In which sport could you hit a \"hole in one\"?", "Golf", "Bowling", "Billiards", "Croquet"],
+    ["Which country has won badminton's Thomas Cup the most times?", "Indonesia", "China", "Malaysia", "Denmark"],
+    ["In a triathlon, athletes swim, cycle, and…", "Run", "Row", "Ski", "Skate"],
+  ],
+  // Food & Life
+  [
+    ["Pho noodle soup comes from which country?", "Vietnam", "Thailand", "China", "Laos"],
+    ["Gado-gado is a salad served with which sauce?", "Peanut sauce", "Soy sauce", "Tomato sauce", "Mayonnaise"],
+    ["Tacos come from which country?", "Mexico", "Spain", "Peru", "Brazil"],
+    ["Which vegetable can make you cry when you chop it?", "Onion", "Carrot", "Cabbage", "Potato"],
+    ["Which of these \"nuts\" grows underground?", "Peanut", "Almond", "Walnut", "Cashew"],
+    ["Which leaf gives Indonesian desserts their green color and sweet smell?", "Pandan", "Mint", "Spinach", "Basil"],
+    ["How many seconds are in an hour?", "3,600", "360", "6,000", "1,800"],
+    ["Sambal is a sauce made mainly from what?", "Chili peppers", "Tomatoes", "Peanuts", "Coconut"],
+    ["How many sides does a hexagon have?", "6", "5", "7", "8"],
+    ["Bakso is a kind of what?", "Meatball", "Dumpling", "Noodle", "Spring roll"],
+  ],
+];
+
 export type Question = { id: number; cat: number; text: string; choices: [string, string, string, string] };
 
+const flatten = (byCat: Q[][]) =>
+  byCat.flatMap((list, cat) => list.map(([text, a, b, c, d]) => ({ cat, text, choices: [a, b, c, d] as [string, string, string, string] })));
+
 /** Flat list. The right answer is always choices[0]. */
-export const QUESTIONS: Question[] = BY_CAT.flatMap((list, cat) => list.map(([text, a, b, c, d]) => ({ cat, text, choices: [a, b, c, d] as [string, string, string, string] }))).map((q, id) => ({ id, ...q }));
+export const QUESTIONS: Question[] = [...flatten(BY_CAT), ...flatten(MORE_BY_CAT)].map((q, id) => ({ id, ...q }));

@@ -53,6 +53,18 @@ export const CHAINS: Record<Lang, string[][]> = {
     ["horse", "shoe", "box", "office", "chair"],
     ["team", "work", "shop", "window", "seat"],
     ["fire", "truck", "driver", "license", "plate"],
+    ["key", "hole", "punch", "line", "dance"],
+    ["break", "fast", "food", "court", "room"],
+    ["sun", "set", "up", "stairs", "case"],
+    ["fire", "work", "book", "mark", "down"],
+    ["water", "melon", "seed", "money", "box"],
+    ["sea", "food", "truck", "stop", "watch"],
+    ["tooth", "paste", "board", "game", "night"],
+    ["blue", "print", "out", "come", "back"],
+    ["rain", "drop", "kick", "off", "line"],
+    ["school", "bus", "stop", "sign", "post"],
+    ["pine", "apple", "pie", "chart", "topper"],
+    ["life", "guard", "dog", "house", "warming"],
   ],
   id: [
     ["pisang", "kuning", "matahari", "terbit", "pagi"],
@@ -95,6 +107,16 @@ export const CHAINS: Record<Lang, string[][]> = {
     ["baju", "baru", "tahun", "depan", "pintu"],
     ["kambing", "hitam", "putih", "abu", "gosok"],
     ["sakit", "gigi", "susu", "kotak", "pensil"],
+    ["rumah", "makan", "siang", "hari", "ini"],
+    ["buah", "tangan", "kanan", "kiri", "jalan"],
+    ["meja", "hijau", "daun", "pisang", "goreng"],
+    ["teh", "manis", "muka", "dua", "puluh"],
+    ["anak", "kunci", "pintu", "gerbang", "sekolah"],
+    ["kaca", "mata", "kaki", "tangan", "kosong"],
+    ["uang", "saku", "celana", "panjang", "umur"],
+    ["kuda", "laut", "dalam", "negeri", "dongeng"],
+    ["jam", "dinding", "rumah", "tangga", "darurat"],
+    ["ikan", "asin", "garam", "dapur", "umum"],
   ],
 };
 
@@ -143,6 +165,11 @@ export const PROMPTS: Prompt[] = [
   { en: "Love ___", id: "___ cinta", groups: [["letter", "surat"], ["song", "lagu"], ["story", "kisah", "cerita"], ["bird", "birds", "burung"], ["triangle", "segitiga"], ["sick"], ["first", "pertama"], ["monkey", "monyet"], ["heart", "hati"]] },
   { en: "Train ___", id: "Kereta ___", groups: [["station", "stasiun"], ["ticket", "tiket", "karcis"], ["track", "rel"], ["fast", "cepat"], ["express", "ekspres"], ["commuter", "krl", "komuter"], ["mrt", "lrt", "subway"], ["fire", "api"], ["toy", "mainan"], ["kuda", "horse"]] },
   { en: "Big ___", id: "___ besar", groups: [["brother", "kakak", "abang"], ["city", "kota"], ["boss", "bos"], ["mac"], ["bang"], ["head", "kepala"], ["deal"], ["ben"], ["house", "rumah"], ["day", "hari"], ["mouth", "mulut"]] },
+  { en: "Paper ___", id: "Kertas ___", groups: [["plane", "pesawat"], ["bag", "kantong", "tas"], ["clip", "klip"], ["towel", "tisu", "tissue"], ["work"], ["cut", "luka"], ["boat", "perahu", "kapal"], ["money", "uang"], ["roll", "gulung", "gulungan"], ["hvs", "a4"], ["minyak", "oil", "blotting"]] },
+  { en: "Car ___", id: "Mobil ___", groups: [["park", "parking", "parkir"], ["wash", "cuci"], ["key", "keys", "kunci"], ["seat", "kursi", "jok"], ["race", "racing", "balap"], ["wheel", "roda", "ban", "tire", "tyre"], ["door", "pintu"], ["alarm"], ["sport", "sports"], ["toy", "mainan", "remote"], ["box"], ["pool"], ["listrik", "electric"]] },
+  { en: "Black ___", id: "___ hitam", groups: [["board", "papan"], ["coffee", "kopi"], ["hole", "lubang"], ["cat", "kucing"], ["tea", "teh"], ["magic", "ilmu", "magis"], ["list", "daftar"], ["out"], ["pepper", "lada", "merica"], ["sticky rice", "ketan"], ["horse", "kuda"], ["goat", "kambing"], ["market", "pasar"]] },
+  { en: "Head ___", id: "Kepala ___", groups: [["ache", "headache", "pusing", "sakit"], ["phone", "phones", "headphone", "headset"], ["light", "lampu"], ["band"], ["master", "headmaster", "principal", "sekolah"], ["desa", "village"], ["line"], ["batu", "keras", "stubborn"], ["first"], ["count"], ["keluarga", "family"], ["dua", "two"]] },
+  { en: "Gold ___", id: "___ emas", groups: [["fish", "ikan"], ["medal", "medali"], ["coin", "koin"], ["ring", "cincin"], ["mine", "tambang"], ["bar", "batangan"], ["rush"], ["chain", "kalung", "necklace"], ["card", "kartu"], ["generation", "generasi"], ["shop", "toko"], ["standard"]] },
 ];
 
 export function sameAnswer(p: Prompt, a: string, b: string) {
@@ -196,12 +223,18 @@ export const CATEGORIES: Category[] = [
   { tier: 4, en: "Rock, paper, scissors", id: "Suit gunting batu kertas", ban: ["rock", "batu"], answers: ["paper", "kertas", "scissors", "gunting", "rock", "batu"] },
   { tier: 4, en: "Countries sharing a land border with Indonesia", id: "Negara yang berbatasan darat dengan Indonesia", ban: ["malaysia"], answers: ["papua new guinea", "papua nugini", "png", "timor leste", "east timor", "malaysia"] },
   { tier: 4, en: "Planets closest to the sun", id: "Planet terdekat dari matahari", ban: ["earth", "bumi"], answers: ["mercury", "merkurius", "venus", "mars", "earth", "bumi"] },
+  // More categories (appended: games store indexes into this list).
+  { tier: 3, en: "Fingers on a hand", id: "Jari tangan", ban: ["thumb", "jempol", "ibu jari"], answers: ["index", "telunjuk", "jari telunjuk", "middle", "tengah", "jari tengah", "ring", "manis", "jari manis", "pinky", "little", "kelingking", "jari kelingking", "thumb", "jempol", "ibu jari"] },
+  { tier: 1, en: "Things in a bathroom", id: "Ada di kamar mandi", ban: ["soap", "sabun"], answers: ["toothbrush", "sikat gigi", "toothpaste", "pasta gigi", "odol", "towel", "handuk", "shampoo", "sampo", "mirror", "cermin", "toilet", "kloset", "wc", "shower", "pancuran", "bathtub", "bak", "bak mandi", "gayung", "dipper", "sink", "wastafel", "comb", "sisir", "tissue", "tisu", "bucket", "ember", "razor", "cukuran", "silet", "sponge", "spons", "faucet", "tap", "keran", "slipper", "slippers", "sandal", "soap", "sabun"] },
+  { tier: 2, en: "Desserts", id: "Makanan penutup", ban: ["cake", "kue"], answers: ["ice cream", "es krim", "pudding", "puding", "brownie", "brownies", "cookie", "cookies", "kue kering", "pie", "donut", "doughnut", "donat", "klepon", "martabak manis", "terang bulan", "es campur", "cendol", "es cendol", "pancake", "panekuk", "waffle", "wafel", "cheesecake", "tiramisu", "jelly", "agar agar", "jeli", "chocolate", "cokelat", "coklat", "cupcake", "kolak", "bubur sumsum", "onde onde", "candy", "permen", "cake", "kue"] },
+  { tier: 4, en: "Compass directions", id: "Arah mata angin", ban: ["north", "utara"], answers: ["south", "selatan", "east", "timur", "west", "barat", "north", "utara"] },
+  { tier: 4, en: "States of matter", id: "Wujud zat", ban: ["solid", "padat"], answers: ["liquid", "cair", "gas", "plasma", "solid", "padat"] },
 ];
 
 // ---------- Spy Word: grid words ----------
 export const SPY_POOL: Record<Lang, string[]> = {
-  en: ["apple", "river", "mango", "clock", "piano", "lemon", "tiger", "cloud", "bread", "rocket", "candle", "shoe", "moon", "guitar", "sock", "bridge", "banana", "ocean", "train", "pizza", "lion", "snow", "castle", "phone", "camera", "chair", "forest", "garden", "horse", "kite", "ladder", "magnet", "needle", "orange", "pencil", "pillow", "queen", "robot", "spoon", "star", "table", "tooth", "umbrella", "violin", "window", "zebra", "dragon", "egg", "flower", "glass", "hammer", "island", "jacket", "key", "lamp", "mirror", "owl", "pirate", "rabbit", "doctor", "ghost", "volcano", "bottle", "coin", "anchor", "balloon", "basket", "beach", "bell", "bicycle", "blanket", "bone", "brush", "bucket", "button", "cactus", "camel", "carrot", "cheese", "cherry", "circus", "cookie", "crown", "desert", "diamond", "dinosaur", "drum", "eagle", "engine", "feather", "fence", "flag", "fork", "frog", "giraffe", "glove", "grape", "helmet", "honey", "iceberg", "igloo", "jungle", "kangaroo", "kitchen", "knight", "library", "lighthouse", "map", "mask", "medal", "monkey", "mountain", "mushroom", "nest", "octopus", "oven", "panda", "parrot", "peanut", "penguin", "pepper", "pumpkin", "puzzle", "rainbow", "ring", "rope", "sandwich", "scarf", "shark", "ship", "skeleton", "snake", "spider", "sponge", "stamp", "sugar", "sword", "telescope", "tent", "ticket", "tomato", "tractor", "treasure", "trumpet", "turtle", "vampire", "wallet", "whale", "wheel", "witch", "wizard", "bubble", "cannon", "cave", "crab", "hospital", "museum", "paint", "pearl", "planet", "school", "soap", "tunnel", "unicorn", "wave"],
-  id: ["apel", "sungai", "mangga", "jam", "gitar", "jeruk", "harimau", "awan", "roti", "bulan", "sepatu", "jembatan", "pisang", "laut", "kereta", "singa", "salju", "istana", "kamera", "kursi", "hutan", "kebun", "kuda", "layangan", "tangga", "jarum", "bantal", "ratu", "sendok", "bintang", "meja", "gigi", "payung", "jendela", "naga", "telur", "bunga", "gelas", "palu", "pulau", "jaket", "kunci", "lampu", "cermin", "burung", "kelinci", "kapal", "dokter", "hantu", "gunung", "botol", "koin", "kopi", "nasi", "sapi", "ikan", "pantai", "kucing", "mobil", "buku", "topi", "kue", "lilin", "pohon", "jangkar", "balon", "keranjang", "lonceng", "sepeda", "selimut", "tulang", "sikat", "ember", "kancing", "kaktus", "unta", "wortel", "keju", "ceri", "sirkus", "mahkota", "gurun", "berlian", "dinosaurus", "gendang", "elang", "mesin", "bulu", "pagar", "bendera", "garpu", "katak", "jerapah", "sarung", "anggur", "helm", "madu", "kanguru", "dapur", "ksatria", "perpustakaan", "mercusuar", "peta", "topeng", "medali", "monyet", "jamur", "sarang", "gurita", "oven", "panda", "beo", "kacang", "pinguin", "labu", "pelangi", "cincin", "tali", "syal", "hiu", "tengkorak", "ular", "spons", "perangko", "gula", "pedang", "teleskop", "tenda", "tiket", "tomat", "traktor", "harta", "terompet", "penyu", "vampir", "dompet", "paus", "roda", "penyihir", "nanas", "durian", "sate", "bakso", "rendang", "becak", "angklung", "batik", "wayang", "keris", "candi", "gamelan", "delman", "komodo", "badak", "gajah", "bebek", "kambing", "sawah", "kerbau", "sambal", "kerupuk", "tempe", "tahu", "sandal", "sumur", "jagung", "kelapa", "sapu", "pensil", "penghapus", "gunting", "gelembung", "meriam", "gua", "kepiting", "rumah", "sakit", "museum", "mutiara", "planet", "roket", "sekolah", "sabun", "terowongan", "ombak"],
+  en: ["apple", "river", "mango", "clock", "piano", "lemon", "tiger", "cloud", "bread", "rocket", "candle", "shoe", "moon", "guitar", "sock", "bridge", "banana", "ocean", "train", "pizza", "lion", "snow", "castle", "phone", "camera", "chair", "forest", "garden", "horse", "kite", "ladder", "magnet", "needle", "orange", "pencil", "pillow", "queen", "robot", "spoon", "star", "table", "tooth", "umbrella", "violin", "window", "zebra", "dragon", "egg", "flower", "glass", "hammer", "island", "jacket", "key", "lamp", "mirror", "owl", "pirate", "rabbit", "doctor", "ghost", "volcano", "bottle", "coin", "anchor", "balloon", "basket", "beach", "bell", "bicycle", "blanket", "bone", "brush", "bucket", "button", "cactus", "camel", "carrot", "cheese", "cherry", "circus", "cookie", "crown", "desert", "diamond", "dinosaur", "drum", "eagle", "engine", "feather", "fence", "flag", "fork", "frog", "giraffe", "glove", "grape", "helmet", "honey", "iceberg", "igloo", "jungle", "kangaroo", "kitchen", "knight", "library", "lighthouse", "map", "mask", "medal", "monkey", "mountain", "mushroom", "nest", "octopus", "oven", "panda", "parrot", "peanut", "penguin", "pepper", "pumpkin", "puzzle", "rainbow", "ring", "rope", "sandwich", "scarf", "shark", "ship", "skeleton", "snake", "spider", "sponge", "stamp", "sugar", "sword", "telescope", "tent", "ticket", "tomato", "tractor", "treasure", "trumpet", "turtle", "vampire", "wallet", "whale", "wheel", "witch", "wizard", "bubble", "cannon", "cave", "crab", "hospital", "museum", "paint", "pearl", "planet", "school", "soap", "tunnel", "unicorn", "wave", "airport", "astronaut", "bakery", "bamboo", "battery", "beard", "blender", "cabbage", "candy", "compass", "coral", "dentist", "elevator", "fountain", "hammock", "jellyfish", "ketchup", "lantern", "lizard", "pyramid", "scissors", "submarine", "waterfall", "yacht"],
+  id: ["apel", "sungai", "mangga", "jam", "gitar", "jeruk", "harimau", "awan", "roti", "bulan", "sepatu", "jembatan", "pisang", "laut", "kereta", "singa", "salju", "istana", "kamera", "kursi", "hutan", "kebun", "kuda", "layangan", "tangga", "jarum", "bantal", "ratu", "sendok", "bintang", "meja", "gigi", "payung", "jendela", "naga", "telur", "bunga", "gelas", "palu", "pulau", "jaket", "kunci", "lampu", "cermin", "burung", "kelinci", "kapal", "dokter", "hantu", "gunung", "botol", "koin", "kopi", "nasi", "sapi", "ikan", "pantai", "kucing", "mobil", "buku", "topi", "kue", "lilin", "pohon", "jangkar", "balon", "keranjang", "lonceng", "sepeda", "selimut", "tulang", "sikat", "ember", "kancing", "kaktus", "unta", "wortel", "keju", "ceri", "sirkus", "mahkota", "gurun", "berlian", "dinosaurus", "gendang", "elang", "mesin", "bulu", "pagar", "bendera", "garpu", "katak", "jerapah", "sarung", "anggur", "helm", "madu", "kanguru", "dapur", "ksatria", "perpustakaan", "mercusuar", "peta", "topeng", "medali", "monyet", "jamur", "sarang", "gurita", "oven", "panda", "beo", "kacang", "pinguin", "labu", "pelangi", "cincin", "tali", "syal", "hiu", "tengkorak", "ular", "spons", "perangko", "gula", "pedang", "teleskop", "tenda", "tiket", "tomat", "traktor", "harta", "terompet", "penyu", "vampir", "dompet", "paus", "roda", "penyihir", "nanas", "durian", "sate", "bakso", "rendang", "becak", "angklung", "batik", "wayang", "keris", "candi", "gamelan", "delman", "komodo", "badak", "gajah", "bebek", "kambing", "sawah", "kerbau", "sambal", "kerupuk", "tempe", "tahu", "sandal", "sumur", "jagung", "kelapa", "sapu", "pensil", "penghapus", "gunting", "gelembung", "meriam", "gua", "kepiting", "rumah", "sakit", "museum", "mutiara", "planet", "roket", "sekolah", "sabun", "terowongan", "ombak", "bandara", "bambu", "baterai", "jenggot", "kubis", "permen", "kompas", "karang", "lift", "lentera", "kadal", "piramida", "koper", "kipas", "radio", "wajan", "ketupat", "kendi", "layar", "rakit"],
 };
 
 // ---------- Odd One Out: ready-made sets ----------
@@ -248,6 +281,16 @@ export const ODD_SETS: Record<Lang, OddSet[]> = {
     { words: ["elephant",  "giraffe",  "rhino",  "ant"], odd: 3, link: "Big animals" },
     { words: ["pizza",  "pasta",  "lasagna",  "sushi"], odd: 3, link: "Italian food" },
     { words: ["owl",  "bat",  "moth",  "sparrow"], odd: 3, link: "Awake at night" },
+    { words: ["january", "march", "july", "june"], odd: 3, link: "Months with 31 days" },
+    { words: ["spider", "scorpion", "tick", "ant"], odd: 3, link: "Have eight legs" },
+    { words: ["doctor", "nurse", "dentist", "pilot"], odd: 3, link: "Health jobs" },
+    { words: ["whale", "dolphin", "seal", "salmon"], odd: 3, link: "Sea mammals" },
+    { words: ["coffee", "tea", "cocoa", "bread"], odd: 3, link: "Hot drinks" },
+    { words: ["gold", "silver", "bronze", "wood"], odd: 3, link: "Olympic medals" },
+    { words: ["tokyo", "kyoto", "osaka", "seoul"], odd: 3, link: "Cities in Japan" },
+    { words: ["chess", "checkers", "backgammon", "football"], odd: 3, link: "Board games" },
+    { words: ["triangle", "square", "hexagon", "circle"], odd: 3, link: "Shapes with straight sides" },
+    { words: ["thunder", "lightning", "hail", "sunshine"], odd: 3, link: "Stormy weather" },
   ],
   id: [
     { words: ["kucing", "mobil", "anjing", "ayam"], odd: 1, link: "Hewan" },
@@ -290,6 +333,16 @@ export const ODD_SETS: Record<Lang, OddSet[]> = {
     { words: ["sumatra",  "jawa",  "bali",  "bangkok"], odd: 3, link: "Pulau di Indonesia" },
     { words: ["batik",  "wayang",  "angklung",  "sushi"], odd: 3, link: "Budaya Indonesia" },
     { words: ["gajah",  "jerapah",  "badak",  "semut"], odd: 3, link: "Hewan besar" },
+    { words: ["dokter", "perawat", "bidan", "pilot"], odd: 3, link: "Pekerjaan di rumah sakit" },
+    { words: ["kopi", "teh", "susu", "roti"], odd: 3, link: "Minuman hangat" },
+    { words: ["sepatu", "sandal", "kaus kaki", "topi"], odd: 3, link: "Dipakai di kaki" },
+    { words: ["emas", "perak", "perunggu", "kayu"], odd: 3, link: "Medali Olimpiade" },
+    { words: ["tokyo", "kyoto", "osaka", "seoul"], odd: 3, link: "Kota di Jepang" },
+    { words: ["catur", "ular tangga", "monopoli", "sepak bola"], odd: 3, link: "Permainan papan" },
+    { words: ["soto", "bakso", "rawon", "sate"], odd: 3, link: "Makanan berkuah" },
+    { words: ["kucing", "harimau", "singa", "serigala"], odd: 3, link: "Keluarga kucing" },
+    { words: ["borobudur", "prambanan", "mendut", "monas"], odd: 3, link: "Candi di Jawa" },
+    { words: ["batik", "songket", "tenun", "jeans"], odd: 3, link: "Kain tradisional" },
   ],
 };
 export const ODD_DECOYS: Record<Lang, string[]> = {
@@ -328,6 +381,11 @@ export const SCRAMBLES: Record<Lang, Scramble[]> = {
     { word: "picture", bonus: ["price",  "truce",  "cuter",  "erupt",  "tripe",  "cite",  "cure",  "cute",  "epic",  "pure",  "ripe",  "true"] },
     { word: "mustard", bonus: ["smart",  "drums",  "darts",  "strum",  "dust",  "drum",  "star",  "must",  "arms",  "dart",  "mast"] },
     { word: "painter", bonus: ["parent",  "pirate",  "retain",  "paint",  "print",  "ripen",  "train",  "taper",  "inert",  "pint",  "rain",  "pear"] },
+    { word: "marble", bonus: ["ramble", "blame", "amber", "realm", "blare", "able", "bale", "bear", "beam", "lamb", "male", "meal", "real", "mare"] },
+    { word: "flower", bonus: ["lower", "flow", "flew", "wolf", "role", "lore", "fore", "wore"] },
+    { word: "basket", bonus: ["beast", "baste", "skate", "stake", "steak", "takes", "beat", "bake", "best", "east", "eats", "sake", "seat", "stab", "task", "take"] },
+    { word: "lantern", bonus: ["rental", "antler", "learn", "later", "alter", "alert", "tern", "rent", "lane", "neat", "rant", "tear", "near"] },
+    { word: "dinosaur", bonus: ["around", "radius", "sound", "round", "radio", "drain", "raids", "ruins", "sour", "road", "rain", "said", "soda", "iron", "nods"] },
   ],
   id: [
     { word: "pisang", bonus: ["siang", "saing", "sapi", "nasi", "pagi", "asin", "singa"] },
@@ -355,6 +413,10 @@ export const SCRAMBLES: Record<Lang, Scramble[]> = {
     { word: "gerobak", bonus: ["gerak",  "robek",  "kobra",  "kargo",  "kobar",  "ekor",  "kera"] },
     { word: "penari", bonus: ["peran",  "ipar",  "pena",  "pria",  "rapi",  "pari",  "pare"] },
     { word: "sarapan", bonus: ["sarana",  "pasar",  "napas",  "panas",  "paras",  "saran",  "asap",  "rasa",  "sapa"] },
+    { word: "lautan", bonus: ["laut", "tuan", "ulat"] },
+    { word: "sungai", bonus: ["asing", "ingus", "uang", "gusi", "nasi", "sang"] },
+    { word: "kemarau", bonus: ["kamar", "merak", "mekar", "rekam", "marak", "akar", "kera"] },
+    { word: "keranjang", bonus: ["kerjaan", "jangkar", "ranjang", "gerak", "jarak", "kejar", "kerja", "rekan", "anak", "enak", "raja"] },
   ],
 };
 /** Points for a found word: the main word is worth the most. */
@@ -482,6 +544,17 @@ export const RIDDLES: Riddle[] = [
   { en: "laughing", id: "tertawa", also: ["laugh", "ketawa"], cat: ACTION, ban: ["😂", "🤣"] },
   { en: "shopping", id: "belanja", also: ["berbelanja", "shop"], cat: ACTION, ban: ["🛒", "🛍️"] },
   { en: "painting", id: "melukis", also: ["paint", "lukis"], cat: ACTION, ban: ["🎨"] },
+  { en: "doughnut", id: "donat", also: ["donut"], cat: FOOD, ban: ["🍩"] },
+  { en: "lighthouse", id: "mercusuar", also: [], cat: THING, ban: [] },
+  { en: "dentist", id: "dokter gigi", also: [], cat: JOB, ban: ["🦷"] },
+  { en: "kangaroo", id: "kanguru", also: ["kangguru"], cat: ANIMAL, ban: ["🦘"] },
+  { en: "nurse", id: "perawat", also: ["suster"], cat: JOB, ban: ["🧑‍⚕️", "👩‍⚕️", "👨‍⚕️"] },
+  { en: "swimming pool", id: "kolam renang", also: ["pool"], cat: THING, ban: [] },
+  { en: "mooncake", id: "kue bulan", also: ["moon cake"], cat: FOOD, ban: ["🥮"] },
+  { en: "rice field", id: "sawah", also: ["paddy field", "paddy", "rice paddy"], cat: NATURE, ban: ["🌾"] },
+  { en: "lipstick", id: "lipstik", also: ["gincu"], cat: THING, ban: ["💄"] },
+  { en: "tsunami", id: "tsunami", also: [], cat: NATURE, ban: ["🌊"] },
+  { en: "goldfish", id: "ikan mas", also: ["ikan emas", "ikan koki"], cat: ANIMAL, ban: [] },
 ];
 export function riddleAccepts(r: Riddle, guess: string) {
   const g = norm(guess).replace(/ /g, "");
