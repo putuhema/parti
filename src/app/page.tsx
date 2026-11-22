@@ -128,13 +128,28 @@ const GAMES: Game[] = [
     face: "#1FB89A",
     edge: "#12876F",
     ink: "#0E6B58",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 4, top: 10, width: 92, height: 68, borderRadius: "50%", background: "#F6E7B0", boxShadow: "0 4px 0 rgba(0,0,0,.18)" }} />
         <span style={{ position: "absolute", left: 14, top: 2, fontSize: 34 }}>🌴</span>
         <span style={{ position: "absolute", right: 12, top: 24, fontSize: 28 }}>💎</span>
         <span style={{ position: "absolute", left: 34, bottom: 6, fontSize: 28, transform: "rotate(-12deg)" }}>🎲</span>
+      </span>
+    ),
+  },
+  {
+    href: "/chain",
+    name: "Scribble Chain",
+    sub: "Draw, guess, watch it drift",
+    face: "#FF5FA2",
+    edge: "#D93F82",
+    ink: "#B0246A",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", alignItems: "center", gap: 4, transform: "rotate(-4deg)" }} aria-hidden="true">
+        <span style={{ width: 44, height: 44, borderRadius: 11, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 3px 0 rgba(0,0,0,.16)" }}>🐈</span>
+        <span style={{ fontSize: 18, color: "#fff", fontWeight: 900 }}>➜</span>
+        <span style={{ width: 44, height: 44, borderRadius: 11, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 3px 0 rgba(0,0,0,.16)", transform: "rotate(8deg)" }}>🥔</span>
       </span>
     ),
   },

@@ -24,6 +24,7 @@ export const GAMES = {
   party: { name: "Party Blitz", path: "/party/room/" },
   potato: { name: "Hot Potato", path: "/potato/room/" },
   island: { name: "Lucky Island", path: "/island/room/" },
+  chain: { name: "Scribble Chain", path: "/chain/room/" },
 } as const;
 
 export const gameKind = v.union(...(Object.keys(GAMES) as (keyof typeof GAMES)[]).map((k) => v.literal(k)));

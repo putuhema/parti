@@ -414,6 +414,28 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  chainRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    drawings: v.number(), // drawings per chain
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see ChainGame in convex/lib/chain/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // One step of a Scribble Chain: a phrase and/or drawing, or a guess. Kept apart from the room so drawings stay off it.
+  chainEntries: defineTable({
+    roomId: v.id("chainRooms"),
+    gameNo: v.number(),
+    chain: v.number(),
+    step: v.number(),
+    by: v.id("players"),
+    text: v.optional(v.string()),
+    strokes: v.optional(v.array(v.array(v.number()))),
+  }).index("by_roomId_and_gameNo_and_chain_and_step", ["roomId", "gameNo", "chain", "step"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),

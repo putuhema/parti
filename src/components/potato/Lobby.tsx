@@ -92,7 +92,7 @@ export function PotatoLobby({ room }: { room: PotatoView }) {
         </div>
       </section>
 
-      {room.members.length < MAX_PLAYERS && <InviteFriends kind="party" code={room.code} />}
+      {room.members.length < MAX_PLAYERS && <InviteFriends kind="potato" code={room.code} />}
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (
