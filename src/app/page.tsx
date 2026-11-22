@@ -122,13 +122,28 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/party",
+    name: "Party Blitz",
+    sub: "9 lightning-fast minigames",
+    face: "#7B2FF7",
+    edge: "#5A1BC4",
+    ink: "#5A1BC4",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 30px)", gap: 4, transform: "rotate(-6deg)" }} aria-hidden="true">
+        {["👆", "🤠", "🎈", "🎯", "⚡", "🧠", "🔍", "🎨", "➕"].map((e, i) => (
+          <span key={i} style={{ width: 30, height: 30, borderRadius: 9, background: i === 4 ? "#FFC800" : "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>{e}</span>
+        ))}
+      </span>
+    ),
+  },
+  {
     href: "/emoji",
     name: "Emoji Charades",
     sub: "Say it only in emoji",
     face: "#FFB020",
     edge: "#E08A00",
     ink: "#9A5B00",
-    tag: "NEW",
     art: (
       <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }} aria-hidden="true">
         <span style={{ display: "flex", gap: 2, padding: "6px 10px", borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", fontSize: 24, transform: "rotate(-5deg)" }}>🦁👑🌅</span>
