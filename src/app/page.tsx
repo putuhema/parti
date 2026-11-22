@@ -122,13 +122,28 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/sync",
+    name: "In Sync",
+    sub: "How well do you know each other?",
+    face: "#E8508F",
+    edge: "#BC2F6C",
+    ink: "#9C2459",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 100, height: 90 }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 0, top: 6, width: 54, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-9deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🍜</span>
+        <span style={{ position: "absolute", right: 0, top: 14, width: 54, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(8deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🍜</span>
+        <span style={{ position: "absolute", left: 36, top: 52, fontSize: 28 }}>💞</span>
+      </span>
+    ),
+  },
+  {
     href: "/sketch",
     name: "Sketch Match",
     sub: "Describe it, draw it, match it",
     face: "#2EB89A",
     edge: "#1F8A73",
     ink: "#1F7A66",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 96, height: 90 }} aria-hidden="true">
         <svg viewBox="0 0 100 100" width={70} height={70} style={{ position: "absolute", left: 0, top: 0, background: "#fff", borderRadius: 14, boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-8deg)" }}>

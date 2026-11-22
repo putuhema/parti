@@ -253,6 +253,29 @@ export default defineSchema({
     strokes: v.array(v.array(v.number())),
   }).index("by_roomId_and_gameNo_and_round_and_playerId", ["roomId", "gameNo", "round", "playerId"]),
 
+  syncRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    decks: v.array(v.union(v.literal("light"), v.literal("dreams"), v.literal("deep"), v.literal("flirty"))),
+    length: v.number(),
+    own: v.boolean(), // two "ask your own question" cards per game
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see SyncGame in convex/lib/sync/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // What a pair of players has played together in In Sync: stats, questions seen, and past answers for throwbacks.
+  syncPairs: defineTable({
+    key: v.string(), // the two player ids, sorted and joined
+    games: v.number(),
+    bestSync: v.number(),
+    lastSync: v.number(),
+    seen: v.array(v.string()), // capped
+    memories: v.array(v.object({ qid: v.string(), at: v.number(), answers: v.record(v.string(), v.union(v.number(), v.array(v.number()), v.string())) })), // capped
+  }).index("by_key", ["key"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),
