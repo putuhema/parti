@@ -403,6 +403,17 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  islandRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    rounds: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see IslandGame in convex/lib/island/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),

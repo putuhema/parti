@@ -122,13 +122,29 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/island",
+    name: "Lucky Island",
+    sub: "Dice, gems and minigames",
+    face: "#1FB89A",
+    edge: "#12876F",
+    ink: "#0E6B58",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 4, top: 10, width: 92, height: 68, borderRadius: "50%", background: "#F6E7B0", boxShadow: "0 4px 0 rgba(0,0,0,.18)" }} />
+        <span style={{ position: "absolute", left: 14, top: 2, fontSize: 34 }}>🌴</span>
+        <span style={{ position: "absolute", right: 12, top: 24, fontSize: 28 }}>💎</span>
+        <span style={{ position: "absolute", left: 34, bottom: 6, fontSize: 28, transform: "rotate(-12deg)" }}>🎲</span>
+      </span>
+    ),
+  },
+  {
     href: "/potato",
     name: "Hot Potato",
     sub: "Pass the bomb before it blows",
     face: "#FF6B1A",
     edge: "#D14A00",
     ink: "#B23E00",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 100, height: 90, display: "flex", alignItems: "center", justifyContent: "center" }} aria-hidden="true">
         <span style={{ position: "absolute", width: 74, height: 74, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,230,120,.9), rgba(255,120,0,0) 70%)" }} />

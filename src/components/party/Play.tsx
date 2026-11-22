@@ -83,7 +83,7 @@ export function PartyPlay({ room }: { room: PartyView }) {
   );
 }
 
-function Intro({ micro, left, best }: { micro: MicroId; left: number; best: number | null }) {
+export function Intro({ micro, left, best }: { micro: MicroId; left: number; best: number | null }) {
   const m = microOf(micro);
   const secs = Math.ceil(left / 1000);
   const lastSec = useRef(-1);
