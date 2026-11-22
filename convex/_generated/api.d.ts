@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as boom from "../boom.js";
+import type * as brain from "../brain.js";
 import type * as buzz from "../buzz.js";
 import type * as chess from "../chess.js";
 import type * as crons from "../crons.js";
@@ -21,6 +22,8 @@ import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as lib_boom_rules from "../lib/boom/rules.js";
+import type * as lib_brain_cards from "../lib/brain/cards.js";
+import type * as lib_brain_rules from "../lib/brain/rules.js";
 import type * as lib_buzz_board from "../lib/buzz/board.js";
 import type * as lib_buzz_questions from "../lib/buzz/questions.js";
 import type * as lib_chess from "../lib/chess.js";
@@ -65,6 +68,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   boom: typeof boom;
+  brain: typeof brain;
   buzz: typeof buzz;
   chess: typeof chess;
   crons: typeof crons;
@@ -76,6 +80,8 @@ declare const fullApi: ApiFromModules<{
   invites: typeof invites;
   leaderboard: typeof leaderboard;
   "lib/boom/rules": typeof lib_boom_rules;
+  "lib/brain/cards": typeof lib_brain_cards;
+  "lib/brain/rules": typeof lib_brain_rules;
   "lib/buzz/board": typeof lib_buzz_board;
   "lib/buzz/questions": typeof lib_buzz_questions;
   "lib/chess": typeof lib_chess;

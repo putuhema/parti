@@ -122,13 +122,28 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/brain",
+    name: "Brain Swap",
+    sub: "Learn a fact, teach your partner",
+    face: "#1899D6",
+    edge: "#1478A8",
+    ink: "#0B4F73",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 104, height: 90 }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 0, top: 8, width: 56, height: 70, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-9deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>🐙</span>
+        <span style={{ position: "absolute", right: 0, top: 14, width: 56, height: 70, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(8deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>🪐</span>
+        <span style={{ position: "absolute", left: 32, top: 50, fontSize: 30 }}>🧠</span>
+      </span>
+    ),
+  },
+  {
     href: "/heist",
     name: "Heist Night",
     sub: "Co-op stealth for two",
     face: "#3B2F63",
     edge: "#231A45",
     ink: "#3B2F63",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 6, top: 30, width: 74, height: 40, background: "linear-gradient(90deg, rgba(255,200,0,.55), rgba(255,200,0,0))", clipPath: "polygon(0 40%, 100% 0, 100% 100%, 0 60%)" }} />

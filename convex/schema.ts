@@ -296,6 +296,25 @@ export default defineSchema({
     bestRounds: v.number(),
   }).index("by_playerId_and_levelId", ["playerId", "levelId"]),
 
+  brainRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    mode: v.union(v.literal("teach"), v.literal("agree")),
+    topics: v.array(v.union(v.literal("space"), v.literal("body"), v.literal("animals"), v.literal("indonesia"), v.literal("history"), v.literal("life"))),
+    rounds: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see BrainGame in convex/lib/brain/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // The fact cards each player has learned in Brain Swap (at most one entry per card).
+  brainBooks: defineTable({
+    playerId: v.id("players"),
+    learned: v.array(v.string()),
+  }).index("by_playerId", ["playerId"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),

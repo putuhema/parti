@@ -33,6 +33,7 @@ import { BOOM_MAX } from "./lib/boom/rules";
 import { SKETCH_MAX } from "./lib/sketch/rules";
 const SYNC_MAX = 2;
 const HEIST_MAX = 2;
+const BRAIN_MAX = 2;
 
 type PId = Id<"players">;
 type Room = Doc<"chessRooms">;
@@ -242,9 +243,20 @@ export const joinAny = mutation({
     const tile = await ctx.db.query("tileRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const boom = await ctx.db.query("boomRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const sketch = await ctx.db.query("sketchRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const brain = await ctx.db.query("brainRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const heist = await ctx.db.query("heistRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const sync = await ctx.db.query("syncRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
-    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0, sketch?._creationTime ?? 0, sync?._creationTime ?? 0, heist?._creationTime ?? 0);
+    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0, sketch?._creationTime ?? 0, sync?._creationTime ?? 0, heist?._creationTime ?? 0, brain?._creationTime ?? 0);
+    if (brain && brain._creationTime === newest) {
+      if (!brain.members.some((m) => m.playerId === me._id)) {
+        if (brain.members.length >= BRAIN_MAX) throw new ConvexError("This room is for two, and it's full");
+        const taken = new Set(brain.members.map((m) => m.seat));
+        let seat = 0;
+        while (taken.has(seat)) seat++;
+        await ctx.db.patch(brain._id, { members: [...brain.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/brain/room/${brain.code}`;
+    }
     if (heist && heist._creationTime === newest) {
       if (!heist.members.some((m) => m.playerId === me._id)) {
         if (heist.members.length >= HEIST_MAX) throw new ConvexError("This crew is full");
