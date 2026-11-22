@@ -144,12 +144,27 @@ const GAMES: Game[] = [
     face: "#FF5FA2",
     edge: "#D93F82",
     ink: "#B0246A",
-    tag: "NEW",
     art: (
       <span style={{ display: "flex", alignItems: "center", gap: 4, transform: "rotate(-4deg)" }} aria-hidden="true">
         <span style={{ width: 44, height: 44, borderRadius: 11, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 3px 0 rgba(0,0,0,.16)" }}>🐈</span>
         <span style={{ fontSize: 18, color: "#fff", fontWeight: 900 }}>➜</span>
         <span style={{ width: 44, height: 44, borderRadius: 11, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 3px 0 rgba(0,0,0,.16)", transform: "rotate(8deg)" }}>🥔</span>
+      </span>
+    ),
+  },
+  {
+    href: "/bluff",
+    name: "Bluff Bay",
+    sub: "Pirate dice. Call LIAR!",
+    face: "#3B6FD8",
+    edge: "#2A52A8",
+    ink: "#1E3F86",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 6, top: 8, fontSize: 40, transform: "rotate(-10deg)" }}>🎲</span>
+        <span style={{ position: "absolute", right: 6, top: 18, fontSize: 34, transform: "rotate(12deg)" }}>🎲</span>
+        <span style={{ position: "absolute", left: 16, bottom: 4, padding: "3px 10px", borderRadius: 10, background: "#FF4B4B", color: "#fff", fontSize: 15, fontWeight: 900, boxShadow: "0 3px 0 rgba(0,0,0,.2)", transform: "rotate(-4deg)" }}>LIAR!</span>
       </span>
     ),
   },
