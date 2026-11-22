@@ -36,6 +36,7 @@ const HEIST_MAX = 2;
 const BRAIN_MAX = 2;
 const STORY_MAX = 2;
 const TRUTH_MAX = 2;
+const EMOJI_MAX = 2;
 
 type PId = Id<"players">;
 type Room = Doc<"chessRooms">;
@@ -245,12 +246,23 @@ export const joinAny = mutation({
     const tile = await ctx.db.query("tileRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const boom = await ctx.db.query("boomRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const sketch = await ctx.db.query("sketchRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const emoji = await ctx.db.query("emojiRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const truth = await ctx.db.query("truthRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const story = await ctx.db.query("storyRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const brain = await ctx.db.query("brainRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const heist = await ctx.db.query("heistRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const sync = await ctx.db.query("syncRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
-    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0, sketch?._creationTime ?? 0, sync?._creationTime ?? 0, heist?._creationTime ?? 0, brain?._creationTime ?? 0, story?._creationTime ?? 0, truth?._creationTime ?? 0);
+    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0, sketch?._creationTime ?? 0, sync?._creationTime ?? 0, heist?._creationTime ?? 0, brain?._creationTime ?? 0, story?._creationTime ?? 0, truth?._creationTime ?? 0, emoji?._creationTime ?? 0);
+    if (emoji && emoji._creationTime === newest) {
+      if (!emoji.members.some((m) => m.playerId === me._id)) {
+        if (emoji.members.length >= EMOJI_MAX) throw new ConvexError("This room is for two, and it's full");
+        const taken = new Set(emoji.members.map((m) => m.seat));
+        let seat = 0;
+        while (taken.has(seat)) seat++;
+        await ctx.db.patch(emoji._id, { members: [...emoji.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/emoji/room/${emoji.code}`;
+    }
     if (truth && truth._creationTime === newest) {
       if (!truth.members.some((m) => m.playerId === me._id)) {
         if (truth.members.length >= TRUTH_MAX) throw new ConvexError("This room is for two, and it's full");

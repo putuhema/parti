@@ -122,13 +122,27 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/emoji",
+    name: "Emoji Charades",
+    sub: "Say it only in emoji",
+    face: "#FFB020",
+    edge: "#E08A00",
+    ink: "#9A5B00",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }} aria-hidden="true">
+        <span style={{ display: "flex", gap: 2, padding: "6px 10px", borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", fontSize: 24, transform: "rotate(-5deg)" }}>🦁👑🌅</span>
+        <span style={{ padding: "3px 10px", borderRadius: 10, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", fontSize: 13, fontWeight: 900, color: "#9A5B00", transform: "rotate(4deg)" }}>lion king?</span>
+      </span>
+    ),
+  },
+  {
     href: "/truth",
     name: "Truth or Tale",
     sub: "Two truths, one lie, all the stories",
     face: "#9B5DE5",
     edge: "#7A3FB5",
     ink: "#6A2FA5",
-    tag: "NEW",
     art: (
       <span style={{ display: "flex", flexDirection: "column", gap: 5, transform: "rotate(-5deg)" }} aria-hidden="true">
         {["✅", "🤥", "✅"].map((e, i) => (

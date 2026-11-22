@@ -355,6 +355,25 @@ export default defineSchema({
     theme: v.string(),
   }).index("by_key", ["key"]),
 
+  emojiRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    categories: v.array(v.string()), // category ids from convex/lib/emoji/content.ts; empty means all
+    rounds: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see EmojiGame in convex/lib/emoji/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // Best Emoji Charades score per pair, per game length.
+  emojiBests: defineTable({
+    key: v.string(), // the two player ids, sorted and joined, then "|" and the number of rounds
+    best: v.number(),
+    games: v.number(),
+  }).index("by_key", ["key"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),
