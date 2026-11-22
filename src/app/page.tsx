@@ -122,13 +122,28 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/potato",
+    name: "Hot Potato",
+    sub: "Pass the bomb before it blows",
+    face: "#FF6B1A",
+    edge: "#D14A00",
+    ink: "#B23E00",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 100, height: 90, display: "flex", alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+        <span style={{ position: "absolute", width: 74, height: 74, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,230,120,.9), rgba(255,120,0,0) 70%)" }} />
+        <span style={{ position: "relative", fontSize: 54, transform: "rotate(-12deg)" }}>💣</span>
+        <span style={{ position: "absolute", right: 2, top: 4, fontSize: 24 }}>💥</span>
+      </span>
+    ),
+  },
+  {
     href: "/party",
     name: "Party Blitz",
     sub: "9 lightning-fast minigames",
     face: "#7B2FF7",
     edge: "#5A1BC4",
     ink: "#5A1BC4",
-    tag: "NEW",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 30px)", gap: 4, transform: "rotate(-6deg)" }} aria-hidden="true">
         {["👆", "🤠", "🎈", "🎯", "⚡", "🧠", "🔍", "🎨", "➕"].map((e, i) => (

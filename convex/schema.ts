@@ -392,6 +392,17 @@ export default defineSchema({
     best: v.number(),
   }).index("by_playerId_and_micro", ["playerId", "micro"]),
 
+  potatoRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    lives: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see PotatoGame in convex/lib/potato/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),

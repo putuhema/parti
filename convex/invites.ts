@@ -22,6 +22,7 @@ export const GAMES = {
   truth: { name: "Truth or Tale", path: "/truth/room/" },
   emoji: { name: "Emoji Charades", path: "/emoji/room/" },
   party: { name: "Party Blitz", path: "/party/room/" },
+  potato: { name: "Hot Potato", path: "/potato/room/" },
 } as const;
 
 export const gameKind = v.union(...(Object.keys(GAMES) as (keyof typeof GAMES)[]).map((k) => v.literal(k)));
