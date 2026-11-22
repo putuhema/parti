@@ -276,6 +276,26 @@ export default defineSchema({
     memories: v.array(v.object({ qid: v.string(), at: v.number(), answers: v.record(v.string(), v.union(v.number(), v.array(v.number()), v.string())) })), // capped
   }).index("by_key", ["key"]),
 
+  heistRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    level: v.string(), // a level id from convex/lib/heist/levels.ts
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    // Seat 0 plays the Cat, seat 1 the Hacker. Alone, you play both.
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see HeistGame in convex/heist.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // Best result per player per Heist Night level.
+  heistStars: defineTable({
+    playerId: v.id("players"),
+    levelId: v.string(),
+    stars: v.number(),
+    bestRounds: v.number(),
+  }).index("by_playerId_and_levelId", ["playerId", "levelId"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),

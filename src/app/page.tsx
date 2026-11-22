@@ -122,13 +122,30 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/heist",
+    name: "Heist Night",
+    sub: "Co-op stealth for two",
+    face: "#3B2F63",
+    edge: "#231A45",
+    ink: "#3B2F63",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 6, top: 30, width: 74, height: 40, background: "linear-gradient(90deg, rgba(255,200,0,.55), rgba(255,200,0,0))", clipPath: "polygon(0 40%, 100% 0, 100% 100%, 0 60%)" }} />
+        <span style={{ position: "absolute", left: 0, top: 30, fontSize: 30 }}>👮</span>
+        <span style={{ position: "absolute", right: 4, top: 2, fontSize: 34, filter: "drop-shadow(0 0 8px #8fe3ff)" }}>💎</span>
+        <span style={{ position: "absolute", right: 30, bottom: 0, fontSize: 32 }}>🐈‍⬛</span>
+        <span style={{ position: "absolute", right: 0, bottom: 4, fontSize: 28 }}>🪴</span>
+      </span>
+    ),
+  },
+  {
     href: "/sync",
     name: "In Sync",
     sub: "How well do you know each other?",
     face: "#E8508F",
     edge: "#BC2F6C",
     ink: "#9C2459",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 100, height: 90 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 0, top: 6, width: 54, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-9deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🍜</span>
