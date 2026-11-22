@@ -18,6 +18,7 @@ export const GAMES = {
   sync: { name: "In Sync", path: "/sync/room/" },
   heist: { name: "Heist Night", path: "/heist/room/" },
   brain: { name: "Brain Swap", path: "/brain/room/" },
+  story: { name: "Sneaky Story", path: "/story/room/" },
 } as const;
 
 export const gameKind = v.union(...(Object.keys(GAMES) as (keyof typeof GAMES)[]).map((k) => v.literal(k)));

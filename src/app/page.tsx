@@ -122,13 +122,29 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/story",
+    name: "Sneaky Story",
+    sub: "Write together, hide a secret word",
+    face: "#B8743A",
+    edge: "#8A5A1F",
+    ink: "#8A5A1F",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 104, height: 90 }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 4, top: 6, width: 92, height: 72, borderRadius: 10, background: "repeating-linear-gradient(#FFFBF2 0 15px, #E9DCC4 15px 16px)", boxShadow: "0 3px 0 rgba(0,0,0,.2)", transform: "rotate(-5deg)", padding: "8px 8px", fontSize: 11, fontWeight: 900, color: "#5A3D1F", lineHeight: "16px", overflow: "hidden" }}>
+          a cake shaped like a <span style={{ background: "#FFC800", borderRadius: 4, padding: "0 2px" }}>trombone</span>…
+        </span>
+        <span style={{ position: "absolute", right: 0, bottom: 0, fontSize: 32 }}>🔍</span>
+      </span>
+    ),
+  },
+  {
     href: "/brain",
     name: "Brain Swap",
     sub: "Learn a fact, teach your partner",
     face: "#1899D6",
     edge: "#1478A8",
     ink: "#0B4F73",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 104, height: 90 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 0, top: 8, width: 56, height: 70, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-9deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>🐙</span>

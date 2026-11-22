@@ -315,6 +315,26 @@ export default defineSchema({
     learned: v.array(v.string()),
   }).index("by_playerId", ["playerId"]),
 
+  storyRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    length: v.number(), // lines in the story
+    starter: v.optional(v.number()), // index into STARTERS; unset means a surprise
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see StoryGame in convex/lib/story/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // Finished Sneaky Stories, kept on the pair's Story Shelf.
+  storyBooks: defineTable({
+    key: v.string(), // the two player ids, sorted and joined
+    starter: v.number(),
+    names: v.record(v.string(), v.string()),
+    lines: v.array(v.object({ by: v.string(), text: v.string(), secret: v.string(), spotted: v.union(v.boolean(), v.null()), twist: v.optional(v.string()) })),
+  }).index("by_key", ["key"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),
