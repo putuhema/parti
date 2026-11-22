@@ -232,6 +232,27 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  sketchRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    source: v.union(v.literal("book"), v.literal("own")), // picture book, or the describer draws their own
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see SketchGame in convex/lib/sketch/rules.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // One drawing per drawer per round, kept apart from the room so drawers saving don't clash.
+  sketchDrawings: defineTable({
+    roomId: v.id("sketchRooms"),
+    gameNo: v.number(),
+    round: v.number(),
+    playerId: v.id("players"),
+    strokes: v.array(v.array(v.number())),
+  }).index("by_roomId_and_gameNo_and_round_and_playerId", ["roomId", "gameNo", "round", "playerId"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),

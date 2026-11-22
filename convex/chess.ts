@@ -30,6 +30,7 @@ import { BUZZ_MAX } from "./lib/buzz/board";
 import { SCRAMBLE_MAX } from "./lib/scramble/board";
 import { TILES_MAX } from "./lib/tiles/rules";
 import { BOOM_MAX } from "./lib/boom/rules";
+import { SKETCH_MAX } from "./lib/sketch/rules";
 
 type PId = Id<"players">;
 type Room = Doc<"chessRooms">;
@@ -238,7 +239,18 @@ export const joinAny = mutation({
     const grid = await ctx.db.query("gridRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const tile = await ctx.db.query("tileRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const boom = await ctx.db.query("boomRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
-    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0);
+    const sketch = await ctx.db.query("sketchRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0, sketch?._creationTime ?? 0);
+    if (sketch && sketch._creationTime === newest) {
+      if (!sketch.members.some((m) => m.playerId === me._id)) {
+        if (sketch.members.length >= SKETCH_MAX) throw new ConvexError("This room is full");
+        const taken = new Set(sketch.members.map((m) => m.seat));
+        let seat = 0;
+        while (taken.has(seat)) seat++;
+        await ctx.db.patch(sketch._id, { members: [...sketch.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/sketch/room/${sketch.code}`;
+    }
     if (boom && boom._creationTime === newest) {
       if (!boom.members.some((m) => m.playerId === me._id)) {
         if (boom.members.length >= BOOM_MAX) throw new ConvexError("This room is full");

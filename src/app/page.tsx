@@ -122,13 +122,33 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/sketch",
+    name: "Sketch Match",
+    sub: "Describe it, draw it, match it",
+    face: "#2EB89A",
+    edge: "#1F8A73",
+    ink: "#1F7A66",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 96, height: 90 }} aria-hidden="true">
+        <svg viewBox="0 0 100 100" width={70} height={70} style={{ position: "absolute", left: 0, top: 0, background: "#fff", borderRadius: 14, boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-8deg)" }}>
+          <circle cx="36" cy="38" r="17" fill="none" stroke="#4A3F55" strokeWidth="6" />
+          <path d="M58 82 L74 52 L90 82 Z" fill="none" stroke="#4A3F55" strokeWidth="6" strokeLinejoin="round" />
+        </svg>
+        <svg viewBox="0 0 100 100" width={58} height={58} style={{ position: "absolute", right: -4, bottom: 0, background: "#fff", borderRadius: 12, boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(7deg)" }}>
+          <path d="M20 40 C18 22 42 18 52 32 C60 46 44 58 30 54 C22 52 20 46 20 40" fill="none" stroke="#1899D6" strokeWidth="6" strokeLinecap="round" />
+          <path d="M56 84 L72 54 L88 86 L56 84" fill="none" stroke="#1899D6" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    ),
+  },
+  {
     href: "/boom",
     name: "Juragan Nusantara",
     sub: "Buy up Indonesia, collect rent",
     face: "#C8362E",
     edge: "#9A2620",
     ink: "#9A2620",
-    tag: "NEW",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gridTemplateRows: "repeat(3, 28px)", gap: 3, transform: "rotate(-6deg)" }} aria-hidden="true">
         {["#3DB6F2", "#F06CB4", "#FF9A1F", "#8B5BD6", "", "#EE4B4B", "#3DAE4A", "#F2C200", "#B0764A"].map((c, i) => (
