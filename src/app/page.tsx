@@ -122,13 +122,30 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/truth",
+    name: "Truth or Tale",
+    sub: "Two truths, one lie, all the stories",
+    face: "#9B5DE5",
+    edge: "#7A3FB5",
+    ink: "#6A2FA5",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", flexDirection: "column", gap: 5, transform: "rotate(-5deg)" }} aria-hidden="true">
+        {["✅", "🤥", "✅"].map((e, i) => (
+          <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, width: 98, height: 24, borderRadius: 8, background: i === 1 ? "#FFE27A" : "#fff", boxShadow: "0 2px 0 rgba(0,0,0,.18)", padding: "0 6px", fontSize: 14 }}>
+            {e}<span style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(0,0,0,.12)" }} />
+          </span>
+        ))}
+      </span>
+    ),
+  },
+  {
     href: "/story",
     name: "Sneaky Story",
     sub: "Write together, hide a secret word",
     face: "#B8743A",
     edge: "#8A5A1F",
     ink: "#8A5A1F",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 104, height: 90 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 4, top: 6, width: 92, height: 72, borderRadius: 10, background: "repeating-linear-gradient(#FFFBF2 0 15px, #E9DCC4 15px 16px)", boxShadow: "0 3px 0 rgba(0,0,0,.2)", transform: "rotate(-5deg)", padding: "8px 8px", fontSize: 11, fontWeight: 900, color: "#5A3D1F", lineHeight: "16px", overflow: "hidden" }}>

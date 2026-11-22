@@ -335,6 +335,26 @@ export default defineSchema({
     lines: v.array(v.object({ by: v.string(), text: v.string(), secret: v.string(), spotted: v.union(v.boolean(), v.null()), twist: v.optional(v.string()) })),
   }).index("by_key", ["key"]),
 
+  truthRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    themes: v.array(v.string()), // theme ids from convex/lib/truth/rules.ts; empty means all
+    rounds: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see TruthGame in convex/lib/truth/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  // Truths revealed in Truth or Tale: things a pair now knows about each other.
+  truthVault: defineTable({
+    key: v.string(), // the two player ids, sorted and joined
+    owner: v.id("players"), // whose truth it is
+    text: v.string(),
+    theme: v.string(),
+  }).index("by_key", ["key"]),
+
   // Word meanings from Wiktionary, cached so each word is fetched once.
   wordDefs: defineTable({
     lang: v.union(v.literal("en"), v.literal("id")),

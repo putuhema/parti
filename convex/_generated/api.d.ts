@@ -45,6 +45,7 @@ import type * as lib_tiles_bot from "../lib/tiles/bot.js";
 import type * as lib_tiles_rules from "../lib/tiles/rules.js";
 import type * as lib_trivia_board from "../lib/trivia/board.js";
 import type * as lib_trivia_questions from "../lib/trivia/questions.js";
+import type * as lib_truth_rules from "../lib/truth/rules.js";
 import type * as lib_words_content from "../lib/words/content.js";
 import type * as lib_words_dict from "../lib/words/dict.js";
 import type * as lib_words_en from "../lib/words/en.js";
@@ -59,6 +60,7 @@ import type * as story from "../story.js";
 import type * as sync from "../sync.js";
 import type * as tiles from "../tiles.js";
 import type * as trivia from "../trivia.js";
+import type * as truth from "../truth.js";
 import type * as words from "../words.js";
 import type * as wordsView from "../wordsView.js";
 
@@ -106,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   "lib/tiles/rules": typeof lib_tiles_rules;
   "lib/trivia/board": typeof lib_trivia_board;
   "lib/trivia/questions": typeof lib_trivia_questions;
+  "lib/truth/rules": typeof lib_truth_rules;
   "lib/words/content": typeof lib_words_content;
   "lib/words/dict": typeof lib_words_dict;
   "lib/words/en": typeof lib_words_en;
@@ -120,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   sync: typeof sync;
   tiles: typeof tiles;
   trivia: typeof trivia;
+  truth: typeof truth;
   words: typeof words;
   wordsView: typeof wordsView;
 }>;
