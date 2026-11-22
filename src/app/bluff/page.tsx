@@ -15,7 +15,8 @@ const STEPS: [string, string][] = [
   ["Roll in secret", "Everyone shakes five dice under their cup. Only you see yours. 1s are wild!"],
   ["Raise the bid", "Guess how many of a face are on the whole table, like \"four 5s\". Each bid must beat the last."],
   ["Call LIAR!", "Don't believe it? Call it. The dice are revealed and whoever was wrong loses a die."],
-]
+];
+
 export default function BluffHome() {
   const { me } = useIdentity();
   const router = useRouter();

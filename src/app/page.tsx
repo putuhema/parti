@@ -159,12 +159,27 @@ const GAMES: Game[] = [
     face: "#3B6FD8",
     edge: "#2A52A8",
     ink: "#1E3F86",
-    tag: "NEW",
     art: (
       <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 6, top: 8, fontSize: 40, transform: "rotate(-10deg)" }}>🎲</span>
         <span style={{ position: "absolute", right: 6, top: 18, fontSize: 34, transform: "rotate(12deg)" }}>🎲</span>
         <span style={{ position: "absolute", left: 16, bottom: 4, padding: "3px 10px", borderRadius: 10, background: "#FF4B4B", color: "#fff", fontSize: 15, fontWeight: 900, boxShadow: "0 3px 0 rgba(0,0,0,.2)", transform: "rotate(-4deg)" }}>LIAR!</span>
+      </span>
+    ),
+  },
+  {
+    href: "/stack",
+    name: "Sky Stack",
+    sub: "Tap to stack. Don't topple!",
+    face: "#FFB020",
+    edge: "#D98E00",
+    ink: "#8A5A00",
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, width: 92 }} aria-hidden="true">
+        {[[30, 44, "#FF4B4B"], [18, 56, "#CE82FF"], [10, 66, "#58CC02"], [4, 74, "#1CB0F6"], [0, 84, "#fff"]].map(([l, w, c], i) => (
+          <span key={i} style={{ marginLeft: l as number, width: w as number, height: 13, borderRadius: 4, background: c as string, boxShadow: "inset 0 -3px 0 rgba(0,0,0,.18)" }} />
+        ))}
       </span>
     ),
   },

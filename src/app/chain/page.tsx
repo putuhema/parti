@@ -15,7 +15,8 @@ const STEPS: [string, string][] = [
   ["Pick and draw", "Choose a silly secret phrase, like \"a cat doing yoga\", and draw it. No letters allowed!"],
   ["Pass it on", "Guess the drawing you get, then draw the guess you get. Back and forth down the chain."],
   ["Watch it drift", "Replay every chain step by step. Did \"cat yoga\" turn into \"potato in jail\"? ❤️ the best ones."],
-]
+];
+
 export default function ChainHome() {
   const { me } = useIdentity();
   const router = useRouter();

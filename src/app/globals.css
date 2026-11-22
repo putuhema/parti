@@ -1802,3 +1802,54 @@ i.no { background: var(--cherry-soft); color: var(--cherry-edge); }
 .bb-done h2 { margin: 0; font-size: 30px; font-weight: 900; color: #1E3F86; text-align: center; }
 .bb-crown { font-size: 64px; line-height: 1; }
 @media (prefers-reduced-motion: reduce) { .bb-react, .bb-seat.loser, .bb-heroart .liar { animation: none; } }
+
+/* ---------- Sky Stack ---------- */
+.ss-screen { min-height: 100dvh; padding-bottom: calc(env(safe-area-inset-bottom) + 10px); gap: 10px; }
+.ss-chip { background: #FFEFC7; color: #8A5A00; }
+.ss-hero, .ss-lobbycard { background: linear-gradient(160deg, #FFB020, #FF7A45); box-shadow: 0 4px 0 #D98E00; }
+.ss-hero { padding: 18px 12px; }
+.ss-lobbycard { border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.ss-heroart { width: 200px; display: flex; flex-direction: column; gap: 3px; }
+.ss-heroart span { height: 16px; border-radius: 5px; box-shadow: inset 0 -4px 0 rgba(0,0,0,.18); }
+.ss-heroart .ss-hslide { width: 40%; margin-left: 50%; margin-bottom: 8px; animation: ss-hero-slide 2.2s ease-in-out infinite alternate; }
+@keyframes ss-hero-slide { from { transform: translateX(-120%); } to { transform: translateX(30%); } }
+
+.ss-players { display: flex; gap: 6px; overflow-x: auto; padding: 2px; }
+.ss-pl { flex: 1 0 0; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border-radius: 14px; background: #fff; border: 2px solid var(--line); }
+.ss-pl b { font-size: 12px; font-weight: 900; color: var(--plum); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-pl small { font-size: 11px; }
+.ss-pl.turn { border-color: #FFB020; box-shadow: 0 3px 0 #D98E00; }
+.ss-pl.out { opacity: .4; }
+.ss-bot { width: 32px; height: 32px; border-radius: 50%; background: #FFF4DA; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+
+.ss-stage { position: relative; flex: 1; min-height: 300px; max-height: 62dvh; border-radius: 24px; overflow: hidden; background: linear-gradient(#BFE6FF, #EAF7FF 70%, #F6FBF0); border: 3px solid var(--line); touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.ss-screen.myturn .ss-stage { border-color: #FFB020; box-shadow: 0 0 0 4px #FFE6A8; }
+.ss-sky { position: absolute; top: 8%; left: 10%; font-size: 34px; opacity: .8; animation: ss-cloud 18s linear infinite; pointer-events: none; }
+@keyframes ss-cloud { from { transform: translateX(-30%); } to { transform: translateX(260%); } }
+.ss-floor-no { position: absolute; top: 10px; right: 12px; padding: 4px 10px; border-radius: 10px; background: rgba(255,255,255,.85); font-size: 15px; font-weight: 900; color: var(--plum); z-index: 2; }
+.ss-tower { position: absolute; inset: 0; }
+.ss-block { position: absolute; border-radius: 6px; transition: bottom 350ms var(--spring, ease-out); }
+.ss-block.landed { animation: ss-land 260ms ease-out both; }
+.ss-block.perfect { outline: 3px solid #fff; outline-offset: -3px; }
+@keyframes ss-land { 0% { transform: translateY(-30%); } 70% { transform: translateY(6%); } 100% { transform: translateY(0); } }
+.ss-slider { transition: none; z-index: 1; }
+.ss-sliver { position: absolute; border-radius: 6px; animation: ss-sliver 900ms ease-in both; z-index: 1; pointer-events: none; }
+@keyframes ss-sliver { to { transform: translateY(260%) rotate(40deg); opacity: 0; } }
+.ss-missed { transition: none; animation: ss-miss 1.4s ease-in both; }
+@keyframes ss-miss { to { transform: translateY(700%) rotate(80deg); opacity: .2; } }
+.ss-stage.falling .ss-tower { animation: ss-topple 2.4s ease-in both; transform-origin: 50% 100%; }
+@keyframes ss-topple { 0% { transform: rotate(0); } 15% { transform: rotate(-2deg); } 30% { transform: rotate(3deg); } 100% { transform: translateY(40%) rotate(-24deg); opacity: .25; } }
+.ss-flash { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font-size: 26px; font-weight: 900; color: #fff; text-shadow: 0 3px 0 #D98E00, 0 0 14px rgba(255,176,32,.9); white-space: nowrap; animation: ss-flash 1s ease-out both; pointer-events: none; z-index: 3; }
+@keyframes ss-flash { 0% { transform: translate(-50%, 10px) scale(.6); opacity: 0; } 20% { transform: translate(-50%, 0) scale(1.15); opacity: 1; } 100% { transform: translate(-50%, -30px) scale(1); opacity: 0; } }
+
+.ss-go, .ss-wait, .ss-crash { display: flex; flex-direction: column; gap: 6px; text-align: center; }
+.ss-go b { font-size: 19px; font-weight: 900; color: #8A5A00; }
+.ss-wait { font-size: 16px; font-weight: 800; color: var(--muted); }
+.ss-wait b { color: var(--plum); }
+.ss-crash h2 { margin: 0; font-size: 28px; font-weight: 900; color: #C23030; }
+.ss-crash p { margin: 0; font-size: 16px; font-weight: 800; color: var(--plum); }
+.ss-done { gap: 12px; }
+.ss-done h2 { margin: 0; font-size: 30px; font-weight: 900; color: #8A5A00; text-align: center; }
+.ss-crown { font-size: 64px; line-height: 1; }
+.ss-tallest { margin: 0; font-size: 17px; font-weight: 800; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .ss-sky, .ss-heroart .ss-hslide, .ss-stage.falling .ss-tower, .ss-block.landed { animation: none; } }
