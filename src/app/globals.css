@@ -970,8 +970,61 @@ a { text-decoration: none; }
 .jn-cardtext { margin: 8px 0 0; font-size: 15px; line-height: 1.35; font-weight: 700; color: var(--ow-ink); }
 .jn-cardwho { margin: 4px 0 0; font-size: 13px; font-weight: 900; color: var(--ow-maroon); }
 
+/* Kejutan dilemmas: two sides on the card, then a timing QTE for the risky one */
+.jn-cardlayer.live { pointer-events: auto; cursor: pointer; touch-action: none; }
+.jn-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.jn-optchip { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 10px; border: 2px solid var(--ow-ink); font-size: 11px; font-weight: 800; line-height: 1.25; text-align: left; }
+.jn-optchip b { font-size: 12px; font-weight: 900; }
+.jn-optchip.safe { background: #E3F2EA; }
+.jn-optchip.risky { background: #FBE3DF; }
+.jn-qte { position: relative; height: 30px; margin: 10px 2px 4px; border-radius: 999px; background: #FBF8F2; border: 2.5px solid var(--ow-ink); box-shadow: inset 0 2px 0 rgba(35,27,26,.08); }
+.jn-qtezone { position: absolute; top: 3px; bottom: 3px; border-radius: 999px; background: var(--ow-moss); box-shadow: 0 0 0 2px var(--ow-ink); }
+.jn-qteneedle { position: absolute; top: -7px; bottom: -7px; width: 6px; margin-left: -3px; border-radius: 3px; background: var(--ow-coral); box-shadow: 0 0 0 2px var(--ow-ink); }
+.jn-qtestamp { position: absolute; left: 50%; top: 50%; padding: 3px 12px; border-radius: 8px; border: 2.5px solid var(--ow-ink); font-size: 16px; font-weight: 900; letter-spacing: .06em; white-space: nowrap; transform: translate(-50%, -50%) rotate(-6deg); animation: jn-stamp 360ms cubic-bezier(.3,1.7,.5,1) both; }
+.jn-qte.hit .jn-qtestamp { background: var(--ow-moss); color: var(--ow-bone); }
+.jn-qte.miss .jn-qtestamp { background: var(--ow-coral); color: var(--ow-bone); }
+.jn-qte.miss { animation: jn-shake 360ms ease-in-out; }
+@keyframes jn-stamp { from { transform: translate(-50%, -50%) rotate(-6deg) scale(2.2); opacity: 0; } to { transform: translate(-50%, -50%) rotate(-6deg); opacity: 1; } }
+@keyframes jn-shake { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+.jn-cardchoice { margin: 6px 0 0; font-size: 14px; font-weight: 900; color: var(--ow-moss); }
+.jn-cardchoice.risky { color: var(--ow-coral); }
+.jn-cardnote { margin: 4px 0 0; font-size: 13px; font-weight: 700; font-style: italic; color: var(--ow-ink); }
+.jn-opt { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0 6px; height: 50px; min-height: 50px; line-height: 1.1; white-space: nowrap; overflow: hidden; }
+.jn-opt b { font-size: 15px; font-weight: 900; }
+.jn-opt small { font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; opacity: .9; }
+.jn-tap { font-size: 22px; letter-spacing: .14em; animation: jn-tappulse 520ms ease-in-out infinite; }
+@keyframes jn-tappulse { 50% { transform: scale(1.03); box-shadow: 5px 5px 0 var(--ow-bone); } }
+
+/* Diperiksa mashing and rent haggling */
+.jn-mash { position: relative; display: flex; flex-direction: column; gap: 6px; margin: 8px 2px 2px; }
+.jn-mashcount { font-size: 15px; font-weight: 800; color: var(--ow-muted); }
+.jn-mashcount b { display: inline-block; font-size: 34px; line-height: 1; color: var(--ow-ink); animation: jn-pop 220ms cubic-bezier(.3,1.7,.5,1); }
+.jn-mashbar { height: 18px; border-radius: 999px; background: #FBF8F2; border: 2.5px solid var(--ow-ink); overflow: hidden; }
+.jn-mashbar i { display: block; height: 100%; background: var(--ow-moss); transition: width 80ms ease-out; }
+.jn-mashtime { height: 5px; border-radius: 999px; background: rgba(35,27,26,.12); overflow: hidden; }
+.jn-mashtime i { display: block; height: 100%; width: 100%; background: var(--ow-coral); }
+.jn-mash.miss { animation: jn-shake 360ms ease-in-out; }
+.jn-mash .jn-qtestamp { top: 40%; }
+.jn-mash.hit .jn-qtestamp { background: var(--ow-moss); color: var(--ow-bone); }
+.jn-mash.miss .jn-qtestamp { background: var(--ow-coral); color: var(--ow-bone); }
+.jn-hold { position: relative; height: 30px; margin: 10px 2px 4px; border-radius: 999px; background: #FBF8F2; border: 2.5px solid var(--ow-ink); overflow: visible; }
+.jn-holdzone { position: absolute; top: 3px; bottom: 3px; border-radius: 999px; background: color-mix(in srgb, var(--ow-moss) 45%, transparent); box-shadow: 0 0 0 2px var(--ow-moss); }
+.jn-holdfull { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ow-ink); opacity: .35; }
+.jn-holdfill { position: absolute; left: 3px; top: 6px; bottom: 6px; width: 0; max-width: calc(100% - 6px); border-radius: 999px; background: var(--ow-coral); box-shadow: 0 0 0 1.5px var(--ow-ink); }
+.jn-hold.deal .jn-qtestamp { background: var(--ow-moss); color: var(--ow-bone); }
+.jn-hold.full .jn-qtestamp { background: var(--ow-bone); color: var(--ow-ink); }
+.jn-hold.over .jn-qtestamp { background: var(--ow-coral); color: var(--ow-bone); }
+.jn-hold.over { animation: jn-shake 360ms ease-in-out; }
+.jn-rentart { display: flex; justify-content: center; margin: 6px 0 2px; }
+.jn-rentart .jn-bld { height: 64px; width: auto; }
+.jn-cardwho s { margin-left: 6px; opacity: .55; font-weight: 700; }
+.jn-holdbtn { touch-action: none; }
+.jn-holdbtn.held { transform: translate(3px, 3px) scale(.98); box-shadow: none; }
+
 /* the dock */
-.jn-dock { position: relative; bottom: auto; box-shadow: none; gap: 10px; padding: 12px 14px 14px; }
+.jn-dock { position: relative; bottom: auto; box-shadow: none; gap: 10px; padding: 12px 14px 14px; flex-shrink: 0; overflow: clip; }
+/* The action row never collapses or grows, whichever buttons (or none) it holds. */
+.jn-actions { height: 50px; flex-shrink: 0; }
 .jn-dock .ow-dockhead b { white-space: nowrap; }
 .jn-status { position: relative; margin: 0; height: 22px; text-align: center; font-size: 15px; line-height: 22px; font-weight: 700; color: var(--ow-bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jn-actions .jn-wide { grid-column: 1 / -1; }
@@ -1024,18 +1077,80 @@ a { text-decoration: none; }
   .jn-banner { width: min(520px, 100%); height: 60px; font-size: 17px; line-height: 23px; padding: 0 18px; }
   .jn-die { width: 50px; height: 50px; padding: 8px; gap: 3px; border-radius: 12px; }
   .jn-card { width: 420px; padding: 10px 16px 16px; }
+  .jn-optchip { font-size: 13px; padding: 8px 10px; } .jn-optchip b { font-size: 14px; }
+  .jn-qte { height: 36px; }
   .jn-cardtext { font-size: 18px; }
   .jn-cardwho { font-size: 15px; }
-  .jn-dock { grid-template-columns: 190px minmax(0, 1fr) 260px; }
+  .jn-play .jn-dock { grid-template-columns: 170px minmax(0, 1fr) 320px; }
   .jn-dock .ow-dockhead b { font-size: 26px; }
-  .jn-status { height: auto; text-align: left; font-size: 19px; line-height: 26px; white-space: normal; }
-  .jn-actions { grid-template-columns: 1fr 1fr; }
+  .jn-status { height: 52px; display: flex; align-items: center; text-align: left; font-size: 19px; line-height: 26px; white-space: normal; }
+  .jn-dock .jn-actions { grid-template-columns: 1fr 1fr; height: 54px; }
+  .jn-play .ow-timer { height: 20px; min-height: 20px; overflow: clip; }
   .ow-root .sheet { left: 50%; right: auto; top: 50%; bottom: auto; width: 460px; max-width: calc(100vw - 48px); margin: 0; padding: 28px 24px 24px; border: 3px solid var(--ow-ink); border-radius: 24px; box-shadow: 8px 8px 0 var(--ow-ink); animation: jn-dialog 300ms cubic-bezier(.3,1.5,.5,1) both; }
   .ow-root .sheet .grabber { display: none; }
   .jn-sheetband { top: -28px; left: -24px; right: -24px; height: 16px; border-top: 0; }
 }
 @keyframes jn-dialog { from { opacity: 0; transform: translate(-50%, -46%) scale(.9); } to { opacity: 1; transform: translate(-50%, -50%); } }
-@media (prefers-reduced-motion: reduce) { .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop { animation: none; } .ow-root .sheet { animation: none; } }
+/* ---- the isometric board: a world of 128px tiles on a 2:1 grid, moved by the camera (see boom/iso.ts) ---- */
+.jn-boardwrap { position: relative; display: block; container-type: normal; }
+.jn-iso { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }
+.jn-iso.zoomed { cursor: grab; touch-action: none; }
+.jn-iso.zoomed:active { cursor: grabbing; }
+.jn-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: transform 450ms cubic-bezier(.2,.8,.2,1), opacity 140ms ease; }
+.jn-world.panning { transition: opacity 140ms ease; }
+.jn-world.fading { opacity: 0; }
+.jn-ground { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; }
+.jn-itground { position: absolute; width: 128px; height: 128px; pointer-events: none; }
+.jn-it { position: absolute; width: 128px; height: 128px; padding: 0; margin: 0; border: 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  clip-path: polygon(50% 34.4%, 100% 59.4%, 100% 75%, 50% 100%, 0 75%, 0 59.4%); transition: translate 120ms ease-out; }
+@media (hover: hover) { .jn-it:hover { translate: 0 -3px; } }
+.jn-it:active { translate: 0 2px; }
+.jn-it:focus-visible .jn-itface { box-shadow: inset 0 0 0 4px var(--ow-ink); }
+.jn-itart { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; user-select: none; }
+.jn-itface { position: absolute; left: 32px; top: 44px; width: 64px; height: 64px; transform: matrix(1, .5, -1, .5, 0, 0); transform-origin: 50% 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-top: 6px; color: var(--ow-ink); text-align: center; pointer-events: none; }
+.jn-itface.dark { color: var(--ow-bone); }
+.jn-itband { position: absolute; left: 0; right: 0; top: 0; height: 11px; border-bottom: 2px solid var(--ow-ink); }
+.jn-itname { max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8.5px; font-weight: 800; line-height: 1; }
+.jn-itamt { font-size: 12.5px; font-weight: 900; line-height: 1; letter-spacing: .02em; }
+.jn-itico { font-size: 17px; line-height: 1; }
+.jn-it.own .jn-itface { box-shadow: inset 0 0 0 4px var(--o); }
+.jn-it.offer .jn-itface { animation: jn-itoffer 900ms ease-in-out infinite; }
+@keyframes jn-itoffer { 50% { box-shadow: inset 0 0 0 6px var(--ow-coral); } }
+.jn-world .jn-prop { position: absolute; display: block; transform: translate(-50%, -100%); pointer-events: none; }
+.jn-world .jn-prop .jn-bld { display: block; height: 100%; width: auto; max-width: none; margin: 0; }
+.jn-world .jn-stage { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 500; }
+
+/* ---- the HUD in the board's corners ---- */
+.jn-hudtop, .jn-hudbl, .jn-cam { position: absolute; z-index: 4; }
+.jn-hudtop { top: 6px; left: 8px; right: 8px; pointer-events: none; }
+.jn-hudtop .ow-players { display: flex; gap: 6px; }
+.jn-hudtop .ow-pl { flex: 1; min-width: 0; padding: 3px 7px 3px 3px; gap: 6px; border-width: 2px; border-radius: 12px; }
+.jn-hudtop .ow-pl.turn { box-shadow: 3px 3px 0 var(--ow-ink); }
+.jn-hudtop .ow-hat { width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; }
+.jn-hudtop .ow-hat svg { width: 22px; height: 25px; }
+.jn-hudtop .ow-plname { min-width: 0; line-height: 1.05; }
+.jn-hudtop .ow-plname b { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jn-hudtop .ow-plmeta small { font-size: 11.5px; font-weight: 800; opacity: 1; white-space: nowrap; }
+.jn-hudbl { left: 8px; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.jn-hudrow { display: flex; align-items: center; gap: 10px; }
+.jn-hudrow .jn-dice { gap: 8px; }
+.jn-hudrow .jn-banner { flex: 1; min-width: 0; height: 54px; }
+.jn-cam { right: 8px; bottom: 72px; display: flex; gap: 6px; }
+.jn-cambtn { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border-radius: 10px; background: var(--ow-bone); border: 2.5px solid var(--ow-ink); box-shadow: 2px 2px 0 var(--ow-ink); color: var(--ow-ink); cursor: pointer; }
+.jn-cambtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.jn-cambtn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
+.jn-cambtn:disabled { opacity: .4; cursor: default; }
+@media (min-width: 1000px) {
+  .jn-hudtop { display: none; }
+  .jn-hudbl { left: 14px; right: auto; bottom: 14px; width: min(400px, 46%); }
+  .jn-hudbl .jn-headline { font-size: 34px; text-shadow: 0 0 6px #F3EDE0, 0 0 2px #F3EDE0; }
+  .jn-hudrow .jn-banner { height: 58px; font-size: 15px; line-height: 20px; }
+  .jn-hudrow .jn-die { width: 46px; height: 46px; padding: 7px; }
+  .jn-cam { right: 14px; bottom: 14px; }
+  .jn-cambtn { width: 40px; height: 40px; border-radius: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
 
 /* ---------- Sketch Match ---------- */
 .sk-screen { min-height: 100dvh; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }

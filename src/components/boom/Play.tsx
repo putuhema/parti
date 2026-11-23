@@ -2,20 +2,26 @@
 
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { api } from "../../../convex/_generated/api";
-import { CHOICE_MS, COLS, GROUPS, LAP_BONUS, N, ROLL_MS, ROWS, SPACES, TAX, HUB_RENT, baseRent, buildCost, cellOf, eventMs, isBot, priceOf, type Art, type BoomEvent } from "../../../convex/lib/boom/rules";
+import { CARDS, CHOICE_MS, COLS, DILEMMA_MS, GROUPS, HOLD_FILL_MS, LAP_BONUS, LOBBY_FEE, MASH_MS, N, NEGO_DEAL, NEGO_OVER, QTE_MS, ROLL_MS, ROWS, SPACES, TAX, HUB_RENT, baseRent, buildCost, cellOf, eventMs, isBot, mashTarget, priceOf, type Art, type BoomEvent, type Outcome, type Qte } from "../../../convex/lib/boom/rules";
 import { Countdown, TimerBar, Toast } from "@/components/words/common";
 import { Confetti, Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
-import { BoardStage, type Grid, type StageEvent } from "./BoardStage";
+import { BoardStage, type StageEvent } from "./BoardStage";
+import { CORNERS, IsoGround, IsoTile, tileLabel } from "./IsoBoard";
+import { TH, TW, place, turn, turnedSize, worldSize, type Rot } from "./iso";
 import { Building, BUILDING_NAMES } from "./Building";
 import { CardScene } from "./CardScene";
+import { TimingBar } from "./TimingBar";
+import { HoldMeter, MashMeter } from "./QteMeters";
 import { describe, money, short, useNameOf, type BoomGameView, type BoomView } from "./common";
 
 type NameOf = (id?: string | null) => string;
-type Banner = { n: number; text: string; tone: "good" | "bad" | "info"; kind: BoomEvent["kind"]; by: string; art?: Art; raw?: string; amount?: number };
+type Banner = { n: number; text: string; tone: "good" | "bad" | "info"; kind: BoomEvent["kind"]; by: string; art?: Art; raw?: string; amount?: number; choice?: string; risky?: boolean; success?: boolean; note?: string; qte?: Qte; ms?: number; taps?: number; target?: number; nego?: BoomEvent["nego"]; other?: string; tile?: number };
+/** "+Rp150rb", "−Rp100rb", plus "· Diperiksa" when the outcome sends you in. */
+const outcome = (o: Outcome) => `${o.amount > 0 ? `+${money(o.amount)}` : o.amount < 0 ? `−${money(-o.amount)}` : "Rp0"}${o.jail ? " · Diperiksa" : ""}`;
 type Dice = { faces: [number, number]; rolling: boolean };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -39,8 +45,10 @@ function useWide() {
     () => false,
   );
 }
-const PORTRAIT: Grid = { cols: COLS, rows: ROWS, at: cellOf };
-const LANDSCAPE: Grid = { cols: ROWS, rows: COLS, at: (i) => { const c = cellOf(i); return { col: ROWS - 1 - c.row, row: c.col }; } };
+/** Room kept clear for the corner HUD (players up top, dice and news below) on phones; big screens use the empty corners. */
+const HUD_PHONE = { top: 50, bottom: 112 }, HUD_WIDE = { top: 0, bottom: 64 };
+const ZOOM_IN = 2.2;
+const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
 
 /** A tiny peci-wearing head for player cards. */
 function Head({ ink }: { ink: string }) {
@@ -58,8 +66,54 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const inks = useMemo(() => inksFor(live.players, room.meId), [live.players, room.meId]);
   const inkOf = (p?: string | null) => (p ? inks.get(p) ?? "#231B1A" : "#231B1A");
   const wide = useWide();
-  const grid = wide ? LANDSCAPE : PORTRAIT;
-  const boardRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null); // the upright layer that shakes on big moments
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // The isometric grid, turned in quarter turns. Every space's top-face centre, in world pixels.
+  const [rot, setRot] = useState<Rot>(0);
+  const [fading, setFading] = useState(false);
+  const turned = turnedSize(COLS, ROWS, rot);
+  const world = worldSize(COLS, ROWS);
+  const at = useMemo(() => SPACES.map((_, i) => place(turn(cellOf(i), COLS, ROWS, rot), turned.rows)), [rot, turned.rows]);
+  const ground = useMemo(() => {
+    const ring = new Set(SPACES.map((_, i) => `${cellOf(i).col},${cellOf(i).row}`));
+    const cells: { x: number; y: number; z: number }[] = [];
+    for (let col = 0; col < COLS; col++) for (let row = 0; row < ROWS; row++) {
+      if (!ring.has(`${col},${row}`)) cells.push(place(turn({ col, row }, COLS, ROWS, rot), turned.rows));
+    }
+    const P = (col: number, row: number) => place({ col, row }, turned.rows);
+    const tp = P(0, 0), rp = P(turned.cols - 1, 0), bp = P(turned.cols - 1, turned.rows - 1), lp = P(0, turned.rows - 1);
+    const corners: [number, number][] = [[tp.x, tp.y - TH / 2], [rp.x + TW / 2, rp.y], [bp.x, bp.y + TH / 2], [lp.x - TW / 2, lp.y]];
+    return { cells, corners };
+  }, [rot, turned.rows, turned.cols]);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const hud = wide ? HUD_WIDE : HUD_PHONE;
+  const viewH = size.h - hud.top - hud.bottom;
+  const fit = size.w ? Math.max(0.1, Math.min((size.w - 16) / world.w, (viewH - 8) / world.h)) : 0;
+  // Zoomed in, the camera follows whoever's turn it is, until you drag it somewhere else.
+  // Phones start zoomed in (the whole diamond is tiny there); big screens start on the whole board.
+  const [zoomPick, setZoomPick] = useState<{ wide: boolean; on: boolean } | null>(null);
+  const zoomed = zoomPick && zoomPick.wide === wide ? zoomPick.on : !wide;
+  const [pan, setPan] = useState<{ x: number; y: number; turn: string } | null>(null);
+  const [panning, setPanning] = useState(false);
+  const drag = useRef<{ x: number; y: number; cx: number; cy: number; id: number; moved: boolean } | null>(null);
+  const dragged = useRef(false);
+  /** Quarter-turn the board: fade out, turn, fade back in, so tiles never slide through each other. */
+  function spin(d: 1 | -1 | 0) {
+    feedback.tap();
+    setFading(true);
+    setTimeout(() => {
+      setRot((r) => (d === 0 ? 0 : (((r + d) % 4) + 4) % 4) as Rot);
+      setPan(null);
+      setTimeout(() => setFading(false), 30);
+    }, 140);
+  }
 
   // The board on screen lags the server while dice roll and figures hop, then catches up.
   const [shown, setShown] = useState(live);
@@ -86,12 +140,12 @@ export function BoomPlay({ room }: { room: BoomView }) {
       const d = describe(e, nameOf, room.meId);
       // The card itself shows the satire, so the news line just says who drew it.
       const short = e.kind === "card" ? `${nameOf(e.by)} drew a Kejutan card` : e.kind === "wheel" ? `${nameOf(e.by)} spun the Kampanye wheel` : d.text;
-      const b: Banner = { n: e.n, kind: e.kind, by: e.by, art: e.art, raw: e.text, amount: e.amount, tone: d.tone, text: short };
+      const b: Banner = { n: e.n, kind: e.kind, by: e.by, art: e.art, raw: e.text, amount: e.amount, tone: d.tone, text: short, choice: e.choice, risky: e.risky, success: e.success, note: e.note, qte: e.qte, ms: e.ms, taps: e.taps, target: e.target, nego: e.nego, other: e.other, tile: e.tile };
       setBanner(b);
       // The rail keeps the full line (card text included) for the last few events.
       if (e.kind !== "roll") setHistory((h) => [...h, { ...b, text: d.text }].slice(-5));
     };
-    setStageEvent({ n: e.n, kind: e.kind, by: e.by, other: e.other, amount: e.amount });
+    setStageEvent({ n: e.n, kind: e.kind, by: e.by, other: e.other, amount: e.amount, success: e.success });
     if (e.kind === "roll") {
       setDice({ faces: e.dice!, rolling: true });
       feedback.tick();
@@ -145,7 +199,67 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const g = shown;
   const settled = shown.seq === live.seq;
   const myTurn = g.isPlayer && g.turn === room.meId && !g.done && settled;
-  const offer = !g.done && g.phase !== "roll" ? g.pos[g.turn] : null;
+  const offer = !g.done && (g.phase === "buy" || g.phase === "build") ? g.pos[g.turn] : null;
+  // A Kejutan dilemma waiting on the player whose turn it is (shown once the board has caught up).
+  const pend = settled && !g.done && g.phase === "dilemma" && g.qte ? g.qte : null;
+  const pendCard = pend ? CARDS[pend.card] : null;
+  const qteKey = pend ? `${g.round}-${g.turn}-${pend.card}-${pend.phase}` : "";
+  const [runState, setRun] = useState<{ key: string; start: number; stopAt: number | null } | null>(null);
+  const run = runState && runState.key === qteKey ? runState : null;
+
+  // Diperiksa: wait it out, or pay the fee and mash.
+  const pendJail = settled && !g.done && g.phase === "jailed";
+  const pendRent = settled && !g.done && g.phase === "rent" && g.nego ? g.nego : null;
+  const stepKey = `${g.phase}-${g.seq}`;
+  const [mashState, setMash] = useState<{ key: string; start: number; taps: number } | null>(null);
+  const mash = pendJail && mashState && mashState.key === stepKey ? mashState : null;
+  const mashTaps = useRef(0);
+  function startMash() {
+    if (!pendJail || mash || sending) return;
+    feedback.unlock();
+    feedback.tick();
+    mashTaps.current = 0;
+    setMash({ key: stepKey, start: performance.now(), taps: 0 });
+  }
+  function tapMash() {
+    if (!mash || performance.now() - mash.start > MASH_MS) return;
+    mashTaps.current += 1;
+    feedback.tap();
+    setMash({ ...mash, taps: mashTaps.current });
+  }
+  useEffect(() => {
+    if (!mash) return;
+    const t = setTimeout(() => void send({ kind: "jail", lobby: true, taps: mashTaps.current }), Math.max(0, mash.start + MASH_MS - performance.now()));
+    return () => clearTimeout(t);
+  }, [mash?.key, mash?.start]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Rent: pay in full, or hold the haggling meter and let go in the deal zone.
+  const [holdState, setHold] = useState<{ key: string; start: number | null; stopMs: number | null } | null>(null);
+  const hold = pendRent && holdState && holdState.key === stepKey ? holdState : null;
+  function armHold() {
+    if (!pendRent || hold || sending) return;
+    feedback.unlock();
+    feedback.tick();
+    setHold({ key: stepKey, start: null, stopMs: null });
+  }
+  function holdDown(e: React.PointerEvent) {
+    if (!hold || hold.start !== null) return;
+    e.preventDefault();
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* the pointer may already be gone */ }
+    setHold({ ...hold, start: performance.now() });
+  }
+  function holdUp() {
+    if (!hold || hold.start === null || hold.stopMs !== null) return;
+    const holdMs = Math.round(performance.now() - hold.start);
+    setHold({ ...hold, stopMs: holdMs });
+    void send({ kind: "rent", haggle: true, holdMs });
+  }
+  // Holding on past the end of the bar lets go for you (and it's too late by then).
+  useEffect(() => {
+    if (!hold || hold.start === null || hold.stopMs !== null) return;
+    const t = setTimeout(holdUp, Math.max(0, hold.start + HOLD_FILL_MS * 1.25 - performance.now()));
+    return () => clearTimeout(t);
+  }, [hold?.start, hold?.stopMs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const wasMine = useRef(myTurn);
   useEffect(() => {
@@ -153,7 +267,30 @@ export function BoomPlay({ room }: { room: BoomView }) {
     wasMine.current = myTurn;
   }, [myTurn]);
 
-  async function send(move: { kind: "roll" } | { kind: "choose"; yes: boolean }) {
+  /** Go risky: the timing bar starts now, and the tap is measured from this moment. */
+  function goRisky() {
+    if (!pend || run || sending) return;
+    feedback.unlock();
+    feedback.tick();
+    setRun({ key: qteKey, start: performance.now(), stopAt: null });
+  }
+  function tapQte() {
+    if (!run || run.stopAt !== null) return;
+    const ms = Math.round(performance.now() - run.start);
+    setRun({ ...run, stopAt: ms });
+    void send({ kind: "dilemma", risky: true, ms });
+  }
+  // No tap before the bar runs out counts as a miss.
+  useEffect(() => {
+    if (!run || run.stopAt !== null) return;
+    const t = setTimeout(() => {
+      setRun((r) => (r && r.stopAt === null ? { ...r, stopAt: QTE_MS + 1 } : r));
+      void send({ kind: "dilemma", risky: true, ms: QTE_MS + 1 });
+    }, Math.max(0, run.start + QTE_MS + 150 - performance.now()));
+    return () => clearTimeout(t);
+  }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function send(move: { kind: "roll" } | { kind: "choose"; yes: boolean } | { kind: "dilemma"; risky: boolean; ms?: number } | { kind: "jail"; lobby: boolean; taps?: number } | { kind: "rent"; haggle: boolean; holdMs?: number }) {
     if (sending) return;
     feedback.unlock();
     feedback.tap();
@@ -168,10 +305,46 @@ export function BoomPlay({ room }: { room: BoomView }) {
   }
 
   const headline = g.done ? "Final count." : g.turn === room.meId ? "Your move." : `${nameOf(g.turn)}'s move.`;
-  const status = offer !== null && settled
+  const mine = g.turn === room.meId;
+  const status = pendJail
+    ? mine ? (mash ? `Tap TEKAN as fast as you can! ${mash.taps}/${mashTarget(g.round)}` : "You're being questioned. Wait it out, or lobby?") : `${nameOf(g.turn)} is being questioned…`
+    : pendRent
+    ? mine ? (hold ? (hold.start === null ? "Hold the button, let go in the green zone" : "Let go in the green zone!") : `Rent due on ${SPACES[pendRent.tile].name}: ${money(pendRent.rent)}`) : `${nameOf(g.turn)} owes ${nameOf(pendRent.owner)} rent…`
+    : pend
+    ? g.turn === room.meId ? (run && run.stopAt === null ? "Tap when the needle is in the zone!" : run ? "…" : "Kejutan! Play it safe, or take the risk?") : `${nameOf(g.turn)} is deciding…`
+    : offer !== null && settled
     ? g.phase === "buy" ? `${SPACES[offer].name} is for sale: ${money(priceOf(offer))}` : `Build on ${SPACES[offer].name}? Rent goes up to ${money(baseRent(offer, g.level[offer] + 1))}`
     : !settled ? "…" : g.done ? "" : g.turn === room.meId ? "Roll the dice!" : g.phase === "roll" ? `${nameOf(g.turn)} is rolling…` : `${nameOf(g.turn)} is deciding…`;
   const card = banner && (banner.kind === "card" || banner.kind === "wheel") && banner.art ? banner : null;
+  // A quick time event that just finished, replayed for everyone.
+  const qteDone = banner && (banner.kind === "lobby" || (banner.kind === "rent" && banner.nego)) ? banner : null;
+  const negoPrice = (r: number, k: number) => money(Math.round((r * k) / 5) * 5);
+  const sc = zoomed ? Math.max(fit * ZOOM_IN, (viewH - 8) / world.h) : fit;
+  const focus = at[tokens[g.turn] ?? 0];
+  const userPan = pan && pan.turn === g.turn ? pan : null;
+  let camX = world.w / 2, camY = world.h / 2;
+  if (zoomed) {
+    const hw = size.w / 2 / sc, hh = viewH / 2 / sc;
+    camX = clamp(userPan?.x ?? focus.x, hw, world.w - hw);
+    camY = clamp(userPan?.y ?? focus.y, hh, world.h - hh);
+  }
+  const camera = `translate(${(size.w / 2 - camX * sc).toFixed(1)}px, ${(hud.top + viewH / 2 - camY * sc).toFixed(1)}px) scale(${sc.toFixed(4)})`;
+  function onDown(e: React.PointerEvent) {
+    if (e.button !== 0 || !zoomed || (e.target as HTMLElement).closest(".jn-cardlayer")) return;
+    drag.current = { x: e.clientX, y: e.clientY, cx: camX, cy: camY, id: e.pointerId, moved: false };
+    dragged.current = false;
+  }
+  function onMove(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 6) return;
+    if (!d.moved) { d.moved = true; dragged.current = true; setPanning(true); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }
+    setPan({ x: d.cx - dx / sc, y: d.cy - dy / sc, turn: g.turn });
+  }
+  function onUp(e: React.PointerEvent) {
+    if (drag.current?.id === e.pointerId) { drag.current = null; setPanning(false); }
+  }
   const players = (
     <div className="ow-players jn-players">
       {g.players.map((p) => (
@@ -202,33 +375,136 @@ export function BoomPlay({ room }: { room: BoomView }) {
       </aside>
 
       <section className="ow-table jn-table" aria-label="The board">
-        <div className="jn-boardwrap">
-          <div className={`jn-board${wide ? " wide" : ""}`} ref={boardRef} style={{ "--cols": grid.cols, "--rows": grid.rows } as CSSProperties}>
-            {SPACES.map((_, i) => (
-              <Tile key={i} i={i} g={g} grid={grid} inkOf={inkOf} nameOf={nameOf} offer={offer === i} onTap={() => { feedback.tap(); setInfo(i); }} />
-            ))}
-            {/* The middle of the ring: fixed-size slots, so nothing moves when the news changes. */}
-            <div className="jn-center" style={{ gridColumn: `2 / ${grid.cols}`, gridRow: `2 / ${grid.rows}` }}>
-              <h2 className="jn-headline">{headline}</h2>
-              <div className="jn-centerplayers">{players}</div>
-              <p key={banner?.n ?? "hello"} className={`jn-banner ${banner?.tone ?? ""}`} aria-live="polite">{banner?.text ?? "Buy towns. Collect rent. Be the juragan."}</p>
+        <div className="jn-boardwrap" ref={wrapRef}>
+          {/* The HUD sits in the corners, over the board, so the board itself stays clear. */}
+          <div className="jn-hudtop">{players}</div>
+          <div className="jn-hudbl">
+            <h2 className="jn-headline">{headline}</h2>
+            <div className="jn-hudrow">
               <span className="jn-dice" role="img" aria-label={dice.rolling ? "Dice rolling" : `Dice show ${dice.faces[0]} and ${dice.faces[1]}`}>
                 <Die face={dice.faces[0]} rolling={dice.rolling} />
                 <Die face={dice.faces[1]} rolling={dice.rolling} delay />
               </span>
+              <p key={banner?.n ?? "hello"} className={`jn-banner ${banner?.tone ?? ""}`} aria-live="polite">{banner?.text ?? "Buy towns. Collect rent. Be the juragan."}</p>
             </div>
+          </div>
+          <div className="jn-cam" role="group" aria-label="Board view">
+            <button type="button" className="jn-cambtn" aria-label="Turn the board left" onClick={() => spin(-1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.2-5.1M5 4v4h4" /></svg></button>
+            <button type="button" className="jn-cambtn" aria-label="Turn the board right" onClick={() => spin(1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.2-5.1M19 4v4h-4" /></svg></button>
+            <button type="button" className="jn-cambtn" aria-label={zoomed ? "Zoom out to the whole board" : "Zoom in on the player"} aria-pressed={zoomed} onClick={() => { feedback.tap(); setZoomPick({ wide, on: !zoomed }); setPan(null); }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">{zoomed ? <path d="M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15.5 15.5 20 20M7.5 10.5h6" /> : <path d="M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15.5 15.5 20 20M7.5 10.5h6M10.5 7.5v6" />}</svg>
+            </button>
+          </div>
+          <div
+            className={`jn-iso${zoomed ? " zoomed" : ""}`}
+            onPointerDown={onDown}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            onPointerCancel={onUp}
+            onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); e.preventDefault(); dragged.current = false; } }}
+          >
+            {/* The world: ground, tiles, buildings and figures, all in world pixels, moved and scaled by the camera. */}
+            <div className={`jn-world${fading ? " fading" : ""}${panning ? " panning" : ""}`} ref={boardRef} style={{ width: world.w, height: world.h, transform: camera, opacity: fit ? undefined : 0 }}>
+              <IsoGround cells={ground.cells} corners={ground.corners} w={world.w} h={world.h} />
+              {SPACES.map((_, i) => (
+                <IsoTile key={i} i={i} g={g} {...at[i]} ink={g.owner[i] ? inkOf(g.owner[i]) : null} offer={offer === i}
+                  label={tileLabel(i, g, g.owner[i] ? nameOf(g.owner[i]) : null)} onTap={() => { feedback.tap(); setInfo(i); }} />
+              ))}
+              {/* Buildings stand upright on their spaces, drawn in the same back-to-front order as the tiles. */}
+              {SPACES.map((sp, i) => sp.kind === "lot" && g.owner[i] ? (
+                <span key={`b${i}`} className="jn-prop" style={{ left: at[i].x, top: at[i].y + 8, zIndex: at[i].z * 2 + 1, height: g.level[i] ? 74 : 54 }} aria-hidden="true">
+                  <Building key={`${g.owner[i]}-${g.level[i]}`} level={g.level[i]} ink={inkOf(g.owner[i])} className="pop" />
+                </span>
+              ) : null)}
             <BoardStage
               boardRef={boardRef}
-              grid={grid}
+              centers={at}
+              cell={TH * 1.25}
               event={stageEvent}
               players={g.players.map((p) => ({ id: p, ink: inkOf(p), tile: tokens[p] ?? 0, out: g.out.includes(p), turn: g.turn === p && !g.done }))}
             />
-            {card && (
+            </div>
+            {pendJail ? (
+              <div className={`jn-cardlayer${mash ? " live" : ""}`} onPointerDown={mash ? (e) => { e.preventDefault(); tapMash(); } : undefined}>
+                <div key={stepKey} className="jn-card">
+                  <span className="jn-cardtag">DIPERIKSA</span>
+                  <CardScene art="ott" hero={inkOf(g.turn)} />
+                  <p className="jn-cardtext">{mine ? "Kamu dipanggil untuk diperiksa." : `${nameOf(g.turn)} sedang diperiksa.`}</p>
+                  {mash ? (
+                    <MashMeter target={mashTarget(g.round)} taps={mash.taps} live start={mash.start} />
+                  ) : (
+                    <div className="jn-opts">
+                      <span className="jn-optchip safe"><b>Tunggu</b>Skip this turn</span>
+                      <span className="jn-optchip risky"><b>Lobi orang dalam</b>−{money(LOBBY_FEE)} · tap {mashTarget(g.round)}× in {MASH_MS / 1000}s</span>
+                    </div>
+                  )}
+                  <p className="jn-cardwho">{mine ? (mash ? "Tap anywhere on the card!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
+                </div>
+              </div>
+            ) : pendRent ? (
+              <div className="jn-cardlayer">
+                <div key={stepKey} className="jn-card">
+                  <span className="jn-cardtag">SEWA · NEGO?</span>
+                  <span className="jn-rentart"><Building level={g.level[pendRent.tile]} ink={inkOf(pendRent.owner)} /></span>
+                  <p className="jn-cardtext">{mine ? "You owe" : `${nameOf(g.turn)} owes`} {nameOf(pendRent.owner) === "You" ? "you" : nameOf(pendRent.owner)} {money(pendRent.rent)} rent on {SPACES[pendRent.tile].name}.</p>
+                  {hold ? (
+                    <HoldMeter lo={pendRent.lo} hi={pendRent.hi} live holdStart={hold.start} stopMs={hold.stopMs} />
+                  ) : (
+                    <div className="jn-opts">
+                      <span className="jn-optchip safe"><b>Bayar</b>{money(pendRent.rent)}</span>
+                      <span className="jn-optchip risky"><b>Nego</b>{negoPrice(pendRent.rent, NEGO_DEAL)} on a deal · {negoPrice(pendRent.rent, NEGO_OVER)} if you push too hard</span>
+                    </div>
+                  )}
+                  <p className="jn-cardwho">{mine ? (hold ? "Hold, then let go in the green zone" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
+                </div>
+              </div>
+            ) : pend && pendCard ? (
+              // A dilemma waiting for a choice; tapping the card also stops the needle.
+              <div className={`jn-cardlayer${run && run.stopAt === null ? " live" : ""}`} onPointerDown={run && run.stopAt === null ? (e) => { e.preventDefault(); tapQte(); } : undefined}>
+                <div key={qteKey} className="jn-card">
+                  <span className="jn-cardtag">KEJUTAN · PILIH!</span>
+                  <CardScene art={pendCard.art} hero={inkOf(g.turn)} />
+                  <p className="jn-cardtext">{pendCard.text}</p>
+                  {run ? (
+                    <TimingBar q={pend} mode={{ kind: "live", start: run.start, stopAt: run.stopAt }} />
+                  ) : (
+                    <div className="jn-opts">
+                      <span className="jn-optchip safe"><b>{pendCard.dilemma!.safe.label}</b>{outcome(pendCard.dilemma!.safe.out)}</span>
+                      <span className="jn-optchip risky"><b>{pendCard.dilemma!.risky.label}</b>{outcome(pendCard.dilemma!.risky.win)} / {outcome(pendCard.dilemma!.risky.lose)}</span>
+                    </div>
+                  )}
+                  <p className="jn-cardwho">{g.turn === room.meId ? (run ? "Tap anywhere on the card!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
+                </div>
+              </div>
+            ) : qteDone ? (
+              <div className="jn-cardlayer">
+                <div key={qteDone.n} className="jn-card">
+                  {qteDone.kind === "lobby" ? (
+                    <>
+                      <span className="jn-cardtag">LOBI ORANG DALAM</span>
+                      <CardScene art="ott" hero={inkOf(qteDone.by)} />
+                      <MashMeter target={qteDone.target ?? 0} taps={qteDone.taps ?? 0} live={false} success={qteDone.success} />
+                      <p className="jn-cardwho">{nameOf(qteDone.by)} −{money(LOBBY_FEE)}{qteDone.success ? " · walks free" : " · still questioned"}</p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="jn-cardtag">NEGO SEWA</span>
+                      {qteDone.tile !== undefined && <span className="jn-rentart"><Building level={g.level[qteDone.tile]} ink={inkOf(qteDone.other)} /></span>}
+                      <HoldMeter lo={qteDone.nego!.lo} hi={qteDone.nego!.hi} live={false} level={qteDone.nego!.level} result={qteDone.nego!.result} />
+                      <p className="jn-cardwho">{nameOf(qteDone.by)} paid {qteDone.other === room.meId ? "you" : nameOf(qteDone.other)} {money(qteDone.amount ?? 0)} <s>{money(qteDone.nego!.rent)}</s></p>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : card && (
               <div className="jn-cardlayer">
                 <div key={card.n} className="jn-card">
                   <span className="jn-cardtag">{card.kind === "card" ? "KEJUTAN" : "KAMPANYE"}</span>
                   <CardScene art={card.art!} hero={inkOf(card.by)} />
                   <p className="jn-cardtext">{card.raw}</p>
+                  {card.choice && <p className={`jn-cardchoice${card.risky ? " risky" : ""}`}>→ {card.choice}</p>}
+                  {card.risky && card.qte && card.ms !== undefined && <TimingBar q={card.qte} mode={{ kind: "replay", ms: card.ms, success: !!card.success }} />}
+                  {card.note && <p className="jn-cardnote">{card.note}</p>}
                   <p className="jn-cardwho">{nameOf(card.by)}{card.amount ? ` ${card.amount > 0 ? "+" : "−"}${money(Math.abs(card.amount))}` : ""}</p>
                 </div>
               </div>
@@ -237,18 +513,54 @@ export function BoomPlay({ room }: { room: BoomView }) {
         </div>
       </section>
 
-      <div className="ow-timer">{myTurn && <TimerBar deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : CHOICE_MS} />}</div>
+      <div className="ow-timer">{myTurn && <TimerBar deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" ? DILEMMA_MS : CHOICE_MS} />}</div>
 
       <section className="ow-dock jn-dock" aria-label="Your move">
         <span className="ow-leaf a" /><span className="ow-leaf b" /><span className="ow-leaf c" />
         <div className="ow-dockhead">
           <span>Kas <b>{g.isPlayer ? money(g.cash[room.meId] ?? 0) : "—"}</b></span>
-          <span className="ow-docktimer">{myTurn && <TimerBar deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : CHOICE_MS} />}</span>
+          <span className="ow-docktimer">{myTurn && <TimerBar deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" ? DILEMMA_MS : CHOICE_MS} />}</span>
         </div>
         <p className="jn-status">{status}</p>
         <div className="ow-actions jn-actions">
           {myTurn && g.phase === "roll" && <button className="ow-btn cast jn-wide" disabled={sending} onClick={() => send({ kind: "roll" })}>🎲 Roll</button>}
-          {myTurn && g.phase !== "roll" && (
+          {myTurn && g.phase === "jailed" && (
+            mash ? (
+              <button className="ow-btn cast jn-wide jn-tap" onPointerDown={(e) => { e.preventDefault(); tapMash(); }}>TEKAN! {mash.taps}/{mashTarget(g.round)}</button>
+            ) : (
+              <>
+                <button className="ow-btn ghost jn-opt" disabled={sending} onClick={() => send({ kind: "jail", lobby: false })}><b>Tunggu</b><small>Skip this turn</small></button>
+                <button className="ow-btn cast jn-opt" disabled={sending} onClick={startMash}><b>Lobi!</b><small>−{money(LOBBY_FEE)} · tap {mashTarget(g.round)}×</small></button>
+              </>
+            )
+          )}
+          {myTurn && g.phase === "rent" && pendRent && (
+            hold ? (
+              <button className={`ow-btn cast jn-wide jn-holdbtn${hold.start !== null ? " held" : ""}`} disabled={hold.stopMs !== null} onPointerDown={holdDown} onPointerUp={holdUp} onPointerCancel={holdUp}>
+                {hold.stopMs !== null ? "…" : hold.start === null ? "Press and hold" : "Let go!"}
+              </button>
+            ) : (
+              <>
+                <button className="ow-btn ghost jn-opt" disabled={sending} onClick={() => send({ kind: "rent", haggle: false })}><b>Bayar</b><small>{money(pendRent.rent)}</small></button>
+                <button className="ow-btn cast jn-opt" disabled={sending} onClick={armHold}><b>Nego!</b><small>{negoPrice(pendRent.rent, NEGO_DEAL)} / {negoPrice(pendRent.rent, NEGO_OVER)}</small></button>
+              </>
+            )
+          )}
+          {myTurn && g.phase === "dilemma" && pendCard && (
+            run ? (
+              <button className="ow-btn cast jn-wide jn-tap" disabled={run.stopAt !== null} onPointerDown={(e) => { e.preventDefault(); tapQte(); }}>{run.stopAt === null ? "TAP!" : "…"}</button>
+            ) : (
+              <>
+                <button className="ow-btn ghost jn-opt" disabled={sending} onClick={() => send({ kind: "dilemma", risky: false })}>
+                  <b>Aman</b><small>{outcome(pendCard.dilemma!.safe.out)}</small>
+                </button>
+                <button className="ow-btn cast jn-opt" disabled={sending} onClick={goRisky}>
+                  <b>Nekat!</b><small>{outcome(pendCard.dilemma!.risky.win)} / {outcome(pendCard.dilemma!.risky.lose)}</small>
+                </button>
+              </>
+            )
+          )}
+          {myTurn && (g.phase === "buy" || g.phase === "build") && (
             <>
               <button className="ow-btn cast" disabled={sending} onClick={() => send({ kind: "choose", yes: true })}>
                 {g.phase === "buy" ? `Buy ${money(priceOf(g.pos[g.turn]))}` : `Build ${money(buildCost(g.pos[g.turn]))}`}
@@ -281,49 +593,6 @@ function Die({ face, rolling, delay }: { face: number; rolling: boolean; delay?:
     <span className={`jn-die${rolling ? " rolling" : ""}${delay ? " late" : ""}`}>
       {Array.from({ length: 9 }, (_, k) => (on.includes(k) ? <i key={k} /> : <span key={k} />))}
     </span>
-  );
-}
-
-const CORNERS: Record<string, { icon: string; c: string; label: string }> = {
-  start: { icon: "🇮🇩", c: "#E2574C", label: "START" },
-  jail: { icon: "🚨", c: "#5E4A8C", label: "DIPERIKSA" },
-  jackpot: { icon: "💰", c: "#F4C64E", label: "" },
-  wheel: { icon: "📣", c: "#D23A8C", label: "KAMPANYE" },
-};
-
-function Tile({ i, g, grid, inkOf, nameOf, offer, onTap }: { i: number; g: BoomGameView; grid: Grid; inkOf: (p?: string | null) => string; nameOf: NameOf; offer: boolean; onTap: () => void }) {
-  const s = SPACES[i];
-  const { col, row } = grid.at(i);
-  const place: CSSProperties = { gridColumn: col + 1, gridRow: row + 1 };
-  const o = g.owner[i];
-  const cls = (extra: string) => `jn-tile ${extra}${offer ? " offer" : ""}`;
-
-  if (s.kind === "lot" || s.kind === "hub") {
-    const owned = o ? `, owned by ${nameOf(o)}, rent ${money(g.rents[i])}` : `, for sale at ${money(s.price)}`;
-    return (
-      <button type="button" className={cls(`${s.kind}${o ? " own" : ""}`)} onClick={onTap} aria-label={`${s.name}${owned}`}
-        style={{ ...place, ...(o ? ({ "--o": inkOf(o) } as CSSProperties) : {}), ...(s.kind === "lot" ? ({ "--g": GROUPS[s.group].color } as CSSProperties) : {}) }}>
-        {s.kind === "lot" && <span className="jn-band" />}
-        <span className="jn-name">{s.name}</span>
-        {s.kind === "hub" ? <span className="jn-ico">{s.icon}</span> : o ? <Building key={`${o}-${g.level[i]}`} level={g.level[i]} ink={inkOf(o)} className="pop" /> : null}
-        <span className="jn-amt">{short(o ? g.rents[i] : s.price)}</span>
-      </button>
-    );
-  }
-  if (s.kind === "surprise" || s.kind === "bonus" || s.kind === "tax") {
-    return (
-      <button type="button" className={cls(`sp ${s.kind}`)} style={place} onClick={onTap} aria-label={s.name}>
-        <span className="jn-ico">{s.kind === "surprise" ? "?" : s.kind === "bonus" ? "✉️" : "🧾"}</span>
-        <span className="jn-amt">{s.kind === "tax" ? "PUNGLI" : s.kind === "bonus" ? "FAJAR" : "KEJUTAN"}</span>
-      </button>
-    );
-  }
-  const c = CORNERS[s.kind];
-  return (
-    <button type="button" className={cls("corner")} style={{ ...place, "--c": c.c } as CSSProperties} onClick={onTap} aria-label={s.name}>
-      <span className="jn-ico">{c.icon}</span>
-      <span className="jn-amt">{s.kind === "jackpot" ? short(g.pot) : c.label}</span>
-    </button>
   );
 }
 

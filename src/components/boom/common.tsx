@@ -47,13 +47,18 @@ export function describe(e: BoomEvent, nameOf: (id?: string | null) => string, m
     case "build": return { text: `${who} built on ${tile}`, tone: tone(true) };
     case "rent": {
       const to = e.other === me ? "you" : nameOf(e.other);
-      return { text: `${who} paid ${to} ${amt} rent on ${tile}`, tone: e.other === me ? "good" : tone(false) };
+      const how = e.nego ? (e.nego.result === "deal" ? " after a good haggle" : e.nego.result === "over" ? " (haggled too hard!)" : " (the haggle went nowhere)") : "";
+      return { text: `${who} paid ${to} ${amt} rent on ${tile}${how}`, tone: e.other === me ? "good" : tone(false) };
     }
+    case "lobby": return { text: `${who} tried to lobby out: ${e.taps}/${e.target} taps, ${e.success ? "walked free!" : "no luck."} −${amt}`, tone: tone(!!e.success) };
     case "tax": return { text: `${who} paid ${amt} in pungli`, tone: tone(false) };
     case "bonus": return { text: `${who} got a serangan fajar envelope: +${amt}`, tone: tone(true) };
     case "card": {
       const n = e.amount ?? 0;
-      return { text: `${who} drew: ${e.text}${n ? ` ${n > 0 ? "+" : "−"}${amt}` : ""}`, tone: n ? tone(n > 0) : "info" };
+      const sum = n ? ` ${n > 0 ? "+" : "−"}${amt}` : "";
+      // A dilemma: what they picked, and for the risky side whether the QTE came off.
+      if (e.choice) return { text: `${who} chose "${e.choice}"${e.risky ? (e.success ? " and pulled it off!" : " and blew it.") : "."}${sum}`, tone: n ? tone(n > 0) : "info" };
+      return { text: `${who} drew: ${e.text}${sum}`, tone: n ? tone(n > 0) : "info" };
     }
     case "jackpot": return { text: `${who} cashed in the dana aspirasi: +${amt}`, tone: tone(true) };
     case "wheel": {

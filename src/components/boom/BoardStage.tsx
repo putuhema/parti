@@ -8,7 +8,7 @@ import { Actor, breathe, drawFigure, type PoseName } from "./figure";
 // happens to them. Big moments jolt the board on a spring and throw coins, confetti or dust.
 
 export type StagePlayer = { id: string; ink: string; tile: number; out: boolean; turn: boolean };
-export type StageEvent = { n: number; kind: string; by: string; other?: string; amount?: number } | null;
+export type StageEvent = { n: number; kind: string; by: string; other?: string; amount?: number; success?: boolean } | null;
 
 type Fig = {
   actor: Actor;
@@ -22,20 +22,24 @@ type Fig = {
 type Bit = { x: number; y: number; vx: number; vy: number; g: number; drag: number; t: number; life: number; c: string; r: number; vr: number; kind: "coin" | "chip" | "dust"; tx?: number; ty?: number };
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-// The canvas reaches past the board's edges (see .jn-stage) so heads and jumps on the outer spaces aren't clipped.
-const PAD_X = 12, PAD_TOP = 56;
 
 export type Grid = { cols: number; rows: number; at: (tile: number) => { col: number; row: number } };
+export type Pt = { x: number; y: number };
 
-export function BoardStage({ players, event, grid, boardRef }: {
+/**
+ * The board itself is a tilted (isometric on big screens) plane, but figures stand upright: they're drawn in
+ * screen space on this canvas, at `centers` (where each space lands on screen after the projection).
+ */
+export function BoardStage({ players, event, centers, cell, boardRef }: {
   players: StagePlayer[];
   event: StageEvent;
-  grid: Grid; // how spaces map onto the board's grid (portrait on phones, landscape on big screens)
-  boardRef: RefObject<HTMLDivElement | null>;
+  centers: Pt[]; // each space's centre on screen, relative to the canvas
+  cell: number; // how big a space looks on screen, for sizing figures
+  boardRef: RefObject<HTMLDivElement | null>; // the layer that shakes on big moments
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const props = useRef({ players, event, grid, cell: 40 });
-  useEffect(() => { props.current = { ...props.current, players, event, grid }; });
+  const props = useRef({ players, event, centers, cell });
+  useEffect(() => { props.current = { players, event, centers, cell }; });
   const kick = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -49,12 +53,11 @@ export function BoardStage({ players, event, grid, boardRef }: {
 
     const standAt = (tile: number, id: string) => {
       const p = props.current;
-      const g = p.grid.at(tile);
-      const c = { x: (g.col + 0.5) * p.cell, y: (g.row + 0.5) * p.cell };
+      const c = p.centers[tile] ?? { x: -999, y: -999 };
       const mates = p.players.filter((q) => !q.out && q.tile === tile);
       const k = Math.max(0, mates.findIndex((q) => q.id === id));
       const spread = mates.length > 1 ? (k - (mates.length - 1) / 2) * p.cell * 0.28 : 0;
-      return { x: c.x + spread, y: c.y + p.cell * 0.36 };
+      return { x: c.x + spread, y: c.y + p.cell * 0.18 };
     };
     const jolt = (a: number) => { if (!still) shakeV += a; };
     const burst = (x: number, y: number, n: number, cols: string[], kind: Bit["kind"] = "chip") => {
@@ -112,6 +115,10 @@ export function BoardStage({ players, event, grid, boardRef }: {
           if (f) burst(f.x, f.y - p.cell * 1.1, 10, ["#E2574C", "#69BFD6"]);
           jolt(120);
           break;
+        case "lobby":
+          if ((e as { success?: boolean }).success) act(e.by, { pose: "crouch", d: 0.08 }, { pose: "cheer", d: 0.16 }, { pose: "cheer", d: 0.5 }, { pose: "stand", d: 0.3 });
+          else act(e.by, { pose: "slump", d: 0.2 }, { pose: "slump", d: 0.6 }, { pose: "stand", d: 0.3 });
+          break;
         case "skip":
           act(e.by, { pose: "sit", d: 0.25 }, { pose: "sit", d: 0.6 }, { pose: "stand", d: 0.3 });
           break;
@@ -132,12 +139,11 @@ export function BoardStage({ players, event, grid, boardRef }: {
       lastT = now;
       const p = props.current;
       const cw = el.clientWidth, ch = el.clientHeight;
-      const w = cw - PAD_X * 2;
-      p.cell = w / p.grid.cols;
+      if (!p.centers.length) { raf = requestAnimationFrame(paint); return; }
       const dpr = window.devicePixelRatio || 1;
       if (el.width !== Math.round(cw * dpr) || el.height !== Math.round(ch * dpr)) { el.width = Math.round(cw * dpr); el.height = Math.round(ch * dpr); }
-      ctx.setTransform(dpr, 0, 0, dpr, dpr * PAD_X, dpr * PAD_TOP);
-      ctx.clearRect(-PAD_X, -PAD_TOP, cw, ch);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cw, ch);
 
       // Keep a figure for every player; start hops when their space changes.
       for (const pl of p.players) {
@@ -169,7 +175,7 @@ export function BoardStage({ players, event, grid, boardRef }: {
       shakeV += (-260 * shake - 15 * shakeV) * dt;
       shake += shakeV * dt;
       const board = boardRef.current;
-      if (board) board.style.transform = Math.abs(shake) > 0.05 ? `translateY(${shake.toFixed(2)}px)` : "";
+      if (board) board.style.translate = Math.abs(shake) > 0.05 ? `0 ${shake.toFixed(2)}px` : "";
       for (const f of figs.values()) {
         f.actor.update(dt);
         if (f.hop) {
@@ -191,7 +197,7 @@ export function BoardStage({ players, event, grid, boardRef }: {
       // Figures, back to front.
       const order = [...p.players].sort((a, b) => (figs.get(a.id)?.y ?? 0) - (figs.get(b.id)?.y ?? 0));
       // Figures stand a little taller than a space, so they read on a phone; big boards cap the size.
-      const scale = Math.max(0.6, Math.min(1.15, (p.cell * 1.3) / 66));
+      const scale = Math.max(0.55, Math.min(1.5, (p.cell * 1.15) / 66));
       for (const pl of order) {
         const f = figs.get(pl.id)!;
         const air = f.hop ? Math.sin(Math.min(1, f.hop.t / f.hop.d) * Math.PI) : 0;

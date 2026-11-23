@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { addXp, befriend, findPlayer, freeCode, requirePlayer } from "./lib/helpers";
-import { BOOM_MAX, BOTS, ROUND_CHOICES, choose, isBot, leaveGame, newGame, onDeadline, rentOf, roll, worthOf, type BoomGame, type Seat } from "./lib/boom/rules";
+import { BOOM_MAX, BOTS, ROUND_CHOICES, choose, isBot, leaveGame, newGame, onDeadline, rentOf, resolveDilemma, resolveJail, resolveRent, roll, worthOf, type BoomGame, type Seat } from "./lib/boom/rules";
 
 type Room = Doc<"boomRooms">;
 
@@ -156,7 +156,16 @@ export const presence = mutation({
 export const act = mutation({
   args: {
     code: v.string(),
-    move: v.union(v.object({ kind: v.literal("roll") }), v.object({ kind: v.literal("choose"), yes: v.boolean() })),
+    move: v.union(
+      v.object({ kind: v.literal("roll") }),
+      v.object({ kind: v.literal("choose"), yes: v.boolean() }),
+      // A Kejutan dilemma: the side picked, and for the risky side the ms after the timing bar appeared when they tapped.
+      v.object({ kind: v.literal("dilemma"), risky: v.boolean(), ms: v.optional(v.number()) }),
+      // Diperiksa: wait it out, or lobby (how many taps landed in the mash window).
+      v.object({ kind: v.literal("jail"), lobby: v.boolean(), taps: v.optional(v.number()) }),
+      // Rent: pay in full, or haggle (how long the meter was held).
+      v.object({ kind: v.literal("rent"), haggle: v.boolean(), holdMs: v.optional(v.number()) }),
+    ),
   },
   handler: async (ctx, { code, move }) => {
     const me = await requirePlayer(ctx);
@@ -171,8 +180,17 @@ export const act = mutation({
     if (move.kind === "roll") {
       if (g.phase !== "roll") throw new ConvexError("Decide on this space first");
       roll(g, Math.random, now);
+    } else if (move.kind === "jail") {
+      if (g.phase !== "jailed") throw new ConvexError("You're not being questioned");
+      resolveJail(g, move.lobby, move.taps ?? null, now);
+    } else if (move.kind === "rent") {
+      if (g.phase !== "rent") throw new ConvexError("There's no rent to settle");
+      resolveRent(g, move.haggle, move.holdMs ?? null, now);
+    } else if (move.kind === "dilemma") {
+      if (g.phase !== "dilemma") throw new ConvexError("There's no Kejutan to decide");
+      resolveDilemma(g, move.risky, move.ms ?? null, now);
     } else {
-      if (g.phase === "roll") throw new ConvexError("Roll the dice first");
+      if (g.phase !== "buy" && g.phase !== "build") throw new ConvexError("Roll the dice first");
       choose(g, move.yes, now);
     }
     await commit(ctx, room, g);
@@ -247,6 +265,8 @@ export const view = query({
         round: g.round,
         maxRounds: g.maxRounds,
         log: g.log,
+        qte: g.qte ?? null,
+        nego: g.nego ?? null,
         deadline: g.deadline ?? null,
         done: g.done ?? null,
       },
