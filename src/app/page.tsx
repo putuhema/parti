@@ -25,6 +25,8 @@ type Game = {
   ink: string;
   cats: Exclude<Category, "all">[];
   tag?: string;
+  thumb?: string;
+  thumbPos?: string;
   art: ReactNode;
 };
 
@@ -38,6 +40,7 @@ const GAMES: Game[] = [
     ink: "#56408D",
     cats: ["duo", "brain"],
     tag: "NEW",
+    thumb: "/games/orb.jpg",
     art: (
       <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 4, top: 14, display: "flex", width: 72, height: 36, borderRadius: 10, background: "#FAF4EC", boxShadow: "0 3px 0 #34283E", transform: "rotate(-10deg)", alignItems: "center", justifyContent: "space-around", fontSize: 20, fontWeight: 900, color: "#34283E" }}><span>5</span><span>6</span></span>
@@ -54,6 +57,8 @@ const GAMES: Game[] = [
     edge: "#0F7FD6",
     ink: "#0F7FD6",
     cats: ["brain", "duo"],
+    thumb: "/games/sudoku.jpg",
+    thumbPos: "50% 62%",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 25px)", gap: 4, transform: "rotate(-6deg)" }} aria-hidden="true">
         {["5", "", "3", "", "7", "", "9", "", "1"].map((d, i) => (
@@ -70,6 +75,8 @@ const GAMES: Game[] = [
     edge: "#1B9B53",
     ink: "#178C49",
     cats: ["brain", "duo"],
+    thumb: "/games/chess.jpg",
+    thumbPos: "50% 62%",
     art: (
       <span style={{ position: "relative", width: 96, height: 96 }} aria-hidden="true">
         <Piece code="n" size={78} style={{ position: "absolute", left: 0, top: 6, transform: "rotate(-8deg)" }} />
@@ -85,6 +92,7 @@ const GAMES: Game[] = [
     edge: "#7350E0",
     ink: "#5E3CC4",
     cats: ["words", "duo"],
+    thumb: "/games/words.jpg",
     art: (
       <span style={{ display: "flex", gap: 5 }} aria-hidden="true">
         {["K", "A", "T", "A"].map((l, i) => (
@@ -102,6 +110,7 @@ const GAMES: Game[] = [
     ink: "#4A3B5E",
     cats: ["party", "brain"],
     tag: "NEW",
+    thumb: "/games/trivia.jpg",
     art: (
       <span style={{ position: "relative", width: 96, height: 90 }} aria-hidden="true">
         {[[0, 30, 40, -14], [3, 26, 6, 10], [5, 50, 22, 2]].map(([cat, x, y, rot]) => (
@@ -119,6 +128,7 @@ const GAMES: Game[] = [
     ink: "#2258B5",
     cats: ["party", "brain"],
     tag: "NEW",
+    thumb: "/games/buzz.jpg",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gap: 4, transform: "rotate(-5deg)" }} aria-hidden="true">
         {["100", "200", "🔥", "300", "", "400"].map((t, i) => (
@@ -136,6 +146,7 @@ const GAMES: Game[] = [
     ink: "#B23069",
     cats: ["duo", "brain"],
     tag: "NEW",
+    thumb: "/games/faceoff.jpg",
     art: (
       <span style={{ display: "flex", gap: 6, transform: "rotate(-5deg)" }} aria-hidden="true">
         {[10, 0, 14].map((c, i) => (
@@ -153,6 +164,7 @@ const GAMES: Game[] = [
     ink: "#9A4A00",
     cats: ["words", "brain"],
     tag: "NEW",
+    thumb: "/games/scramble.jpg",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 26px)", gap: 4, transform: "rotate(5deg)" }} aria-hidden="true">
         {["W", "O", "R", "S", "D", "E", "T", "A", "L"].map((l, i) => (
@@ -169,6 +181,7 @@ const GAMES: Game[] = [
     edge: "#138F77",
     ink: "#0E6B58",
     cats: ["party"],
+    thumb: "/games/island.jpg",
     art: (
       <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 4, top: 10, width: 92, height: 68, borderRadius: "50%", background: "#F6E7B0", boxShadow: "0 4px 0 rgba(0,0,0,.18)" }} />
@@ -186,6 +199,7 @@ const GAMES: Game[] = [
     edge: "#D93852",
     ink: "#B02446",
     cats: ["party"],
+    thumb: "/games/chain.jpg",
     art: (
       <span style={{ display: "flex", alignItems: "center", gap: 4, transform: "rotate(-4deg)" }} aria-hidden="true">
         <span style={{ width: 44, height: 44, borderRadius: 12, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 3px 0 rgba(0,0,0,.16)" }}>🐈</span>
@@ -202,6 +216,7 @@ const GAMES: Game[] = [
     edge: "#2855B0",
     ink: "#1E3F86",
     cats: ["party"],
+    thumb: "/games/bluff.jpg",
     art: (
       <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 6, top: 8, fontSize: 40, transform: "rotate(-10deg)" }}>🎲</span>
@@ -218,6 +233,7 @@ const GAMES: Game[] = [
     edge: "#DF8E00",
     ink: "#7A4A00",
     cats: ["party", "duo"],
+    thumb: "/games/stack.jpg",
     art: (
       <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, width: 92 }} aria-hidden="true">
         {[[30, 44, "#FF5B74"], [18, 56, "#9775FF"], [10, 66, "#2CC770"], [4, 74, "#28A6FF"], [0, 84, "#fff"]].map(([l, w, c], i) => (
@@ -234,6 +250,7 @@ const GAMES: Game[] = [
     edge: "#D44C08",
     ink: "#A83A00",
     cats: ["party"],
+    thumb: "/games/potato.jpg",
     art: (
       <span style={{ position: "relative", width: 100, height: 90, display: "flex", alignItems: "center", justifyContent: "center" }} aria-hidden="true">
         <span style={{ position: "absolute", width: 74, height: 74, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,230,120,.9), rgba(255,120,0,0) 70%)" }} />
@@ -250,6 +267,7 @@ const GAMES: Game[] = [
     edge: "#5F24CC",
     ink: "#5F24CC",
     cats: ["party"],
+    thumb: "/games/party.jpg",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 30px)", gap: 4, transform: "rotate(-6deg)" }} aria-hidden="true">
         {["👆", "🤠", "🎈", "🎯", "⚡", "🧠", "🔍", "🎨", "➕"].map((e, i) => (
@@ -266,6 +284,7 @@ const GAMES: Game[] = [
     edge: "#D98300",
     ink: "#8A4F00",
     cats: ["party", "words"],
+    thumb: "/games/emoji.jpg",
     art: (
       <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }} aria-hidden="true">
         <span style={{ display: "flex", gap: 2, padding: "6px 10px", borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", fontSize: 24, transform: "rotate(-5deg)" }}>🦁👑🌅</span>
@@ -281,6 +300,7 @@ const GAMES: Game[] = [
     edge: "#763EC4",
     ink: "#6A2FA5",
     cats: ["party", "duo"],
+    thumb: "/games/truth.jpg",
     art: (
       <span style={{ display: "flex", flexDirection: "column", gap: 5, transform: "rotate(-5deg)" }} aria-hidden="true">
         {["✅", "🤥", "✅"].map((e, i) => (
@@ -299,6 +319,7 @@ const GAMES: Game[] = [
     edge: "#945B24",
     ink: "#8A521C",
     cats: ["words", "party"],
+    thumb: "/games/story.jpg",
     art: (
       <span style={{ position: "relative", width: 104, height: 90 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 4, top: 6, width: 92, height: 72, borderRadius: 11, background: "repeating-linear-gradient(#FFFBF2 0 15px, #E9DCC4 15px 16px)", boxShadow: "0 3px 0 rgba(0,0,0,.2)", transform: "rotate(-5deg)", padding: "8px 8px", fontSize: 11, fontWeight: 900, color: "#5A3D1F", lineHeight: "16px", overflow: "hidden" }}>
@@ -316,6 +337,7 @@ const GAMES: Game[] = [
     edge: "#0F76C2",
     ink: "#0B4F73",
     cats: ["duo", "brain"],
+    thumb: "/games/brain.jpg",
     art: (
       <span style={{ position: "relative", width: 104, height: 90 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 0, top: 8, width: 56, height: 70, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-9deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>🐙</span>
@@ -332,6 +354,7 @@ const GAMES: Game[] = [
     edge: "#2D2154",
     ink: "#3B2F63",
     cats: ["duo", "brain"],
+    thumb: "/games/heist.jpg",
     art: (
       <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 6, top: 30, width: 74, height: 40, background: "linear-gradient(90deg, rgba(255,200,0,.55), rgba(255,200,0,0))", clipPath: "polygon(0 40%, 100% 0, 100% 100%, 0 60%)" }} />
@@ -350,6 +373,7 @@ const GAMES: Game[] = [
     edge: "#C2336F",
     ink: "#9C2459",
     cats: ["duo", "party"],
+    thumb: "/games/sync.jpg",
     art: (
       <span style={{ position: "relative", width: 100, height: 90 }} aria-hidden="true">
         <span style={{ position: "absolute", left: 0, top: 6, width: 54, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-9deg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🍜</span>
@@ -366,6 +390,7 @@ const GAMES: Game[] = [
     edge: "#1A8E76",
     ink: "#167A65",
     cats: ["duo", "party"],
+    thumb: "/games/sketch.jpg",
     art: (
       <span style={{ position: "relative", width: 96, height: 90 }} aria-hidden="true">
         <svg viewBox="0 0 100 100" width={70} height={70} style={{ position: "absolute", left: 0, top: 0, background: "#fff", borderRadius: 14, boxShadow: "0 3px 0 rgba(0,0,0,.18)", transform: "rotate(-8deg)" }}>
@@ -387,6 +412,7 @@ const GAMES: Game[] = [
     edge: "#A82A23",
     ink: "#9A2620",
     cats: ["party", "brain"],
+    thumb: "/games/boom.jpg",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gridTemplateRows: "repeat(3, 28px)", gap: 3, transform: "rotate(-6deg)" }} aria-hidden="true">
         {["#3DB6F2", "#F06CB4", "#FF9A1F", "#8B5BD6", "", "#EE4B4B", "#3DAE4A", "#F2C200", "#B0764A"].map((c, i) => (
@@ -404,6 +430,7 @@ const GAMES: Game[] = [
     ink: "#0E7D6A",
     cats: ["words", "brain"],
     tag: "NEW",
+    thumb: "/games/tiles.jpg",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gridTemplateRows: "repeat(3, 28px)", gap: 3, transform: "rotate(-6deg)" }} aria-hidden="true">
         {["", "W", "", "T", "O", "P", "", "N", ""].map((l, i) => (
@@ -686,12 +713,23 @@ export default function Home() {
           <Link
             key={g.href}
             href={g.href}
-            className="game-tile"
+            className={`game-tile${g.thumb ? " has-thumb" : ""}`}
             style={{ background: g.face, boxShadow: `0 5px 0 ${g.edge}, 0 12px 20px rgba(52, 40, 62, 0.14)` }}
             onClick={() => { feedback.unlock(); feedback.tap(); rememberGame(g.href); }}
           >
+            {g.thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={g.thumb}
+                alt=""
+                aria-hidden="true"
+                className="thumb"
+                style={g.thumbPos ? { objectPosition: g.thumbPos } : undefined}
+              />
+            ) : (
+              <span className="art">{g.art}</span>
+            )}
             {g.tag && <span className="tag" style={{ color: g.ink }}>{g.tag}</span>}
-            <span className="art">{g.art}</span>
             <span className="name">{g.name}</span>
             <span className="sub">{g.sub}</span>
           </Link>
