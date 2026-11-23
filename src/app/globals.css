@@ -1326,7 +1326,13 @@ body:has(.jn-play) { background: #E2D3B2; }
   .jn-bid { font-size: 40px; }
   .jn-gavel { font-size: 48px; }
 }
-@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .jn-gavel, .jn-bid { animation: none; } .jn-slottop i, .jn-slot, .jn-reel.stop b { animation: none; } .jn-rollbtn, .jn-act { animation: none; } .jn-tapcall { animation: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
+/* ---- dioramas: tiny iso scenes standing at the back of each space ---- */
+.jn-world .jn-dioprop { position: absolute; width: 92px; height: 92px; transform: translate(-50%, -87.5%); pointer-events: none; }
+.jn-dio { display: block; width: 100%; height: 100%; overflow: visible; }
+.jn-dioblink { animation: jn-bulb 700ms steps(2) infinite; }
+/* the flat labels move toward the front edge, clear of the diorama */
+.jn-world .jn-itface { justify-content: flex-end; padding: 0 0 5px; }
+@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .jn-dioblink { animation: none; } .jn-gavel, .jn-bid { animation: none; } .jn-slottop i, .jn-slot, .jn-reel.stop b { animation: none; } .jn-rollbtn, .jn-act { animation: none; } .jn-tapcall { animation: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
 
 /* ---------- Sketch Match ---------- */
 .sk-screen { min-height: 100dvh; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }

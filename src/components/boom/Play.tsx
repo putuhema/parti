@@ -10,7 +10,8 @@ import { Confetti, Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { BoardStage, type StageEvent } from "./BoardStage";
-import { CORNERS, IsoGround, IsoTile, tileLabel } from "./IsoBoard";
+import { CORNERS, IsoGround, IsoTile, artFor, tileLabel } from "./IsoBoard";
+import { Diorama, dioramaFor } from "./Diorama";
 import { TH, TW, place, turn, turnedSize, worldSize, type Rot } from "./iso";
 import { Building, BUILDING_NAMES } from "./Building";
 import { CardScene } from "./CardScene";
@@ -426,6 +427,15 @@ export function BoomPlay({ room }: { room: BoomView }) {
                 <IsoTile key={i} i={i} g={g} {...at[i]} ink={g.owner[i] ? inkOf(g.owner[i]) : null} offer={offer === i}
                   label={tileLabel(i, g, g.owner[i] ? nameOf(g.owner[i]) : null)} onTap={() => { feedback.tap(); setInfo(i); }} />
               ))}
+              {/* A little diorama stands at the back of each space (unless it has its own art). */}
+              {SPACES.map((_, i) => {
+                const scene = artFor(i) ? null : dioramaFor(i);
+                return scene ? (
+                  <span key={`d${i}`} className="jn-dioprop" style={{ left: at[i].x, top: at[i].y - 10, zIndex: at[i].z * 2 + 1 }} aria-hidden="true">
+                    <Diorama scene={scene} />
+                  </span>
+                ) : null;
+              })}
               {/* Buildings stand upright on their spaces, drawn in the same back-to-front order as the tiles. */}
               {SPACES.map((sp, i) => sp.kind === "lot" && g.owner[i] ? (
                 <span key={`b${i}`} className="jn-prop" style={{ left: at[i].x, top: at[i].y + 8, zIndex: at[i].z * 2 + 1, height: g.level[i] ? 74 : 54 }} aria-hidden="true">
