@@ -38,6 +38,7 @@ export const P = {
   throw: mk({ head: [5, -58], chest: [4, -46], hF: [22, -58], hB: [-8, -34] }),
   give: mk({ head: [3, -59], chest: [2, -47], hF: [20, -40], hB: [-3, -28] }),
   handsUp: mk({ head: [0, -59], hF: [7, -74], hB: [-6, -74] }),
+  grip: mk({ head: [4, -58], chest: [2, -46], hF: [13, -52], hB: [11, -48] }), // hands on the bars of a cell
   shrug: mk({ head: [0, -58], hF: [13, -46], hB: [-12, -46] }),
   scratch: mk({ head: [2, -59], hF: [7, -64], hB: [-4, -27] }),
   sit: mk({ head: [2, -44], chest: [0, -33], hip: [-3, -13], hF: [12, -24], hB: [8, -23], fF: [14, 0], fB: [10, 0] }),

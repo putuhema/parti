@@ -7,7 +7,7 @@ import { Actor, breathe, drawFigure, type PoseName } from "./figure";
 // space to space (crouch, leap, squash on landing, dust), face the way they travel, and act out what
 // happens to them. Big moments jolt the board on a spring and throw coins, confetti or dust.
 
-export type StagePlayer = { id: string; ink: string; tile: number; out: boolean; turn: boolean };
+export type StagePlayer = { id: string; ink: string; tile: number; out: boolean; turn: boolean; jailed?: boolean };
 export type StageEvent = { n: number; kind: string; by: string; other?: string; amount?: number; success?: boolean } | null;
 
 type Fig = {
@@ -18,6 +18,7 @@ type Fig = {
   flip: boolean;
   tile: number;
   fallen: boolean;
+  cage: number; // 0 = no cell, 1 = locked in a cell on Diperiksa
 };
 type Bit = { x: number; y: number; vx: number; vy: number; g: number; drag: number; t: number; life: number; c: string; r: number; vr: number; kind: "coin" | "chip" | "dust"; tx?: number; ty?: number };
 
@@ -150,7 +151,7 @@ export function BoardStage({ players, event, centers, cell, boardRef }: {
         let f = figs.get(pl.id);
         const spot = standAt(pl.tile, pl.id);
         if (!f) {
-          f = { actor: new Actor(), x: spot.x, y: spot.y, hop: null, sq: 0, sqV: 0, flip: false, tile: pl.tile, fallen: pl.out };
+          f = { actor: new Actor(), x: spot.x, y: spot.y, hop: null, sq: 0, sqV: 0, flip: false, tile: pl.tile, fallen: pl.out, cage: pl.jailed ? 1 : 0 };
           if (pl.out) f.actor.set({ pose: "fall", d: 0.01 });
           figs.set(pl.id, f);
         }
@@ -193,6 +194,17 @@ export function BoardStage({ players, event, centers, cell, boardRef }: {
         f.sqV += (-320 * f.sq - 14 * f.sqV) * dt;
         f.sq += f.sqV * dt;
       }
+      // Diperiksa: once a jailed figure has landed, a cell drops around it and it fidgets behind the bars.
+      for (const pl of p.players) {
+        const f = figs.get(pl.id);
+        if (!f) continue;
+        const locked = !!pl.jailed && !pl.out && !f.hop;
+        const was = f.cage;
+        f.cage = still ? (locked ? 1 : 0) : Math.max(0, Math.min(1, f.cage + (locked ? dt * 2.6 : -dt * 3.2)));
+        if (locked && was < 1 && f.cage >= 1) { jolt(70); dust(f.x, f.y, 6); }
+        if (locked && f.actor.idle) f.actor.loop({ pose: "grip", d: 0.35 }, { pose: "grip", d: 1.4 }, { pose: "slump", d: 0.4 }, { pose: "slump", d: 1.6 }, { pose: "scratch", d: 0.35 }, { pose: "scratch", d: 0.7 });
+        if (!locked && was > 0 && f.cage === 0 && !f.hop) f.actor.set({ pose: "cheer", d: 0.18 }, { pose: "stand", d: 0.3 });
+      }
 
       // Figures, back to front.
       const order = [...p.players].sort((a, b) => (figs.get(a.id)?.y ?? 0) - (figs.get(b.id)?.y ?? 0));
@@ -223,6 +235,7 @@ export function BoardStage({ players, event, centers, cell, boardRef }: {
           shirt: pl.ink, flip: f.flip, scale, alpha: pl.out ? 0.45 : 1,
           sx: 1 + sq * 0.5 - stretch * 0.5, sy: 1 - sq + stretch,
         });
+        if (f.cage > 0.01) drawCell(ctx, f.x, f.y, scale, f.cage, still ? 0 : now);
       }
 
       // Particles: coins home in on their target; chips and dust fall.
@@ -271,4 +284,42 @@ export function BoardStage({ players, event, centers, cell, boardRef }: {
   useEffect(() => { kick.current(); });
 
   return <canvas ref={canvas} className="jn-stage" aria-hidden="true" />;
+}
+
+/** A holding cell around a figure on Diperiksa: bars in front, rails, and a siren flashing red and blue on top. */
+function drawCell(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, k: number, now: number) {
+  const w = 40 * s, h = 84 * s;
+  // It drops in from above with a little bounce, and lifts away when the player gets out.
+  const back = 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);
+  const top = y - h - (1 - back) * 70 * s;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, k * 1.6);
+  ctx.lineCap = "round";
+  // a faint back wall, so the cell reads as a box
+  ctx.fillStyle = "rgba(35,27,26,.10)";
+  ctx.fillRect(x - w / 2, top, w, h);
+  // bars
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const bx = x - w / 2 + (w * (i + 0.5)) / n;
+    ctx.strokeStyle = "#231B1A"; ctx.lineWidth = 3 * s;
+    ctx.beginPath(); ctx.moveTo(bx, top + 2 * s); ctx.lineTo(bx, top + h); ctx.stroke();
+    ctx.strokeStyle = "rgba(243,237,224,.55)"; ctx.lineWidth = 1 * s;
+    ctx.beginPath(); ctx.moveTo(bx - 0.6 * s, top + 6 * s); ctx.lineTo(bx - 0.6 * s, top + h - 6 * s); ctx.stroke();
+  }
+  // rails
+  ctx.fillStyle = "#5A4A44"; ctx.strokeStyle = "#231B1A"; ctx.lineWidth = 2 * s;
+  for (const ry of [top - 3 * s, top + h - 6 * s]) { ctx.beginPath(); ctx.rect(x - w / 2 - 3 * s, ry, w + 6 * s, 7 * s); ctx.fill(); ctx.stroke(); }
+  // the siren
+  const red = Math.floor(now / 320) % 2 === 0;
+  const c = red ? "#E2574C" : "#3DB6F2";
+  if (now) {
+    const glow = ctx.createRadialGradient(x, top - 8 * s, 0, x, top - 8 * s, 26 * s);
+    glow.addColorStop(0, red ? "rgba(226,87,76,.55)" : "rgba(61,182,242,.55)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, top - 8 * s, 26 * s, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = c; ctx.strokeStyle = "#231B1A"; ctx.lineWidth = 2 * s;
+  ctx.beginPath(); ctx.arc(x, top - 3 * s, 6 * s, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { api } from "../../../convex/_generated/api";
 import { CARDS, CHOICE_MS, COLS, DILEMMA_MS, GROUPS, HOLD_FILL_MS, LAP_BONUS, LOBBY_FEE, MASH_MS, N, NEGO_DEAL, NEGO_OVER, QTE_MS, ROLL_MS, ROWS, SPACES, TAX, HUB_RENT, baseRent, buildCost, cellOf, eventMs, isBot, mashTarget, priceOf, type Art, type BoomEvent, type Outcome, type Qte } from "../../../convex/lib/boom/rules";
-import { Countdown, TimerBar, Toast } from "@/components/words/common";
+import { Countdown, Toast } from "@/components/words/common";
 import { Confetti, Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
@@ -49,7 +49,7 @@ function useWide() {
  * The board fills the whole screen and the HUD floats over it. These are the edges the floating HUD covers
  * (they match the .jn-play styles), so the board is fitted and centred in the open space between them.
  */
-const HUD_PHONE = { top: 112, bottom: 270, left: 0, right: 0 }, HUD_WIDE = { top: 72, bottom: 128, left: 280, right: 8 };
+const HUD_PHONE = { top: 112, bottom: 150, left: 0, right: 0 }, HUD_WIDE = { top: 72, bottom: 120, left: 280, right: 8 };
 const ZOOM_IN = 2.2;
 const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
 
@@ -203,6 +203,8 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const settled = shown.seq === live.seq;
   const myTurn = g.isPlayer && g.turn === room.meId && !g.done && settled;
   const offer = !g.done && (g.phase === "buy" || g.phase === "build") ? g.pos[g.turn] : null;
+  // Landed on a space you can buy or build on: the land dialog opens once the figure has landed.
+  const pendLand = settled && offer !== null ? offer : null;
   // A Kejutan dilemma waiting on the player whose turn it is (shown once the board has caught up).
   const pend = settled && !g.done && g.phase === "dilemma" && g.qte ? g.qte : null;
   const pendCard = pend ? CARDS[pend.card] : null;
@@ -383,6 +385,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
           <div className="jn-hudtop">{players}</div>
           <div className="jn-hudbl">
             <h2 className="jn-headline">{headline}</h2>
+            <p className="jn-turnpill" style={{ "--f": inkOf(g.turn) } as CSSProperties} aria-live="polite"><i />{status || headline}</p>
             <div className="jn-hudrow">
               <span className="jn-dice" role="img" aria-label={dice.rolling ? "Dice rolling" : `Dice show ${dice.faces[0]} and ${dice.faces[1]}`}>
                 <Die face={dice.faces[0]} rolling={dice.rolling} />
@@ -424,38 +427,46 @@ export function BoomPlay({ room }: { room: BoomView }) {
               centers={at}
               cell={TH * 1.25}
               event={stageEvent}
-              players={g.players.map((p) => ({ id: p, ink: inkOf(p), tile: tokens[p] ?? 0, out: g.out.includes(p), turn: g.turn === p && !g.done }))}
+              players={g.players.map((p) => ({ id: p, ink: inkOf(p), tile: tokens[p] ?? 0, out: g.out.includes(p), turn: g.turn === p && !g.done, jailed: (g.jail[p] ?? 0) > 0 }))}
             />
             </div>
             {pendJail ? (
               <div className={`jn-cardlayer${mash ? " live" : ""}`} onPointerDown={mash ? (e) => { e.preventDefault(); tapMash(); } : undefined}>
-                <div key={stepKey} className="jn-card">
+                <div key={stepKey} className={`jn-card${myTurn ? " act" : ""}`}>
                   <span className="jn-cardtag">DIPERIKSA</span>
                   <CardScene art="ott" hero={inkOf(g.turn)} />
                   <p className="jn-cardtext">{mine ? "Kamu dipanggil untuk diperiksa." : `${nameOf(g.turn)} sedang diperiksa.`}</p>
                   {mash ? (
-                    <MashMeter target={mashTarget(g.round)} taps={mash.taps} live start={mash.start} />
+                    <>
+                      <MashMeter target={mashTarget(g.round)} taps={mash.taps} live start={mash.start} />
+                      <span className="jn-tapcall">TEKAN! TEKAN!</span>
+                    </>
                   ) : (
                     <div className="jn-opts">
-                      <span className="jn-optchip safe"><b>Tunggu</b>Skip this turn</span>
-                      <span className="jn-optchip risky"><b>Lobi orang dalam</b>−{money(LOBBY_FEE)} · tap {mashTarget(g.round)}× in {MASH_MS / 1000}s</span>
+                      <Choice kind="safe" act={myTurn} busy={sending} title="Tunggu" sub="Skip this turn" onPick={() => send({ kind: "jail", lobby: false })} />
+                      <Choice kind="risky" act={myTurn} busy={sending} title="Lobi orang dalam" sub={`−${money(LOBBY_FEE)} · tap ${mashTarget(g.round)}× in ${MASH_MS / 1000}s`} onPick={startMash} />
                     </div>
                   )}
-                  <p className="jn-cardwho">{mine ? (mash ? "Tap anywhere on the card!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
+                  <p className="jn-cardwho">{mine ? (mash ? "Tap anywhere, as fast as you can!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
                 </div>
               </div>
             ) : pendRent ? (
               <div className="jn-cardlayer">
-                <div key={stepKey} className="jn-card">
+                <div key={stepKey} className={`jn-card${myTurn ? " act" : ""}`}>
                   <span className="jn-cardtag">SEWA · NEGO?</span>
                   <span className="jn-rentart"><Building level={g.level[pendRent.tile]} ink={inkOf(pendRent.owner)} /></span>
                   <p className="jn-cardtext">{mine ? "You owe" : `${nameOf(g.turn)} owes`} {nameOf(pendRent.owner) === "You" ? "you" : nameOf(pendRent.owner)} {money(pendRent.rent)} rent on {SPACES[pendRent.tile].name}.</p>
                   {hold ? (
-                    <HoldMeter lo={pendRent.lo} hi={pendRent.hi} live holdStart={hold.start} stopMs={hold.stopMs} />
+                    <>
+                      <HoldMeter lo={pendRent.lo} hi={pendRent.hi} live holdStart={hold.start} stopMs={hold.stopMs} />
+                      <button className={`ow-btn cast jn-cardbtn jn-holdbtn${hold.start !== null ? " held" : ""}`} disabled={hold.stopMs !== null} onPointerDown={holdDown} onPointerUp={holdUp} onPointerCancel={holdUp}>
+                        {hold.stopMs !== null ? "…" : hold.start === null ? "Press and hold" : "Let go!"}
+                      </button>
+                    </>
                   ) : (
                     <div className="jn-opts">
-                      <span className="jn-optchip safe"><b>Bayar</b>{money(pendRent.rent)}</span>
-                      <span className="jn-optchip risky"><b>Nego</b>{negoPrice(pendRent.rent, NEGO_DEAL)} on a deal · {negoPrice(pendRent.rent, NEGO_OVER)} if you push too hard</span>
+                      <Choice kind="safe" act={myTurn} busy={sending} title="Bayar" sub={money(pendRent.rent)} onPick={() => send({ kind: "rent", haggle: false })} />
+                      <Choice kind="risky" act={myTurn} busy={sending} title="Nego!" sub={`${negoPrice(pendRent.rent, NEGO_DEAL)} on a deal · ${negoPrice(pendRent.rent, NEGO_OVER)} if you push too hard`} onPick={armHold} />
                     </div>
                   )}
                   <p className="jn-cardwho">{mine ? (hold ? "Hold, then let go in the green zone" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
@@ -464,20 +475,29 @@ export function BoomPlay({ room }: { room: BoomView }) {
             ) : pend && pendCard ? (
               // A dilemma waiting for a choice; tapping the card also stops the needle.
               <div className={`jn-cardlayer${run && run.stopAt === null ? " live" : ""}`} onPointerDown={run && run.stopAt === null ? (e) => { e.preventDefault(); tapQte(); } : undefined}>
-                <div key={qteKey} className="jn-card">
+                <div key={qteKey} className={`jn-card${myTurn ? " act" : ""}`}>
                   <span className="jn-cardtag">KEJUTAN · PILIH!</span>
                   <CardScene art={pendCard.art} hero={inkOf(g.turn)} />
                   <p className="jn-cardtext">{pendCard.text}</p>
                   {run ? (
-                    <TimingBar q={pend} mode={{ kind: "live", start: run.start, stopAt: run.stopAt }} />
+                    <>
+                      <TimingBar q={pend} mode={{ kind: "live", start: run.start, stopAt: run.stopAt }} />
+                      {run.stopAt === null && <span className="jn-tapcall">TAP!</span>}
+                    </>
                   ) : (
                     <div className="jn-opts">
-                      <span className="jn-optchip safe"><b>{pendCard.dilemma!.safe.label}</b>{outcome(pendCard.dilemma!.safe.out)}</span>
-                      <span className="jn-optchip risky"><b>{pendCard.dilemma!.risky.label}</b>{outcome(pendCard.dilemma!.risky.win)} / {outcome(pendCard.dilemma!.risky.lose)}</span>
+                      <Choice kind="safe" act={myTurn} busy={sending} title={pendCard.dilemma!.safe.label} sub={outcome(pendCard.dilemma!.safe.out)} onPick={() => send({ kind: "dilemma", risky: false })} />
+                      <Choice kind="risky" act={myTurn} busy={sending} title={pendCard.dilemma!.risky.label} sub={`${outcome(pendCard.dilemma!.risky.win)} / ${outcome(pendCard.dilemma!.risky.lose)}`} onPick={goRisky} />
                     </div>
                   )}
                   <p className="jn-cardwho">{g.turn === room.meId ? (run ? "Tap anywhere on the card!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
                 </div>
+              </div>
+            ) : pendLand !== null ? (
+              <div className="jn-cardlayer">
+                <LandCard key={stepKey} i={pendLand} g={g} build={g.phase === "build"} act={myTurn} busy={sending} ink={inkOf(g.turn)}
+                  who={mine ? null : nameOf(g.turn)} cash={g.cash[g.turn] ?? 0}
+                  onYes={() => send({ kind: "choose", yes: true })} onNo={() => send({ kind: "choose", yes: false })} />
               </div>
             ) : qteDone ? (
               <div className="jn-cardlayer">
@@ -516,64 +536,19 @@ export function BoomPlay({ room }: { room: BoomView }) {
         </div>
       </section>
 
-      <div className="ow-timer">{myTurn && <TimerBar deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" ? DILEMMA_MS : CHOICE_MS} />}</div>
-
-      <section className="ow-dock jn-dock" aria-label="Your move">
-        <span className="ow-leaf a" /><span className="ow-leaf b" /><span className="ow-leaf c" />
-        <div className="ow-dockhead">
-          <span>Kas <b>{g.isPlayer ? money(g.cash[room.meId] ?? 0) : "—"}</b></span>
-          <span className="ow-docktimer">{myTurn && <TimerBar deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" ? DILEMMA_MS : CHOICE_MS} />}</span>
+      {/* Your move floats in the corner: a big Roll button wrapped in the turn clock, or just the clock while a card waits. */}
+      {myTurn && (
+        <div className={`jn-act${g.phase === "roll" ? " roll" : ""}`}>
+          <TimerRing deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" ? DILEMMA_MS : CHOICE_MS} />
+          {g.phase === "roll" ? (
+            <button type="button" className="jn-rollbtn" disabled={sending} onClick={() => send({ kind: "roll" })} aria-label="Roll the dice">
+              <span aria-hidden="true">🎲</span><b>ROLL</b>
+            </button>
+          ) : (
+            <span className="jn-actsecs"><Secs deadline={live.deadline} /></span>
+          )}
         </div>
-        <p className="jn-status">{status}</p>
-        <div className="ow-actions jn-actions">
-          {myTurn && g.phase === "roll" && <button className="ow-btn cast jn-wide" disabled={sending} onClick={() => send({ kind: "roll" })}>🎲 Roll</button>}
-          {myTurn && g.phase === "jailed" && (
-            mash ? (
-              <button className="ow-btn cast jn-wide jn-tap" onPointerDown={(e) => { e.preventDefault(); tapMash(); }}>TEKAN! {mash.taps}/{mashTarget(g.round)}</button>
-            ) : (
-              <>
-                <button className="ow-btn ghost jn-opt" disabled={sending} onClick={() => send({ kind: "jail", lobby: false })}><b>Tunggu</b><small>Skip this turn</small></button>
-                <button className="ow-btn cast jn-opt" disabled={sending} onClick={startMash}><b>Lobi!</b><small>−{money(LOBBY_FEE)} · tap {mashTarget(g.round)}×</small></button>
-              </>
-            )
-          )}
-          {myTurn && g.phase === "rent" && pendRent && (
-            hold ? (
-              <button className={`ow-btn cast jn-wide jn-holdbtn${hold.start !== null ? " held" : ""}`} disabled={hold.stopMs !== null} onPointerDown={holdDown} onPointerUp={holdUp} onPointerCancel={holdUp}>
-                {hold.stopMs !== null ? "…" : hold.start === null ? "Press and hold" : "Let go!"}
-              </button>
-            ) : (
-              <>
-                <button className="ow-btn ghost jn-opt" disabled={sending} onClick={() => send({ kind: "rent", haggle: false })}><b>Bayar</b><small>{money(pendRent.rent)}</small></button>
-                <button className="ow-btn cast jn-opt" disabled={sending} onClick={armHold}><b>Nego!</b><small>{negoPrice(pendRent.rent, NEGO_DEAL)} / {negoPrice(pendRent.rent, NEGO_OVER)}</small></button>
-              </>
-            )
-          )}
-          {myTurn && g.phase === "dilemma" && pendCard && (
-            run ? (
-              <button className="ow-btn cast jn-wide jn-tap" disabled={run.stopAt !== null} onPointerDown={(e) => { e.preventDefault(); tapQte(); }}>{run.stopAt === null ? "TAP!" : "…"}</button>
-            ) : (
-              <>
-                <button className="ow-btn ghost jn-opt" disabled={sending} onClick={() => send({ kind: "dilemma", risky: false })}>
-                  <b>Aman</b><small>{outcome(pendCard.dilemma!.safe.out)}</small>
-                </button>
-                <button className="ow-btn cast jn-opt" disabled={sending} onClick={goRisky}>
-                  <b>Nekat!</b><small>{outcome(pendCard.dilemma!.risky.win)} / {outcome(pendCard.dilemma!.risky.lose)}</small>
-                </button>
-              </>
-            )
-          )}
-          {myTurn && (g.phase === "buy" || g.phase === "build") && (
-            <>
-              <button className="ow-btn cast" disabled={sending} onClick={() => send({ kind: "choose", yes: true })}>
-                {g.phase === "buy" ? `Buy ${money(priceOf(g.pos[g.turn]))}` : `Build ${money(buildCost(g.pos[g.turn]))}`}
-              </button>
-              <button className="ow-btn ghost" disabled={sending} onClick={() => send({ kind: "choose", yes: false })}>Skip</button>
-            </>
-          )}
-          {!myTurn && <button className="ow-btn ghost jn-wide" disabled>{g.done ? "Game over" : "Waiting…"}</button>}
-        </div>
-      </section>
+      )}
 
       <Toast toast={toast} onDone={() => setToast(null)} />
       <TileSheet i={info} onClose={() => setInfo(null)} g={g} nameOf={nameOf} inkOf={inkOf} />
@@ -596,6 +571,102 @@ function Die({ face, rolling, delay }: { face: number; rolling: boolean; delay?:
     <span className={`jn-die${rolling ? " rolling" : ""}${delay ? " late" : ""}`}>
       {Array.from({ length: 9 }, (_, k) => (on.includes(k) ? <i key={k} /> : <span key={k} />))}
     </span>
+  );
+}
+
+/** The turn clock as a ring: it drains smoothly and turns coral in the last five seconds. */
+function TimerRing({ deadline, total }: { deadline?: number | null; total: number }) {
+  const ring = useRef<SVGCircleElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      const left = deadline ? Math.max(0, deadline - Date.now()) : 0;
+      const el = ring.current;
+      if (el) {
+        el.style.strokeDashoffset = String(100 - Math.min(100, (left / total) * 100));
+        el.style.stroke = left < 5000 ? "var(--ow-coral)" : "var(--ow-mustard)";
+      }
+      if (left > 0) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [deadline, total]);
+  return (
+    <svg className="jn-ring" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="45" className="jn-ringtrack" />
+      <circle ref={ring} cx="50" cy="50" r="45" className="jn-ringfill" pathLength={100} />
+    </svg>
+  );
+}
+
+/** Seconds left on the turn clock. */
+function Secs({ deadline }: { deadline?: number | null }) {
+  const [left, setLeft] = useState(0);
+  useEffect(() => {
+    const tick = () => setLeft(deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0);
+    tick();
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
+  }, [deadline]);
+  return <>{left}s</>;
+}
+
+/** One side of a decision on a card: a real button for the player deciding, a plain chip for everyone watching. */
+function Choice({ kind, act, busy, title, sub, onPick }: { kind: "safe" | "risky"; act: boolean; busy: boolean; title: string; sub: string; onPick: () => void }) {
+  if (!act) return <span className={`jn-optchip ${kind}`}><b>{title}</b>{sub}</span>;
+  return (
+    <button type="button" className={`jn-optchip ${kind} jn-choice`} disabled={busy} onClick={onPick}>
+      <b>{title}</b>{sub}
+    </button>
+  );
+}
+
+/** The land dialog: what you landed on, what it costs, what it earns, and buy/build right there. */
+function LandCard({ i, g, build, act, busy, ink, who, cash, onYes, onNo }: {
+  i: number; g: BoomGameView; build: boolean; act: boolean; busy: boolean; ink: string; who: string | null; cash: number; onYes: () => void; onNo: () => void;
+}) {
+  const s = SPACES[i];
+  const lot = s.kind === "lot";
+  const band = lot ? GROUPS[s.group].color : "#6B5A52";
+  const cost = build ? buildCost(i) : priceOf(i);
+  const short_ = cash < cost;
+  const lv = g.level[i];
+  const rentNow = lot ? baseRent(i, build ? lv : 0) : HUB_RENT[1];
+  const rentNext = build ? baseRent(i, lv + 1) : null;
+  return (
+    <div className={`jn-card jn-land${act ? " act" : ""}`} style={{ "--band": band } as CSSProperties}>
+      <span className="jn-landband" />
+      <span className="jn-cardtag">{build ? "BANGUN?" : "DIJUAL"}</span>
+      <span className="jn-landart">
+        {lot ? <Building level={build ? lv + 1 : 0} ink={ink} /> : <span className="jn-landico">{s.kind === "hub" ? s.icon : ""}</span>}
+      </span>
+      <span className="ow-kicker">{lot ? GROUPS[s.group].name : "Transport"}</span>
+      <h3 className="jn-landname">{s.name}</h3>
+      <div className="jn-landrows">
+        {build ? (
+          <>
+            <span><i>{BUILDING_NAMES[lv]}</i> → <b>{BUILDING_NAMES[lv + 1]}</b></span>
+            <span>Rent <i>{money(rentNow)}</i> → <b>{money(rentNext!)}</b></span>
+          </>
+        ) : (
+          <>
+            <span>Price <b>{money(cost)}</b></span>
+            <span>Rent <b>{money(rentNow)}</b>{lot ? " · build to raise it" : " · more with each hub"}</span>
+          </>
+        )}
+      </div>
+      {act ? (
+        <div className="jn-landacts">
+          <button type="button" className="ow-btn cast" disabled={busy || short_} onClick={onYes}>
+            {short_ ? "Kas kurang" : `${build ? "Bangun" : "Beli"} ${money(cost)}`}
+          </button>
+          <button type="button" className="ow-btn ghost" disabled={busy} onClick={onNo}>Lewati</button>
+        </div>
+      ) : (
+        <p className="jn-cardwho">{who} is deciding…</p>
+      )}
+      {act && <p className="jn-landcash">Kas {money(cash)} → {money(Math.max(0, cash - cost))}</p>}
+    </div>
   );
 }
 

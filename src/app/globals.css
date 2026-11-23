@@ -1178,7 +1178,7 @@ body:has(.jn-play) { background: #E2D3B2; }
 .jn-play .jn-hudbl { left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 166px); z-index: 6; }
 .jn-play .jn-hudbl .jn-banner { border: 2.5px solid var(--ow-ink); box-shadow: 3px 3px 0 rgba(35,27,26,.25); }
 .jn-play .jn-cam { right: 12px; bottom: calc(env(safe-area-inset-bottom) + 232px); z-index: 6; }
-.jn-play .jn-cardlayer { top: 104px; bottom: 160px; }
+.jn-play .jn-cardlayer { top: 104px; bottom: calc(env(safe-area-inset-bottom) + 228px); }
 @media (min-width: 1000px) {
   .jn-play > .topbar { top: 18px; left: 20px; right: 20px; }
   .jn-play .ow-rail { position: absolute; z-index: 10; top: 84px; left: 20px; bottom: 150px; width: 250px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
@@ -1197,7 +1197,76 @@ body:has(.jn-play) { background: #E2D3B2; }
   .jn-play .jn-cam { right: 20px; bottom: 136px; }
   .jn-play .jn-cardlayer { top: 72px; bottom: 120px; left: 270px; }
 }
-@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
+/* ---- decisions happen on the card itself ---- */
+.jn-card.act { pointer-events: auto; }
+.jn-choice { cursor: pointer; font: inherit; font-size: 11px; color: var(--ow-ink); box-shadow: 3px 3px 0 var(--ow-ink); transition: transform 100ms, box-shadow 100ms; }
+.jn-choice:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ow-ink); }
+.jn-choice:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: none; }
+.jn-choice:disabled { opacity: .6; cursor: default; }
+.jn-choice.risky b { color: var(--ow-coral); }
+.jn-tapcall { display: block; margin-top: 8px; font-size: 26px; font-weight: 900; letter-spacing: .12em; color: var(--ow-coral); animation: jn-tappulse 520ms ease-in-out infinite; }
+.jn-cardbtn { width: 100%; margin-top: 10px; }
+/* Buttons on a bone card take ink outlines (the dock's are drawn for a dark background). */
+.jn-card .ow-btn.cast { border-color: var(--ow-ink); box-shadow: 3px 3px 0 var(--ow-ink); }
+.jn-card .ow-btn.ghost { color: var(--ow-ink); border-color: var(--ow-ink); background: var(--ow-bone); }
+.jn-card .ow-btn.ghost:active:not(:disabled) { transform: translate(2px, 2px); }
+.jn-card .ow-btn:disabled { opacity: .55; }
+.jn-land { position: relative; overflow: hidden; padding-top: 22px; }
+.jn-landband { position: absolute; left: 0; right: 0; top: 0; height: 14px; background: var(--band); border-bottom: 3px solid var(--ow-ink); }
+.jn-landart { display: flex; justify-content: center; align-items: flex-end; height: 92px; margin: 8px 0 2px; }
+.jn-landart .jn-bld { height: 88px; width: auto; }
+.jn-landico { font-size: 60px; line-height: 1; }
+.jn-land .ow-kicker { display: block; }
+.jn-landname { margin: 0 0 8px; font-family: var(--font-gothic), serif; font-size: 32px; font-weight: 700; line-height: 1.05; }
+.jn-landrows { display: grid; gap: 4px; padding: 8px 10px; border-radius: 12px; background: rgba(35,27,26,.06); font-size: 14px; font-weight: 700; }
+.jn-landrows i { font-style: normal; opacity: .6; }
+.jn-landrows b { font-weight: 900; }
+.jn-landacts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-top: 12px; }
+.jn-landcash { margin: 8px 0 0; font-size: 12px; font-weight: 800; opacity: .6; }
+@media (min-width: 1000px) {
+  .jn-choice { font-size: 13px; }
+  .jn-landart { height: 120px; }
+  .jn-landart .jn-bld { height: 116px; }
+  .jn-landname { font-size: 42px; }
+  .jn-landrows { font-size: 16px; }
+}
+/* ---- no dock: status lives in the corner HUD, and your move is a floating Roll button in the turn clock ---- */
+.jn-turnpill { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin: 0; padding: 5px 12px 5px 7px; border-radius: 999px;
+  background: var(--ow-bone); border: 2.5px solid var(--ow-ink); box-shadow: 2px 2px 0 var(--ow-ink); font-size: 13px; font-weight: 800; line-height: 18px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jn-turnpill i { flex-shrink: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--f); border: 2px solid var(--ow-ink); }
+.jn-play .jn-hudbl { left: 12px; right: 108px; bottom: calc(env(safe-area-inset-bottom) + 12px); }
+.jn-play .jn-cam { right: 12px; bottom: calc(env(safe-area-inset-bottom) + 108px); }
+.jn-play .jn-cardlayer { z-index: 8; bottom: calc(env(safe-area-inset-bottom) + 112px); }
+.jn-act { position: absolute; z-index: 20; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); width: 56px; height: 56px; display: grid; place-items: center; animation: jn-actin 360ms cubic-bezier(.3,1.5,.5,1) both; }
+.jn-act.roll { width: 86px; height: 86px; }
+@keyframes jn-actin { from { transform: scale(.4); opacity: 0; } }
+.jn-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); filter: drop-shadow(3px 3px 0 rgba(35,27,26,.9)); }
+.jn-ringtrack { fill: var(--ow-bone); stroke: var(--ow-ink); stroke-width: 10; }
+.jn-ringfill { fill: none; stroke: var(--ow-mustard); stroke-width: 5.5; stroke-dasharray: 100; stroke-linecap: round; }
+.jn-actsecs { position: relative; font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--ow-ink); }
+.jn-rollbtn { position: relative; width: 72%; height: 72%; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; border-radius: 50%;
+  background: var(--ow-coral); color: var(--ow-bone); border: 3px solid var(--ow-ink); box-shadow: 0 4px 0 var(--ow-ink); cursor: pointer; font: inherit;
+  animation: jn-rollbob 1.5s ease-in-out infinite; -webkit-tap-highlight-color: transparent; }
+.jn-rollbtn span { font-size: 22px; line-height: 1; }
+.jn-rollbtn b { font-size: 12px; font-weight: 900; letter-spacing: .1em; line-height: 1.2; }
+.jn-rollbtn:active:not(:disabled) { transform: translateY(4px); box-shadow: none; animation: none; }
+.jn-rollbtn:disabled { opacity: .7; animation: none; }
+@keyframes jn-rollbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@media (min-width: 1000px) {
+  .jn-play .jn-hudbl { left: 20px; right: auto; bottom: 20px; width: min(380px, calc(46vw - 80px)); }
+  .jn-turnpill { font-size: 15px; line-height: 20px; padding: 6px 14px 6px 8px; }
+  .jn-act { right: 24px; bottom: 24px; width: 72px; height: 72px; }
+  .jn-act.roll { width: 116px; height: 116px; }
+  .jn-actsecs { font-size: 18px; }
+  .jn-rollbtn span { font-size: 30px; }
+  .jn-rollbtn b { font-size: 15px; }
+  .jn-play .jn-cam { right: 24px; bottom: 152px; }
+  .jn-play .jn-cardlayer { bottom: 24px; }
+  .jn-play .ow-rail { bottom: 200px; }
+  .jn-play .jn-log { overflow: hidden; }
+}
+@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .jn-rollbtn, .jn-act { animation: none; } .jn-tapcall { animation: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
 
 /* ---------- Sketch Match ---------- */
 .sk-screen { min-height: 100dvh; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
