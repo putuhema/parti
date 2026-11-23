@@ -41,7 +41,7 @@ export const GROUPS = [
 ] as const;
 
 export type Space =
-  | { kind: "start" | "jail" | "jackpot" | "wheel" | "surprise" | "bonus" | "tax"; name: string }
+  | { kind: "start" | "jail" | "jackpot" | "wheel" | "surprise" | "bonus" | "tax" | "judol"; name: string }
   | { kind: "lot"; name: string; group: number; price: number }
   | { kind: "hub"; name: string; price: number; icon: string };
 
@@ -64,7 +64,7 @@ export const SPACES: Space[] = [
   lot("Banjarmasin", 3, 180), lot("Pontianak", 3, 180), hub("Bandara", "✈️"), lot("Balikpapan", 3, 200), { kind: "tax", name: "Pungli" },
   { kind: "jackpot", name: "Dana Aspirasi" },
   lot("Padang", 4, 220), surprise, lot("Palembang", 4, 220), lot("Medan", 4, 240), hub("Stasiun", "🚆"),
-  lot("Lombok", 5, 260), bonus, lot("Bali", 5, 280), lot("Yogyakarta", 6, 300), lot("Bandung", 6, 300),
+  lot("Lombok", 5, 260), { kind: "judol", name: "Judol" }, lot("Bali", 5, 280), lot("Yogyakarta", 6, 300), lot("Bandung", 6, 300),
   { kind: "wheel", name: "Kampanye" },
   lot("Surabaya", 6, 320), surprise, hub("Terminal", "🚌"), lot("Kota Tua", 7, 350), lot("Menteng", 7, 400),
 ];
@@ -100,7 +100,7 @@ const sameGroup = (i: number) => SPACES.map((_, k) => k).filter((k) => groupOf(i
 // ---------- The game ----------
 export type BoomEvent = {
   n: number;
-  kind: "roll" | "buy" | "build" | "rent" | "tax" | "bonus" | "card" | "jackpot" | "wheel" | "jail" | "skip" | "lobby" | "sold" | "bankrupt" | "left" | "lap";
+  kind: "roll" | "buy" | "build" | "rent" | "tax" | "bonus" | "card" | "jackpot" | "wheel" | "jail" | "skip" | "lobby" | "sold" | "bankrupt" | "left" | "lap" | "gamble" | "auction";
   by: Seat;
   dice?: [number, number];
   from?: number;
@@ -122,7 +122,43 @@ export type BoomEvent = {
   target?: number;
   // A rent haggle: how it went and where the meter stopped.
   nego?: { result: "deal" | "full" | "over"; level: number; lo: number; hi: number; rent: number };
+  // A spin at the Judol slot: the bet (0 = walked away), where the reels stopped, and how it went.
+  bet?: number;
+  reels?: [number, number, number];
+  slot?: SlotResult;
+  spin?: number; // which spin this was on this visit (1-based)
 };
+
+// ---------- Lelang: a space someone passed on goes to auction ----------
+// Everyone still in can bid, not just whoever's turn it is. The first bid opens at 20% of the price, then
+// bids go up in steps. Each bid keeps the hammer up for at least AUCTION_EXTEND more, up to AUCTION_MAX in all.
+// Bots snipe: when the clock runs down they may top the bid, up to a private value set when the auction opens.
+export const AUCTION_MS = 7000;
+export const AUCTION_EXTEND = 3500;
+export const AUCTION_MAX = 25000;
+export const RAISES = [10, 50] as const;
+export type Auction = { tile: number; bid: number; leader: Seat | null; from: Seat; bids: number; start: number; caps: Record<string, number> };
+export const openingBid = (i: number) => Math.max(10, Math.round((priceOf(i) * 0.2) / 10) * 10);
+/** What the next bid would be with this raise. */
+export const nextBid = (a: Pick<Auction, "bid" | "leader" | "tile">, raise: number) => (a.leader ? a.bid + raise : openingBid(a.tile));
+
+// ---------- Judol: the online-gambling slot (satire) ----------
+// Bet, spin three reels, maybe win. A pair pays double, three of a kind four times, 7-7-7 ten times.
+// Two sirens or more is a raid: the bet is gone and you're called in. Lost bets feed the dana aspirasi.
+// You can keep spinning, up to SLOT_SPINS times a visit, which is exactly the trap.
+export const SLOT = ["7️⃣", "💰", "💸", "🐀", "🚨"] as const;
+export const SIREN = 4;
+export const BETS = [50, 100, 200] as const;
+export const SLOT_SPINS = 3;
+export const SLOT_PAY = { jackpot: 10, triple: 4, pair: 2, zonk: 0, raid: 0 } as const;
+export type SlotResult = keyof typeof SLOT_PAY;
+export function slotResult(reels: [number, number, number]): SlotResult {
+  const [a, b, c] = reels;
+  if (reels.filter((r) => r === SIREN).length >= 2) return "raid";
+  if (a === b && b === c) return a === 0 ? "jackpot" : "triple";
+  if (a === b || b === c || a === c) return "pair";
+  return "zonk";
+}
 
 /**
  * The timing QTE on a risky choice: a needle sweeps back and forth along a bar, and you tap while it's in
@@ -160,7 +196,7 @@ export interface BoomGame {
   level: number[];
   pot: number;
   turn: Seat;
-  phase: "roll" | "buy" | "build" | "dilemma" | "jailed" | "rent";
+  phase: "roll" | "buy" | "build" | "dilemma" | "jailed" | "rent" | "gamble" | "auction";
   streak: number; // doubles in a row
   again: boolean; // rolled doubles: same player rolls again
   round: number;
@@ -168,6 +204,8 @@ export interface BoomGame {
   log: BoomEvent[];
   qte?: Qte; // the Kejutan dilemma waiting on the player whose turn it is
   nego?: Nego; // the rent waiting on the player whose turn it is (pay, or haggle)
+  spins?: number; // spins taken at the Judol slot on this visit
+  auction?: Auction; // a space someone passed on, up for grabs
   busy: number; // ms of animation the latest move needs before anyone can act
   deadline?: number;
   sched?: number;
@@ -184,6 +222,8 @@ export function eventMs(e: BoomEvent): number {
   if (e.kind === "card" && e.risky) return 2700; // time to replay the needle and stamp the result
   if (e.kind === "rent" && e.nego) return 2500; // replay the haggling meter
   if (e.kind === "lobby") return 2300; // replay the mash count
+  if (e.kind === "gamble") return e.bet ? 2600 : 900; // the reels spin and stop one by one
+  if (e.kind === "auction") return 1700; // the gavel comes down
   return 1100;
 }
 
@@ -375,6 +415,8 @@ function land(g: BoomGame, p: Seat, rng: Rng) {
     const paid = charge(g, p, TAX);
     g.pot += paid;
     note(g, { kind: "tax", by: p, amount: paid });
+  } else if (s.kind === "judol") {
+    if (g.cash[p] >= BETS[0]) { g.spins = 0; g.phase = "gamble"; }
   } else if (s.kind === "bonus") {
     const amount = 50 + Math.floor(rng() * 4) * 50;
     g.cash[p] += amount;
@@ -496,6 +538,41 @@ export function resolveRent(g: BoomGame, haggle: boolean, holdMs: number | null,
   settle(g, now);
 }
 
+/**
+ * One go at the Judol slot: bet one of BETS (or 0 to walk away). The bet goes into the dana aspirasi; any win
+ * is paid by the bank. A raid sends you to Diperiksa. Otherwise you may spin again, up to SLOT_SPINS a visit.
+ */
+export function resolveGamble(g: BoomGame, bet: number, rng: Rng, now: number) {
+  if (g.done || g.phase !== "gamble") return;
+  g.busy = 0;
+  const p = g.turn;
+  const spin = (g.spins ?? 0) + 1;
+  if (!(BETS as readonly number[]).includes(bet) || g.cash[p] < bet) {
+    note(g, { kind: "gamble", by: p, bet: 0, amount: 0, spin });
+    g.spins = undefined;
+    g.phase = "roll";
+    return settle(g, now);
+  }
+  const reels: [number, number, number] = [0, 0, 0].map(() => Math.floor(rng() * SLOT.length)) as [number, number, number];
+  const slot = slotResult(reels);
+  const paid = -toPot(g, p, bet);
+  const won = bet * SLOT_PAY[slot];
+  if (won) g.cash[p] += won;
+  note(g, { kind: "gamble", by: p, bet, reels, slot, amount: won - paid, spin });
+  g.spins = spin;
+  if (slot === "raid") sendToJail(g, p);
+  const again = slot !== "raid" && spin < SLOT_SPINS && !g.out.includes(p) && g.cash[p] >= BETS[0];
+  if (!again) { g.spins = undefined; g.phase = "roll"; }
+  settle(g, now);
+}
+/** Bots gamble when flush, a bit less keen with each spin. */
+export function botGamble(g: BoomGame, rng: Rng) {
+  const c = g.cash[g.turn];
+  const keen = c > 500 && rng() < 0.6 - 0.15 * (g.spins ?? 0);
+  if (!keen) return 0;
+  return BETS.filter((b) => b <= c - 300).at(Math.floor(rng() * 2)) ?? 0;
+}
+
 /** Bots: lobby when they can spare it, haggle about half the time, and get it right more often than not. */
 export function botJail(g: BoomGame, rng: Rng) {
   const lobby = g.cash[g.turn] > 300 && rng() < 0.55;
@@ -537,7 +614,7 @@ export function roll(g: BoomGame, rng: Rng, now: number) {
 }
 
 /** Answer the buy or build offer for the space you're standing on. */
-export function choose(g: BoomGame, yes: boolean, now: number) {
+export function choose(g: BoomGame, yes: boolean, now: number, rng?: Rng) {
   if (g.done || (g.phase !== "buy" && g.phase !== "build")) return;
   g.busy = 0;
   const p = g.turn;
@@ -550,9 +627,66 @@ export function choose(g: BoomGame, yes: boolean, now: number) {
     g.cash[p] -= buildCost(i);
     g.level[i] += 1;
     note(g, { kind: "build", by: p, tile: i, amount: buildCost(i) });
+  } else if (g.phase === "buy" && !g.owner[i] && active(g).length > 1) {
+    return openAuction(g, i, rng ?? Math.random, now);
   }
   g.phase = "roll";
   settle(g, now);
+}
+
+function openAuction(g: BoomGame, i: number, rng: Rng, now: number) {
+  // Each bot privately decides what the space is worth to it, keeping a cushion of cash.
+  const caps: Record<string, number> = {};
+  for (const p of active(g)) if (isBot(p)) caps[p] = Math.max(0, Math.min(Math.round((priceOf(i) * (0.55 + rng() * 0.6)) / 10) * 10, g.cash[p] - 150));
+  g.auction = { tile: i, bid: 0, leader: null, from: g.turn, bids: 0, start: now + g.busy, caps };
+  g.phase = "auction";
+  g.deadline = now + g.busy + AUCTION_MS;
+}
+
+/** A bid from anyone still in the game. Returns false if it doesn't stand (outbid already, can't afford, closed). */
+export function placeBid(g: BoomGame, p: Seat, raise: number, now: number): boolean {
+  const a = g.auction;
+  if (g.done || g.phase !== "auction" || !a || g.out.includes(p) || !g.players.includes(p) || a.leader === p) return false;
+  if (!(RAISES as readonly number[]).includes(raise) || (g.deadline && now > g.deadline + 250)) return false;
+  const bid = nextBid(a, raise);
+  if (g.cash[p] < bid) return false;
+  a.bid = bid;
+  a.leader = p;
+  a.bids += 1;
+  g.busy = 0;
+  // Going once, going twice: a late bid keeps the hammer up a little longer (but not forever).
+  const cap = a.start + AUCTION_MAX;
+  g.deadline = Math.min(cap, Math.max(g.deadline ?? now, now + AUCTION_EXTEND));
+  return true;
+}
+
+/** The hammer comes down: the leader pays and takes the space, or nobody bid and the bank keeps it. */
+function closeAuction(g: BoomGame, now: number) {
+  const a = g.auction!;
+  g.busy = 0;
+  g.auction = undefined;
+  g.phase = "roll";
+  if (a.leader && !g.out.includes(a.leader) && g.cash[a.leader] >= a.bid) {
+    g.cash[a.leader] -= a.bid;
+    g.owner[a.tile] = a.leader;
+    note(g, { kind: "auction", by: a.leader, tile: a.tile, amount: a.bid, other: a.from });
+  } else note(g, { kind: "auction", by: a.from, tile: a.tile, amount: 0 });
+  settle(g, now);
+}
+
+/** The auction clock ran down: a bot may snipe (which keeps it open), otherwise it closes. */
+function auctionDeadline(g: BoomGame, rng: Rng, now: number) {
+  const a = g.auction!;
+  const late = now >= a.start + AUCTION_MAX;
+  const keen = late ? [] : active(g).filter((p) => isBot(p) && p !== a.leader && (a.caps[p] ?? 0) >= nextBid(a, RAISES[0]) && g.cash[p] >= nextBid(a, RAISES[0]));
+  if (keen.length) {
+    const p = keen[Math.floor(rng() * keen.length)];
+    const raise = a.leader && rng() < 0.3 && a.caps[p] >= nextBid(a, RAISES[1]) ? RAISES[1] : RAISES[0];
+    placeBid(g, p, raise, now);
+    g.deadline = Math.min(a.start + AUCTION_MAX, now + 2500);
+    return;
+  }
+  closeAuction(g, now);
 }
 
 function apply(g: BoomGame, p: Seat, out: Outcome) {
@@ -613,6 +747,7 @@ export function botWants(g: BoomGame): boolean {
 /** The turn clock ran out (or it's a bot's turn): roll for them, and turn down any offer a person ignored. */
 export function onDeadline(g: BoomGame, rng: Rng, now: number) {
   if (g.phase === "roll") return roll(g, rng, now);
+  if (g.phase === "auction" && g.auction) return auctionDeadline(g, rng, now);
   if (g.phase === "dilemma") {
     // A bot decides; a person who let the clock run out takes the safe option.
     const b = isBot(g.turn) ? botDilemma(g, rng) : { risky: false, ms: null };
@@ -623,12 +758,16 @@ export function onDeadline(g: BoomGame, rng: Rng, now: number) {
     const b = isBot(g.turn) ? botJail(g, rng) : { lobby: false, taps: null };
     return resolveJail(g, b.lobby, b.taps, now);
   }
+  if (g.phase === "gamble") {
+    // A person who doesn't answer walks away from the slot.
+    return resolveGamble(g, isBot(g.turn) ? botGamble(g, rng) : 0, rng, now);
+  }
   if (g.phase === "rent") {
     // A person who doesn't answer pays in full.
     const b = isBot(g.turn) ? botRent(g, rng) : { haggle: false, holdMs: null };
     return resolveRent(g, b.haggle, b.holdMs, now);
   }
-  choose(g, isBot(g.turn) ? botWants(g) : false, now);
+  choose(g, isBot(g.turn) ? botWants(g) : false, now, rng);
 }
 
 /** A player walks away: the bank takes back everything they own. */
@@ -641,11 +780,15 @@ export function leaveGame(g: BoomGame, p: Seat, now: number) {
   }
   g.out = [...g.out, p];
   note(g, { kind: "left", by: p });
+  // A leaver's standing bid falls away; the auction carries on without them.
+  if (g.auction?.leader === p) { g.auction.leader = null; g.auction.bid = 0; }
   // Someone else's turn carries on with the clock it had.
   if (g.turn !== p) return void checkEnd(g);
   g.phase = "roll";
   g.qte = undefined;
   g.nego = undefined;
+  g.spins = undefined;
+  g.auction = undefined;
   g.again = false;
   settle(g, now);
 }

@@ -19,6 +19,7 @@ const SPECIAL: Record<string, { icon: string; c: string; label: string }> = {
   surprise: { icon: "?", c: "#F4C64E", label: "KEJUTAN" },
   bonus: { icon: "✉️", c: "#CFE9DA", label: "FAJAR" },
   tax: { icon: "🧾", c: "#F7D3DF", label: "PUNGLI" },
+  judol: { icon: "🎰", c: "#3B2D5C", label: "JUDOL" },
 };
 const INK = "#231B1A", BONE = "#F3EDE0";
 
@@ -59,7 +60,7 @@ export function IsoTile({ i, g, x, y, z, ink, offer, label, onTap }: {
   else if (s.kind === "hub") { side = "#6B5A52"; icon = s.icon; name = s.name; amt = short(owned ? g.rents[i] : s.price); }
   else if (CORNERS[s.kind]) { const c = CORNERS[s.kind]; top = c.c; side = c.c; icon = c.icon; amt = s.kind === "jackpot" ? short(g.pot) : c.label; }
   else { const c = SPECIAL[s.kind]; top = c.c; side = c.c; icon = c.icon; amt = c.label; }
-  const dark = s.kind === "start" || s.kind === "jail" || s.kind === "wheel";
+  const dark = s.kind === "start" || s.kind === "jail" || s.kind === "wheel" || s.kind === "judol";
   return (
     <button
       type="button"

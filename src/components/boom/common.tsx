@@ -53,6 +53,16 @@ export function describe(e: BoomEvent, nameOf: (id?: string | null) => string, m
     case "lobby": return { text: `${who} tried to lobby out: ${e.taps}/${e.target} taps, ${e.success ? "walked free!" : "no luck."} −${amt}`, tone: tone(!!e.success) };
     case "tax": return { text: `${who} paid ${amt} in pungli`, tone: tone(false) };
     case "bonus": return { text: `${who} got a serangan fajar envelope: +${amt}`, tone: tone(true) };
+    case "auction":
+      return e.amount
+        ? { text: `Lelang! ${who} won ${tile} for ${amt}`, tone: tone(true) }
+        : { text: `Nobody bid on ${tile}. The bank keeps it.`, tone: "info" };
+    case "gamble": {
+      if (!e.bet) return { text: `${who} walked away from the judol`, tone: "info" as const };
+      const n = e.amount ?? 0;
+      const how = e.slot === "jackpot" ? "JACKPOT 7-7-7!" : e.slot === "triple" ? "three of a kind!" : e.slot === "pair" ? "a pair" : e.slot === "raid" ? "GEREBEK! Raided by the police" : "zonk";
+      return { text: `${who} bet ${money(e.bet)} on the judol: ${how} ${n >= 0 ? "+" : "−"}${money(Math.abs(n))}`, tone: tone(n > 0) };
+    }
     case "card": {
       const n = e.amount ?? 0;
       const sum = n ? ` ${n > 0 ? "+" : "−"}${amt}` : "";

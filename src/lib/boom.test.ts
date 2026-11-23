@@ -3,7 +3,7 @@
  * Run with `npm test`.
  */
 import { describe, expect, it } from "vitest";
-import { CARDS, COLS, GROUPS, HOLD_FILL_MS, JAIL, LAP_BONUS, LOBBY_FEE, MASH_CAP, MASH_MS, N, QTE_MS, ROWS, SPACES, START_CASH, active, botDilemma, botWants, cellOf, choose, leaveGame, mashTarget, newGame, onDeadline, priceOf, qteHit, qtePos, rentOf, resolveDilemma, resolveJail, resolveRent, roll, worthOf, type BoomGame, type Qte } from "../../convex/lib/boom/rules";
+import { AUCTION_EXTEND, AUCTION_MAX, AUCTION_MS, RAISES, nextBid, openingBid, placeBid, BETS, CARDS, COLS, SIREN, SLOT, SLOT_PAY, SLOT_SPINS, resolveGamble, slotResult, GROUPS, HOLD_FILL_MS, JAIL, LAP_BONUS, LOBBY_FEE, MASH_CAP, MASH_MS, N, QTE_MS, ROWS, SPACES, START_CASH, active, botDilemma, botWants, cellOf, choose, leaveGame, mashTarget, newGame, onDeadline, priceOf, qteHit, qtePos, rentOf, resolveDilemma, resolveJail, resolveRent, roll, worthOf, type BoomGame, type Qte } from "../../convex/lib/boom/rules";
 import { mulberry32 } from "../../convex/lib/sudoku";
 
 /** An rng that makes the next roll come up as these dice, then falls back to a seeded stream. */
@@ -89,10 +89,12 @@ describe("a turn", () => {
     expect(g.turn).toBe("b");
     g.phase = "roll";
     roll(g, dice(1, 3, 3), 0); // Pelabuhan: an offer
-    choose(g, false, 0);
+    choose(g, false, 0); // passing puts it up for auction; nobody bids
+    onDeadline(g, dice(1, 1), 0);
     expect(g.turn).toBe("c");
     roll(g, dice(1, 3, 4), 0); // same port
     choose(g, false, 0);
+    onDeadline(g, dice(1, 1), 0);
     expect(g.turn).toBe("a");
     expect(g.phase).toBe("jailed"); // wait it out, or lobby
     onDeadline(g, dice(1, 1), 0); // no answer: waits
@@ -133,6 +135,12 @@ describe("whole games", () => {
         else if (g.phase === "dilemma") { const b = botDilemma(g, rng); resolveDilemma(g, b.risky, b.ms, 0); }
         else if (g.phase === "jailed") resolveJail(g, rng() < 0.5, Math.floor(rng() * 20), 0);
         else if (g.phase === "rent") resolveRent(g, rng() < 0.5, Math.floor(rng() * 1500), 0);
+        else if (g.phase === "auction") {
+          const who = active(g)[Math.floor(rng() * active(g).length)];
+          if (rng() < 0.4) placeBid(g, who, RAISES[Math.floor(rng() * 2)], 0);
+          else onDeadline(g, rng, (g.auction?.start ?? 0) + AUCTION_MAX * rng());
+        }
+        else if (g.phase === "gamble") resolveGamble(g, rng() < 0.5 ? BETS[Math.floor(rng() * 3)] : 0, rng, 0);
         else choose(g, botWants(g), 0);
         for (const p of g.players) expect(g.cash[p]).toBeGreaterThanOrEqual(0);
         for (const p of g.out) expect(g.owner.includes(p)).toBe(false);
@@ -148,7 +156,9 @@ describe("whole games", () => {
     onDeadline(g, dice(1, 2), 0);
     expect(g.phase).toBe("buy");
     onDeadline(g, dice(1, 2), 0);
-    expect(g.owner[3]).toBe(null); // a person who doesn't answer passes on the offer
+    expect(g.phase).toBe("auction"); // a person who doesn't answer passes, and it goes to auction
+    onDeadline(g, dice(1, 2), 0);
+    expect(g.owner[3]).toBe(null); // nobody bid: the bank keeps it
     expect(g.turn).toBe("b");
     expect(priceOf(3)).toBe(60);
   });
@@ -318,5 +328,160 @@ describe("rent: pay or haggle", () => {
     expect(g.cash.a).toBe(START_CASH - 100);
     expect(g.turn).toBe("b");
     expect(g.log.at(-1)?.nego).toBeUndefined();
+  });
+});
+
+describe("judol: the slot", () => {
+  const JUDOL = SPACES.findIndex((s) => s.kind === "judol");
+  /** An rng whose next three draws stop the reels on these symbols. */
+  const reels = (a: number, b: number, c: number) => {
+    const q = [a, b, c].map((r) => (r + 0.5) / SLOT.length);
+    const rest = mulberry32(3);
+    return () => (q.length ? q.shift()! : rest());
+  };
+  const atTable = () => {
+    const g = game(2);
+    g.pos.a = JUDOL;
+    g.phase = "gamble";
+    g.spins = 0;
+    return g;
+  };
+  it("is on the board once, and landing there opens the table", () => {
+    expect(SPACES.filter((s) => s.kind === "judol").length).toBe(1);
+    const g = game(2);
+    g.pos.a = JUDOL - 5;
+    roll(g, dice(2, 3), 0);
+    expect(g.pos.a).toBe(JUDOL);
+    expect(g.phase).toBe("gamble");
+  });
+  it("reads the reels: pairs, triples, the jackpot and raids", () => {
+    expect(slotResult([0, 0, 0])).toBe("jackpot");
+    expect(slotResult([1, 1, 1])).toBe("triple");
+    expect(slotResult([1, 2, 1])).toBe("pair");
+    expect(slotResult([1, 2, 3])).toBe("zonk");
+    expect(slotResult([SIREN, 1, SIREN])).toBe("raid");
+    expect(slotResult([SIREN, SIREN, SIREN])).toBe("raid");
+    expect(slotResult([SIREN, 1, 1])).toBe("pair");
+  });
+  it("pays the bank's winnings and sends lost bets to the dana aspirasi", () => {
+    const g = atTable();
+    const pot = g.pot;
+    resolveGamble(g, 100, reels(1, 1, 2), 0);
+    expect(g.cash.a).toBe(START_CASH - 100 + 100 * SLOT_PAY.pair);
+    expect(g.pot).toBe(pot + 100);
+    expect(g.log.at(-1)).toMatchObject({ kind: "gamble", bet: 100, slot: "pair", amount: 100, spin: 1 });
+  });
+  it("lets you spin again, up to the limit, then passes the dice", () => {
+    const g = atTable();
+    for (let k = 1; k <= SLOT_SPINS; k++) {
+      expect(g.phase).toBe("gamble");
+      resolveGamble(g, BETS[0], reels(1, 2, 3), 0);
+    }
+    expect(g.phase).toBe("roll");
+    expect(g.turn).toBe("b");
+    expect(g.cash.a).toBe(START_CASH - BETS[0] * SLOT_SPINS);
+  });
+  it("a raid takes the bet and calls you in", () => {
+    const g = atTable();
+    resolveGamble(g, 200, reels(SIREN, 2, SIREN), 0);
+    expect(g.cash.a).toBe(START_CASH - 200);
+    expect(g.pos.a).toBe(JAIL);
+    expect(g.jail.a).toBe(1);
+    expect(g.turn).toBe("b");
+  });
+  it("walking away (or a bet that isn't on the table) costs nothing", () => {
+    const g = atTable();
+    resolveGamble(g, 0, reels(0, 0, 0), 0);
+    expect(g.cash.a).toBe(START_CASH);
+    expect(g.turn).toBe("b");
+    const h = atTable();
+    resolveGamble(h, 75, reels(0, 0, 0), 0);
+    expect(h.cash.a).toBe(START_CASH);
+  });
+  it("a person who lets the clock run out walks away", () => {
+    const g = atTable();
+    onDeadline(g, reels(0, 0, 0), 0);
+    expect(g.cash.a).toBe(START_CASH);
+    expect(g.log.at(-1)).toMatchObject({ kind: "gamble", bet: 0 });
+  });
+  it("the house keeps an edge over a long night", () => {
+    const rng = mulberry32(42);
+    let back = 0;
+    const spins = 60000;
+    for (let k = 0; k < spins; k++) {
+      const r: [number, number, number] = [0, 0, 0].map(() => Math.floor(rng() * SLOT.length)) as [number, number, number];
+      back += SLOT_PAY[slotResult(r)];
+    }
+    const rtp = back / spins;
+    expect(rtp).toBeGreaterThan(0.8);
+    expect(rtp).toBeLessThan(1);
+  });
+});
+
+describe("lelang: auctions", () => {
+  /** Player "a" passes on Pelabuhan (space 4); b and c are people, bot1 a bot. */
+  const passed = (players = ["a", "b", "c"]) => {
+    const g = newGame(players, 20, 0);
+    roll(g, dice(1, 3), 0);
+    expect(g.phase).toBe("buy");
+    choose(g, false, 1000, mulberry32(9));
+    return g;
+  };
+  it("passing on a space opens an auction for everyone", () => {
+    const g = passed();
+    expect(g.phase).toBe("auction");
+    expect(g.auction).toMatchObject({ tile: 4, bid: 0, leader: null, from: "a" });
+    expect(g.turn).toBe("a");
+  });
+  it("opens at 20% of the price, then goes up by the raise, from anyone", () => {
+    const g = passed();
+    expect(placeBid(g, "b", 50, 1000)).toBe(true);
+    expect(g.auction!.bid).toBe(openingBid(4));
+    expect(placeBid(g, "b", 10, 1000)).toBe(false); // already leading
+    expect(placeBid(g, "c", 50, 1000)).toBe(true);
+    expect(g.auction).toMatchObject({ bid: openingBid(4) + 50, leader: "c" });
+    expect(placeBid(g, "a", 25, 1000)).toBe(false); // not a raise on offer
+    expect(nextBid(g.auction!, 10)).toBe(openingBid(4) + 60);
+  });
+  it("a late bid keeps the hammer up, but never past the cap", () => {
+    const g = passed();
+    const opened = g.deadline!;
+    placeBid(g, "b", 10, opened - 500);
+    expect(g.deadline).toBe(opened - 500 + AUCTION_EXTEND);
+    const g2 = passed();
+    const start = g2.auction!.start;
+    g2.deadline = start + AUCTION_MAX - 50; // a long bidding war, nearly at the cap
+    expect(placeBid(g2, "b", 10, start + AUCTION_MAX - 100)).toBe(true);
+    expect(g2.deadline).toBe(start + AUCTION_MAX);
+    expect(AUCTION_MS).toBeLessThan(AUCTION_MAX);
+    // and once the hammer is down, a bid doesn't count
+    expect(placeBid(g, "c", 10, g.deadline! + 1000)).toBe(false);
+  });
+  it("the leader pays and takes the space when the hammer falls; the dice pass on", () => {
+    const g = passed();
+    placeBid(g, "c", 10, 1000);
+    placeBid(g, "b", 50, 1000);
+    onDeadline(g, mulberry32(1), g.deadline!);
+    expect(g.owner[4]).toBe("b");
+    expect(g.cash.b).toBe(START_CASH - (openingBid(4) + 50));
+    expect(g.log.at(-1)).toMatchObject({ kind: "auction", by: "b", tile: 4, other: "a" });
+    expect(g.turn).toBe("b");
+  });
+  it("you can't bid more than you have", () => {
+    const g = passed();
+    g.cash.b = openingBid(4) - 1;
+    expect(placeBid(g, "b", 10, 1000)).toBe(false);
+  });
+  it("bots snipe at the last moment, up to what the space is worth to them", () => {
+    const g = passed(["a", "b", "bot1"]);
+    g.auction!.caps.bot1 = 120;
+    placeBid(g, "b", 10, 1000);
+    onDeadline(g, mulberry32(2), g.deadline!);
+    expect(g.phase).toBe("auction");
+    expect(g.auction!.leader).toBe("bot1");
+    // Outbid past its limit, the bot lets it go.
+    g.auction!.bid = 150; g.auction!.leader = "b";
+    onDeadline(g, mulberry32(2), g.deadline!);
+    expect(g.owner[4]).toBe("b");
   });
 });

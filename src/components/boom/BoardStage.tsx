@@ -111,6 +111,24 @@ export function BoardStage({ players, event, centers, cell, boardRef }: {
         case "sold":
           act(e.by, { pose: "slump", d: 0.2 }, { pose: "slump", d: 0.5 }, { pose: "stand", d: 0.3 });
           break;
+        case "auction": {
+          if (!e.amount) break;
+          const f = figs.get(e.by);
+          act(e.by, { pose: "crouch", d: 0.08 }, { pose: "cheer", d: 0.16 }, { pose: "cheer", d: 0.45 }, { pose: "proud", d: 0.3 }, { pose: "stand", d: 0.3 });
+          if (f) coins(f.x, f.y - p.cell * 0.7, f.x, f.y - p.cell * 2, 6);
+          jolt(90);
+          break;
+        }
+        case "gamble": {
+          if (!e.amount) break;
+          const f = figs.get(e.by);
+          if (e.amount > 0) {
+            act(e.by, { pose: "crouch", d: 0.08 }, { pose: "danceA", d: 0.2 }, { pose: "danceB", d: 0.2 }, { pose: "danceA", d: 0.2 }, { pose: "cheer", d: 0.3 }, { pose: "stand", d: 0.3 });
+            if (f) coins(f.x, f.y - p.cell * 2.2, f.x, f.y - p.cell * 0.6, Math.min(14, 4 + Math.round(e.amount / 50)));
+            jolt(e.amount >= 400 ? 160 : 60);
+          } else act(e.by, { pose: "slump", d: 0.2 }, { pose: "scratch", d: 0.4 }, { pose: "slump", d: 0.5 }, { pose: "stand", d: 0.3 });
+          break;
+        }
         case "jail":
           act(e.by, { pose: "handsUp", d: 0.15 }, { pose: "handsUp", d: 0.9 }, { pose: "slump", d: 0.3 });
           if (f) burst(f.x, f.y - p.cell * 1.1, 10, ["#E2574C", "#69BFD6"]);

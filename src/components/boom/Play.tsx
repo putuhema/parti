@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { api } from "../../../convex/_generated/api";
-import { CARDS, CHOICE_MS, COLS, DILEMMA_MS, GROUPS, HOLD_FILL_MS, LAP_BONUS, LOBBY_FEE, MASH_MS, N, NEGO_DEAL, NEGO_OVER, QTE_MS, ROLL_MS, ROWS, SPACES, TAX, HUB_RENT, baseRent, buildCost, cellOf, eventMs, isBot, mashTarget, priceOf, type Art, type BoomEvent, type Outcome, type Qte } from "../../../convex/lib/boom/rules";
+import { CARDS, CHOICE_MS, COLS, DILEMMA_MS, GROUPS, HOLD_FILL_MS, LAP_BONUS, LOBBY_FEE, MASH_MS, N, NEGO_DEAL, NEGO_OVER, QTE_MS, ROLL_MS, ROWS, SPACES, TAX, HUB_RENT, RAISES, nextBid, openingBid, BETS, SLOT, SLOT_PAY, SLOT_SPINS, baseRent, buildCost, cellOf, eventMs, isBot, mashTarget, priceOf, type Art, type BoomEvent, type Outcome, type Qte } from "../../../convex/lib/boom/rules";
 import { Countdown, Toast } from "@/components/words/common";
 import { Confetti, Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
@@ -19,7 +19,7 @@ import { HoldMeter, MashMeter } from "./QteMeters";
 import { describe, money, short, useNameOf, type BoomGameView, type BoomView } from "./common";
 
 type NameOf = (id?: string | null) => string;
-type Banner = { n: number; text: string; tone: "good" | "bad" | "info"; kind: BoomEvent["kind"]; by: string; art?: Art; raw?: string; amount?: number; choice?: string; risky?: boolean; success?: boolean; note?: string; qte?: Qte; ms?: number; taps?: number; target?: number; nego?: BoomEvent["nego"]; other?: string; tile?: number };
+type Banner = { n: number; text: string; tone: "good" | "bad" | "info"; kind: BoomEvent["kind"]; by: string; art?: Art; raw?: string; amount?: number; choice?: string; risky?: boolean; success?: boolean; note?: string; qte?: Qte; ms?: number; taps?: number; target?: number; nego?: BoomEvent["nego"]; other?: string; tile?: number; bet?: number; reels?: [number, number, number]; slot?: BoomEvent["slot"]; spin?: number };
 /** "+Rp150rb", "−Rp100rb", plus "· Diperiksa" when the outcome sends you in. */
 const outcome = (o: Outcome) => `${o.amount > 0 ? `+${money(o.amount)}` : o.amount < 0 ? `−${money(-o.amount)}` : "Rp0"}${o.jail ? " · Diperiksa" : ""}`;
 type Dice = { faces: [number, number]; rolling: boolean };
@@ -143,7 +143,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
       const d = describe(e, nameOf, room.meId);
       // The card itself shows the satire, so the news line just says who drew it.
       const short = e.kind === "card" ? `${nameOf(e.by)} drew a Kejutan card` : e.kind === "wheel" ? `${nameOf(e.by)} spun the Kampanye wheel` : d.text;
-      const b: Banner = { n: e.n, kind: e.kind, by: e.by, art: e.art, raw: e.text, amount: e.amount, tone: d.tone, text: short, choice: e.choice, risky: e.risky, success: e.success, note: e.note, qte: e.qte, ms: e.ms, taps: e.taps, target: e.target, nego: e.nego, other: e.other, tile: e.tile };
+      const b: Banner = { n: e.n, kind: e.kind, by: e.by, art: e.art, raw: e.text, amount: e.amount, tone: d.tone, text: short, choice: e.choice, risky: e.risky, success: e.success, note: e.note, qte: e.qte, ms: e.ms, taps: e.taps, target: e.target, nego: e.nego, other: e.other, tile: e.tile, bet: e.bet, reels: e.reels, slot: e.slot, spin: e.spin };
       setBanner(b);
       // The rail keeps the full line (card text included) for the last few events.
       if (e.kind !== "roll") setHistory((h) => [...h, { ...b, text: d.text }].slice(-5));
@@ -205,6 +205,10 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const offer = !g.done && (g.phase === "buy" || g.phase === "build") ? g.pos[g.turn] : null;
   // Landed on a space you can buy or build on: the land dialog opens once the figure has landed.
   const pendLand = settled && offer !== null ? offer : null;
+  // At the Judol slot: bet, spin, maybe spin again.
+  const pendGamble = settled && !g.done && g.phase === "gamble";
+  // Lelang: a live auction everyone can bid in (bids update the board state without new events).
+  const auc = !g.done && g.phase === "auction" && g.auction ? g.auction : null;
   // A Kejutan dilemma waiting on the player whose turn it is (shown once the board has caught up).
   const pend = settled && !g.done && g.phase === "dilemma" && g.qte ? g.qte : null;
   const pendCard = pend ? CARDS[pend.card] : null;
@@ -295,7 +299,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
     return () => clearTimeout(t);
   }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function send(move: { kind: "roll" } | { kind: "choose"; yes: boolean } | { kind: "dilemma"; risky: boolean; ms?: number } | { kind: "jail"; lobby: boolean; taps?: number } | { kind: "rent"; haggle: boolean; holdMs?: number }) {
+  async function send(move: { kind: "roll" } | { kind: "gamble"; bet: number } | { kind: "bid"; raise: number } | { kind: "choose"; yes: boolean } | { kind: "dilemma"; risky: boolean; ms?: number } | { kind: "jail"; lobby: boolean; taps?: number } | { kind: "rent"; haggle: boolean; holdMs?: number }) {
     if (sending) return;
     feedback.unlock();
     feedback.tap();
@@ -317,12 +321,18 @@ export function BoomPlay({ room }: { room: BoomView }) {
     ? mine ? (hold ? (hold.start === null ? "Hold the button, let go in the green zone" : "Let go in the green zone!") : `Rent due on ${SPACES[pendRent.tile].name}: ${money(pendRent.rent)}`) : `${nameOf(g.turn)} owes ${nameOf(pendRent.owner)} rent…`
     : pend
     ? g.turn === room.meId ? (run && run.stopAt === null ? "Tap when the needle is in the zone!" : run ? "…" : "Kejutan! Play it safe, or take the risk?") : `${nameOf(g.turn)} is deciding…`
+    : auc
+    ? `Lelang ${SPACES[auc.tile].name}! ${auc.leader ? `${auc.leader === room.meId ? "You lead" : `${nameOf(auc.leader)} leads`} at ${money(auc.bid)}` : "Anyone can bid"}`
+    : pendGamble
+    ? mine ? "Judol! Pasang taruhan, atau udahan?" : `${nameOf(g.turn)} is at the judol slot…`
     : offer !== null && settled
     ? g.phase === "buy" ? `${SPACES[offer].name} is for sale: ${money(priceOf(offer))}` : `Build on ${SPACES[offer].name}? Rent goes up to ${money(baseRent(offer, g.level[offer] + 1))}`
     : !settled ? "…" : g.done ? "" : g.turn === room.meId ? "Roll the dice!" : g.phase === "roll" ? `${nameOf(g.turn)} is rolling…` : `${nameOf(g.turn)} is deciding…`;
   const card = banner && (banner.kind === "card" || banner.kind === "wheel") && banner.art ? banner : null;
   // A quick time event that just finished, replayed for everyone.
   const qteDone = banner && (banner.kind === "lobby" || (banner.kind === "rent" && banner.nego)) ? banner : null;
+  const lastAuction = banner && banner.kind === "auction" && banner.tile !== undefined ? banner : null;
+  const lastSpin = banner && banner.kind === "gamble" && banner.bet && banner.reels ? banner : null;
   const negoPrice = (r: number, k: number) => money(Math.round((r * k) / 5) * 5);
   const sc = zoomed ? Math.max(fit * ZOOM_IN, (viewH - 8) / world.h) : fit;
   const focus = at[tokens[g.turn] ?? 0];
@@ -499,6 +509,48 @@ export function BoomPlay({ room }: { room: BoomView }) {
                   who={mine ? null : nameOf(g.turn)} cash={g.cash[g.turn] ?? 0}
                   onYes={() => send({ kind: "choose", yes: true })} onNo={() => send({ kind: "choose", yes: false })} />
               </div>
+            ) : auc ? (
+              <div className="jn-cardlayer">
+                <AuctionCard
+                  key={`lelang-${auc.tile}-${g.round}-${auc.from}`}
+                  a={auc}
+                  g={g}
+                  deadline={live.deadline}
+                  me={room.meId}
+                  canBid={g.isPlayer}
+                  busy={sending}
+                  nameOf={nameOf}
+                  inkOf={inkOf}
+                  onBid={(raise) => send({ kind: "bid", raise })}
+                />
+              </div>
+            ) : lastAuction ? (
+              <div className="jn-cardlayer">
+                <div key={lastAuction.n} className="jn-card jn-lelang done">
+                  <span className="jn-cardtag">LELANG</span>
+                  <span className="jn-gavel down" aria-hidden="true">🔨</span>
+                  <h3 className="jn-landname">{SPACES[lastAuction.tile!].name}</h3>
+                  <div className="jn-bidbox">
+                    <b className="jn-qtestamp">{lastAuction.amount ? "TERJUAL!" : "TIDAK LAKU"}</b>
+                  </div>
+                  <p className="jn-cardwho">{lastAuction.amount ? `${nameOf(lastAuction.by)} · ${money(lastAuction.amount)}` : "The bank keeps it."}</p>
+                </div>
+              </div>
+            ) : pendGamble || lastSpin ? (
+              <div className="jn-cardlayer">
+                <GambleCard
+                  key={`judol-${g.turn}-${g.round}`}
+                  spin={lastSpin}
+                  open={pendGamble}
+                  act={myTurn && pendGamble}
+                  busy={sending}
+                  cash={g.cash[g.turn] ?? 0}
+                  spins={g.spins ?? 0}
+                  who={(pendGamble ? g.turn : lastSpin?.by) === room.meId ? null : nameOf(pendGamble ? g.turn : lastSpin?.by)}
+                  ink={inkOf(pendGamble ? g.turn : lastSpin?.by)}
+                  onBet={(bet) => send({ kind: "gamble", bet })}
+                />
+              </div>
             ) : qteDone ? (
               <div className="jn-cardlayer">
                 <div key={qteDone.n} className="jn-card">
@@ -537,7 +589,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
       </section>
 
       {/* Your move floats in the corner: a big Roll button wrapped in the turn clock, or just the clock while a card waits. */}
-      {myTurn && (
+      {myTurn && g.phase !== "auction" && (
         <div className={`jn-act${g.phase === "roll" ? " roll" : ""}`}>
           <TimerRing deadline={live.deadline} total={g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" ? DILEMMA_MS : CHOICE_MS} />
           {g.phase === "roll" ? (
@@ -611,6 +663,134 @@ function Secs({ deadline }: { deadline?: number | null }) {
   return <>{left}s</>;
 }
 
+/** "Going once, going twice": what the auctioneer is calling with this much time left. */
+function useCall(deadline?: number | null) {
+  const [left, setLeft] = useState(99);
+  useEffect(() => {
+    const tick = () => setLeft(deadline ? (deadline - Date.now()) / 1000 : 99);
+    tick();
+    const t = setInterval(tick, 150);
+    return () => clearInterval(t);
+  }, [deadline]);
+  return left;
+}
+
+/** The Lelang card: what's up, the current bid and who holds it, the hammer clock, and raise buttons for everyone. */
+function AuctionCard({ a, g, deadline, me, canBid, busy, nameOf, inkOf, onBid }: {
+  a: NonNullable<BoomGameView["auction"]>; g: BoomGameView; deadline?: number | null; me: string; canBid: boolean; busy: boolean;
+  nameOf: NameOf; inkOf: (p?: string | null) => string; onBid: (raise: number) => void;
+}) {
+  const s = SPACES[a.tile];
+  const lot = s.kind === "lot";
+  const left = useCall(deadline);
+  const call = left > 3 ? "Tawar!" : left > 2 ? "Satu kali…" : left > 1 ? "Dua kali…" : left > 0 ? "Tiga…" : "Dok!";
+  const leading = a.leader === me;
+  const cash = g.cash[me] ?? 0;
+  const prev = useRef(a.bid);
+  useEffect(() => {
+    if (a.bid !== prev.current) { prev.current = a.bid; if (a.leader !== me) feedback.tick(); }
+  }, [a.bid, a.leader, me]);
+  return (
+    <div className={`jn-card jn-lelang${canBid ? " act" : ""}`} style={{ "--band": lot ? GROUPS[s.group].color : "#6B5A52" } as CSSProperties}>
+      <span className="jn-landband" />
+      <span className="jn-cardtag">LELANG!</span>
+      <span className={`jn-gavel${left < 1.2 ? " down" : ""}`} aria-hidden="true">🔨</span>
+      <span className="ow-kicker">{lot ? GROUPS[s.group].name : "Transport"} · harga {money(priceOf(a.tile))}</span>
+      <h3 className="jn-landname">{s.name}</h3>
+      <div className="jn-bidbox" aria-live="polite">
+        <b key={a.bid} className="jn-bid">{a.leader ? money(a.bid) : "—"}</b>
+        <span className="jn-bidder">
+          {a.leader ? <><i style={{ background: inkOf(a.leader) }} />{a.leader === me ? "You lead" : `${nameOf(a.leader)} leads`}</> : `Opens at ${money(openingBid(a.tile))}`}
+        </span>
+      </div>
+      <div className="jn-hammer"><span className="jn-hammerfill" style={{ width: `${Math.max(0, Math.min(100, (left / 7) * 100))}%` }} /><b>{call}</b></div>
+      {canBid && (leading ? (
+        <p className="jn-leadnote">You’re winning. Hold on…</p>
+      ) : (
+        <div className="jn-raises">
+          {(a.leader ? RAISES : [RAISES[0]]).map((r) => {
+            const next = nextBid(a, r);
+            return (
+              <button key={r} type="button" className="jn-bet" disabled={busy || cash < next || left <= 0} onClick={() => onBid(r)}>
+                {a.leader ? <>+{money(r)}<small>{money(next)}</small></> : <>Buka {money(next)}</>}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+      <p className="jn-slotfine">{nameOf(a.from)} passed on it · {a.bids} bid{a.bids === 1 ? "" : "s"}</p>
+    </div>
+  );
+}
+
+const SLOT_STAMP = { jackpot: "JACKPOT!!", triple: "MAXWIN ×4", pair: "MENANG ×2", zonk: "ZONK", raid: "GEREBEK!" } as const;
+const playedSpins = new Set<number>(); // spins whose reels already rolled on this phone
+
+/** The Judol slot machine: three reels that spin and stop one by one, then a stamp. */
+function SlotReels({ spin }: { spin: Banner | null }) {
+  const final = spin?.reels ?? [0, 1, 2];
+  const fresh = !!spin && !playedSpins.has(spin.n);
+  const [shown, setShown] = useState<number[]>(fresh ? [1, 3, 2] : [...final]);
+  const [stopped, setStopped] = useState(fresh ? 0 : 3);
+  const n = spin?.n;
+  const reels = spin?.reels;
+  useEffect(() => {
+    if (n === undefined || !reels || playedSpins.has(n)) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t0 = performance.now();
+    const stops = reduce ? [0, 0, 0] : [550, 900, 1300];
+    let last = 0;
+    const iv = setInterval(() => {
+      const t = performance.now() - t0;
+      const stop = stops.filter((x) => t >= x).length;
+      if (stop !== last) { last = stop; feedback.tick(); }
+      setStopped(stop);
+      setShown((cur) => cur.map((v, k) => (k < stop ? reels[k] : (v + 1 + Math.floor(Math.random() * 3)) % SLOT.length)));
+      // Only once the reels have stopped does this spin count as seen (a re-run mid-spin starts it again).
+      if (stop >= 3) { clearInterval(iv); playedSpins.add(n); }
+    }, 70);
+    return () => clearInterval(iv);
+  }, [n]); // eslint-disable-line react-hooks/exhaustive-deps
+  const done = !!spin && stopped >= 3;
+  const res = spin?.slot;
+  return (
+    <div className={`jn-slot${done && res ? ` ${res}` : ""}`}>
+      <span className="jn-slottop">SLOT GACOR <i /><i /><i /></span>
+      <div className="jn-reels">
+        {shown.map((v, k) => <span key={k} className={`jn-reel${k < stopped || !spin ? " stop" : ""}`}><b>{SLOT[v]}</b></span>)}
+      </div>
+      {done && res && <b className="jn-qtestamp">{SLOT_STAMP[res]}</b>}
+    </div>
+  );
+}
+
+/** The Judol card: the machine, the stakes, and bet chips for the player at the table. */
+function GambleCard({ spin, open, act, busy, cash, spins, who, ink, onBet }: {
+  spin: Banner | null; open: boolean; act: boolean; busy: boolean; cash: number; spins: number; who: string | null; ink: string; onBet: (bet: number) => void;
+}) {
+  const net = spin?.amount ?? 0;
+  return (
+    <div className={`jn-card jn-judol${act ? " act" : ""}`} style={{ "--f": ink } as CSSProperties}>
+      <span className="jn-cardtag">JUDOL · {open ? `PUTARAN ${spins + 1}/${SLOT_SPINS}` : "HASIL"}</span>
+      <SlotReels key={spin?.n ?? "idle"} spin={spin} />
+      {spin && <p className={`jn-slotnet${net > 0 ? " up" : " down"}`}>{who ?? "You"} {net >= 0 ? "+" : "−"}{money(Math.abs(net))}</p>}
+      {open && act ? (
+        <>
+          <div className="jn-bets">
+            {BETS.map((b) => (
+              <button key={b} type="button" className="jn-bet" disabled={busy || cash < b} onClick={() => onBet(b)}>{money(b)}</button>
+            ))}
+          </div>
+          <button type="button" className="ow-btn ghost jn-cardbtn" disabled={busy} onClick={() => onBet(0)}>{spins ? "Udahan, cukup" : "Lewati"}</button>
+          <p className="jn-slotfine">Pair ×{SLOT_PAY.pair} · Triple ×{SLOT_PAY.triple} · 7️⃣7️⃣7️⃣ ×{SLOT_PAY.jackpot} · 🚨🚨 = gerebek</p>
+        </>
+      ) : (
+        <p className="jn-cardwho">{open ? `${who} is deciding…` : "Bandar selalu menang."}</p>
+      )}
+    </div>
+  );
+}
+
 /** One side of a decision on a card: a real button for the player deciding, a plain chip for everyone watching. */
 function Choice({ kind, act, busy, title, sub, onPick }: { kind: "safe" | "risky"; act: boolean; busy: boolean; title: string; sub: string; onPick: () => void }) {
   if (!act) return <span className={`jn-optchip ${kind}`}><b>{title}</b>{sub}</span>;
@@ -674,6 +854,7 @@ const ABOUT: Record<string, string> = {
   start: `Everyone begins here. It's gajian every time you pass: collect ${money(LAP_BONUS)}.`,
   jail: "Just passing through is fine. If you get called in for questioning, you sit out your next turn.",
   jackpot: "Land here to cash in the dana aspirasi. Pungli and fines keep topping it up.",
+  judol: `Judi online, satire edition. Bet ${money(BETS[0])} to ${money(BETS[2])}: a pair pays ×${SLOT_PAY.pair}, three of a kind ×${SLOT_PAY.triple}, 7-7-7 ×${SLOT_PAY.jackpot}. Two sirens is a raid and you're called in. Up to ${SLOT_SPINS} spins, and the bandar always wins in the end.`,
   wheel: "A kampanye rally: rake in sponsors, blow the budget, or get audited and called in.",
   surprise: "Draw a Kejutan card of political satire. It might pay you, cost you, or move you.",
   bonus: `A serangan fajar envelope! Collect ${money(50)} to ${money(200)}.`,

@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { addXp, befriend, findPlayer, freeCode, requirePlayer } from "./lib/helpers";
-import { BOOM_MAX, BOTS, ROUND_CHOICES, choose, isBot, leaveGame, newGame, onDeadline, rentOf, resolveDilemma, resolveJail, resolveRent, roll, worthOf, type BoomGame, type Seat } from "./lib/boom/rules";
+import { BOOM_MAX, BOTS, ROUND_CHOICES, choose, isBot, leaveGame, newGame, onDeadline, rentOf, placeBid, resolveDilemma, resolveGamble, resolveJail, resolveRent, roll, worthOf, type BoomGame, type Seat } from "./lib/boom/rules";
 
 type Room = Doc<"boomRooms">;
 
@@ -165,6 +165,10 @@ export const act = mutation({
       v.object({ kind: v.literal("jail"), lobby: v.boolean(), taps: v.optional(v.number()) }),
       // Rent: pay in full, or haggle (how long the meter was held).
       v.object({ kind: v.literal("rent"), haggle: v.boolean(), holdMs: v.optional(v.number()) }),
+      // Judol: the bet for this spin (0 walks away).
+      v.object({ kind: v.literal("gamble"), bet: v.number() }),
+      // Lelang: anyone still in can raise the bid (by 10 or 50), whoever's turn it is.
+      v.object({ kind: v.literal("bid"), raise: v.number() }),
     ),
   },
   handler: async (ctx, { code, move }) => {
@@ -176,6 +180,11 @@ export const act = mutation({
     if (!g.players.includes(me._id) || g.out.includes(me._id)) throw new ConvexError("You're watching this game");
     const now = Date.now();
     if (room.startAt && now < room.startAt - 200) throw new ConvexError("Wait for the countdown");
+    if (move.kind === "bid") {
+      if (g.phase !== "auction") throw new ConvexError("The auction is over");
+      if (!placeBid(g, me._id, move.raise, now)) throw new ConvexError("That bid doesn't stand");
+      return await commit(ctx, room, g);
+    }
     if (g.turn !== me._id) throw new ConvexError("It's not your turn");
     if (move.kind === "roll") {
       if (g.phase !== "roll") throw new ConvexError("Decide on this space first");
@@ -186,12 +195,15 @@ export const act = mutation({
     } else if (move.kind === "rent") {
       if (g.phase !== "rent") throw new ConvexError("There's no rent to settle");
       resolveRent(g, move.haggle, move.holdMs ?? null, now);
+    } else if (move.kind === "gamble") {
+      if (g.phase !== "gamble") throw new ConvexError("You're not at the Judol table");
+      resolveGamble(g, move.bet, Math.random, now);
     } else if (move.kind === "dilemma") {
       if (g.phase !== "dilemma") throw new ConvexError("There's no Kejutan to decide");
       resolveDilemma(g, move.risky, move.ms ?? null, now);
     } else {
       if (g.phase !== "buy" && g.phase !== "build") throw new ConvexError("Roll the dice first");
-      choose(g, move.yes, now);
+      choose(g, move.yes, now, Math.random);
     }
     await commit(ctx, room, g);
   },
@@ -267,6 +279,9 @@ export const view = query({
         log: g.log,
         qte: g.qte ?? null,
         nego: g.nego ?? null,
+        spins: g.spins ?? 0,
+        // The auction without the bots' private limits.
+        auction: g.auction ? { tile: g.auction.tile, bid: g.auction.bid, leader: g.auction.leader, from: g.auction.from, bids: g.auction.bids } : null,
         deadline: g.deadline ?? null,
         done: g.done ?? null,
       },

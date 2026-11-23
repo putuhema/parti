@@ -8,7 +8,7 @@
 //                    4 Sumatra, 5 Bali & Lombok, 6 Jawa, 7 Jakarta)
 //   hub              pelabuhan, bandara, stasiun, terminal
 //   start, jail, jackpot, wheel        the four corners (Start, Diperiksa, Dana Aspirasi, Kampanye)
-//   surprise, bonus, tax               Kejutan, Serangan Fajar, Pungli
+//   surprise, bonus, tax, judol        Kejutan, Serangan Fajar, Pungli, the Judol slot
 //   ground                              the empty cells inside the ring
 //
 // Names, prices and owner colours are laid on top of your art by the game, so leave the top face free of text.
