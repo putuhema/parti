@@ -45,8 +45,11 @@ function useWide() {
     () => false,
   );
 }
-/** Room kept clear for the corner HUD (players up top, dice and news below) on phones; big screens use the empty corners. */
-const HUD_PHONE = { top: 50, bottom: 112 }, HUD_WIDE = { top: 0, bottom: 64 };
+/**
+ * The board fills the whole screen and the HUD floats over it. These are the edges the floating HUD covers
+ * (they match the .jn-play styles), so the board is fitted and centred in the open space between them.
+ */
+const HUD_PHONE = { top: 112, bottom: 270, left: 0, right: 0 }, HUD_WIDE = { top: 72, bottom: 128, left: 280, right: 8 };
 const ZOOM_IN = 2.2;
 const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
 
@@ -94,8 +97,8 @@ export function BoomPlay({ room }: { room: BoomView }) {
     return () => ro.disconnect();
   }, []);
   const hud = wide ? HUD_WIDE : HUD_PHONE;
-  const viewH = size.h - hud.top - hud.bottom;
-  const fit = size.w ? Math.max(0.1, Math.min((size.w - 16) / world.w, (viewH - 8) / world.h)) : 0;
+  const viewH = size.h - hud.top - hud.bottom, viewW = size.w - hud.left - hud.right;
+  const fit = size.w ? Math.max(0.1, Math.min((viewW - 16) / world.w, (viewH - 8) / world.h)) : 0;
   // Zoomed in, the camera follows whoever's turn it is, until you drag it somewhere else.
   // Phones start zoomed in (the whole diamond is tiny there); big screens start on the whole board.
   const [zoomPick, setZoomPick] = useState<{ wide: boolean; on: boolean } | null>(null);
@@ -324,11 +327,11 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const userPan = pan && pan.turn === g.turn ? pan : null;
   let camX = world.w / 2, camY = world.h / 2;
   if (zoomed) {
-    const hw = size.w / 2 / sc, hh = viewH / 2 / sc;
+    const hw = viewW / 2 / sc, hh = viewH / 2 / sc;
     camX = clamp(userPan?.x ?? focus.x, hw, world.w - hw);
     camY = clamp(userPan?.y ?? focus.y, hh, world.h - hh);
   }
-  const camera = `translate(${(size.w / 2 - camX * sc).toFixed(1)}px, ${(hud.top + viewH / 2 - camY * sc).toFixed(1)}px) scale(${sc.toFixed(4)})`;
+  const camera = `translate(${(hud.left + viewW / 2 - camX * sc).toFixed(1)}px, ${(hud.top + viewH / 2 - camY * sc).toFixed(1)}px) scale(${sc.toFixed(4)})`;
   function onDown(e: React.PointerEvent) {
     if (e.button !== 0 || !zoomed || (e.target as HTMLElement).closest(".jn-cardlayer")) return;
     drag.current = { x: e.clientX, y: e.clientY, cx: camX, cy: camY, id: e.pointerId, moved: false };

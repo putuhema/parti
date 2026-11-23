@@ -1150,6 +1150,53 @@ a { text-decoration: none; }
   .jn-cam { right: 14px; bottom: 14px; }
   .jn-cambtn { width: 40px; height: 40px; border-radius: 12px; }
 }
+/* ---- full-screen board: the board is the whole screen, and the HUD floats over it ---- */
+.ow-screen.ow-play.jn-play { position: relative; display: block; max-width: none; width: 100%; height: 100dvh; min-height: 0; padding: 0; overflow: hidden;
+  background: radial-gradient(ellipse 80% 70% at 50% 46%, #F7F1E4 0%, #EDE3CC 62%, #E2D3B2 100%); }
+body:has(.jn-play) { background: #E2D3B2; }
+.jn-play .ow-table { position: absolute; inset: 0; padding: 0; margin: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.jn-play.myturn .ow-table { box-shadow: none; }
+.jn-play .jn-boardwrap { position: absolute; inset: 0; }
+.jn-play .jn-iso { border-radius: 0; }
+.jn-play .ow-timer { display: none !important; }
+/* Everything that floats shares one look: bone or ink cards with an ink outline and a hard ink shadow. */
+.jn-play > .topbar { position: absolute; z-index: 20; top: calc(env(safe-area-inset-top) + 10px); left: 12px; right: 12px; margin: 0; padding: 0; pointer-events: none; }
+.jn-play > .topbar > * { pointer-events: auto; }
+.jn-play > .topbar .ow-wordmark { padding: 2px 12px 4px; border-radius: 14px; background: var(--ow-mustard); border: 3px solid var(--ow-ink); box-shadow: 3px 3px 0 var(--ow-ink); }
+.jn-play > .topbar .ow-chip, .jn-play > .topbar .jn-pot { box-shadow: 3px 3px 0 rgba(35,27,26,.9); }
+.jn-play .jn-pot { display: inline-block; border-width: 2.5px; }
+@media (max-width: 999px) {
+  .jn-play > .topbar { gap: 6px !important; }
+  .jn-play > .topbar .ow-wordmark { font-size: 19px; padding: 1px 8px 3px; border-radius: 11px; border-width: 2.5px; }
+  .jn-play > .topbar .ow-chip, .jn-play > .topbar .jn-pot { padding: 4px 8px; font-size: 11.5px; letter-spacing: .03em; }
+}
+.jn-play .jn-hudtop { top: calc(env(safe-area-inset-top) + 64px); left: 12px; right: 12px; z-index: 6; }
+.jn-play .jn-hudtop .ow-pl { box-shadow: 2px 2px 0 var(--ow-ink); }
+.jn-play .jn-hudtop .ow-pl.turn { box-shadow: 3px 3px 0 var(--ow-ink); }
+.jn-play .jn-dock { position: absolute; z-index: 20; left: 10px; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); margin: 0;
+  border: 3px solid var(--ow-ink); box-shadow: 4px 4px 0 rgba(35,27,26,.35); }
+.jn-play .jn-hudbl { left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 166px); z-index: 6; }
+.jn-play .jn-hudbl .jn-banner { border: 2.5px solid var(--ow-ink); box-shadow: 3px 3px 0 rgba(35,27,26,.25); }
+.jn-play .jn-cam { right: 12px; bottom: calc(env(safe-area-inset-bottom) + 232px); z-index: 6; }
+.jn-play .jn-cardlayer { top: 104px; bottom: 160px; }
+@media (min-width: 1000px) {
+  .jn-play > .topbar { top: 18px; left: 20px; right: 20px; }
+  .jn-play .ow-rail { position: absolute; z-index: 10; top: 84px; left: 20px; bottom: 150px; width: 250px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  .jn-play .ow-rail > * { pointer-events: auto; }
+  .jn-play .ow-raillabel { display: none; }
+  .jn-play .ow-rail .ow-players { display: flex; flex-direction: column; gap: 8px; }
+  .jn-play .ow-rail .ow-pl { box-shadow: 3px 3px 0 var(--ow-ink); }
+  .jn-play .ow-rail .ow-pl.turn { box-shadow: 5px 5px 0 var(--ow-ink); }
+  .jn-play .jn-log { flex: 0 1 auto; max-height: 100%; height: auto; margin-top: 4px; border: 3px solid var(--ow-ink); box-shadow: 4px 4px 0 rgba(35,27,26,.3); }
+  .jn-play .jn-dock { left: auto; right: 20px; bottom: 20px; width: min(640px, 56vw); padding: 14px 20px; gap: 16px; grid-template-columns: 120px minmax(0, 1fr) 270px; border-radius: 24px; }
+  .jn-play .jn-dock .ow-dockhead { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .jn-play .jn-dock .ow-docktimer { display: block; width: 100%; }
+  .jn-play .jn-dock .ow-dockhead b { font-size: 22px; }
+  .jn-play .jn-status { font-size: 17px; line-height: 23px; height: 46px; }
+  .jn-play .jn-hudbl { left: 20px; right: auto; bottom: 20px; width: min(360px, calc(44vw - 60px)); }
+  .jn-play .jn-cam { right: 20px; bottom: 136px; }
+  .jn-play .jn-cardlayer { top: 72px; bottom: 120px; left: 270px; }
+}
 @media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
 
 /* ---------- Sketch Match ---------- */
