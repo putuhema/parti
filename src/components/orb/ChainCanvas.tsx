@@ -14,8 +14,15 @@ export type Fresh = { n: number; key: string; orb: boolean } | null;
 const C = { bone: "#F3EDE0", ink: "#231B1A", muted: "#5A4A44", coral: "#E2574C", coralSoft: "#FBE3DF", moss: "#3FA77A", magenta: "#D23A8C", mustard: "#F4C64E" };
 const FACE: Record<Ink, string> = { plum: "#5E4A8C", lagoon: "#69BFD6", moss: "#3FA77A", magenta: "#D23A8C", bone: "#F3EDE0" };
 // The board's height comes from CSS (fixed per screen size), so the chain never pushes the page around.
-const LAND_MS = 520;
+// A placed tile lands in three beats: a small lift (anticipation), a fall that stretches, then an impact
+// that squashes and wobbles to rest on a damped spring.
+const RISE_MS = 90;
+const DROP_MS = 150;
+const HIT_MS = RISE_MS + DROP_MS;
 const FX_MS = 1500;
+
+/** A chip or dust puff with real gravity, drag and spin. */
+type Bit = { x: number; y: number; vx: number; vy: number; r: number; vr: number; c: string; t: number; life: number; w: number; h: number; g: number; drag: number; round: boolean };
 
 type Item =
   | { kind: "end"; side: Side; value: number }
@@ -82,7 +89,6 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.roundRect(x, y, w, h, r);
 }
 
-const easeOutBack = (p: number) => 1 + 2.4 * Math.pow(p - 1, 3) + 1.4 * Math.pow(p - 1, 2);
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 
 export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsRef, label }: {
@@ -119,7 +125,63 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
     const readFont = () => { font = getComputedStyle(el).getPropertyValue("--font-allo").trim() || "sans-serif"; };
     readFont();
 
+    // ---- juice: a spring for board shake, and physics particles ----
+    let lastT = 0;
+    let shake = 0, shakeV = 0;
+    let hitN = -1;
+    const bits: Bit[] = [];
+    const jolt = (amount: number) => { if (!still) shakeV += amount; };
+    const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+    const burst = (x: number, y: number, n: number, cols: string[]) => {
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + rnd(-1.25, 1.25), sp = rnd(110, 280);
+        bits.push({ x: x + rnd(-8, 8), y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rnd(0, 6.28), vr: rnd(-16, 16), c: cols[i % cols.length], t: 0, life: rnd(0.45, 0.85), w: rnd(3, 6), h: 2.6, g: 700, drag: 1.4, round: false });
+      }
+    };
+    const dust = (x: number, y: number, w: number, n: number) => {
+      for (let i = 0; i < n; i++) {
+        const side = i % 2 ? 1 : -1;
+        bits.push({ x: x + side * (w / 2 - rnd(0, 5)), y, vx: side * rnd(40, 120), vy: -rnd(8, 40), r: 0, vr: 0, c: "rgba(90,74,68,.35)", t: 0, life: rnd(0.28, 0.5), w: rnd(2, 4), h: 0, g: 180, drag: 5, round: true });
+      }
+    };
+    const stepFx = (dt: number) => {
+      shakeV += (-260 * shake - 15 * shakeV) * dt;
+      shake += shakeV * dt;
+      for (let i = bits.length - 1; i >= 0; i--) {
+        const b = bits[i];
+        b.t += dt;
+        b.vy += b.g * dt;
+        b.vx *= 1 - Math.min(1, b.drag * dt);
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.r += b.vr * dt;
+        if (b.t > b.life) bits.splice(i, 1);
+      }
+    };
+    const drawBits = () => {
+      for (const b of bits) {
+        const k = b.t / b.life;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - k);
+        ctx.translate(b.x, b.y);
+        if (b.round) {
+          ctx.fillStyle = b.c;
+          ctx.beginPath(); ctx.arc(0, 0, b.w * (1 - k * 0.5), 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.rotate(b.r);
+          ctx.fillStyle = C.ink;
+          ctx.fillRect(-b.w / 2 - 1, -b.h / 2 - 1, b.w + 2, b.h + 2);
+          ctx.fillStyle = b.c;
+          ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+        }
+        ctx.restore();
+      }
+    };
+
     const paint = (now: number) => {
+      const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0;
+      lastT = now;
+      stepFx(dt);
       const p = props.current;
       const dpr = window.devicePixelRatio || 1;
       if (el.width !== Math.round(width * dpr) || el.height !== Math.round(HEIGHT * dpr)) {
@@ -128,6 +190,7 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, HEIGHT);
+      ctx.translate(0, shake);
 
       const items: Item[] = [
         { kind: "end", side: "L", value: p.ends.L },
@@ -183,7 +246,7 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
       const f = p.fresh;
       if (f && f.n !== born.current.n) born.current = { n: f.n, at: now };
       const age = f && f.n === born.current.n && !still ? now - born.current.at : Infinity;
-      let busy = age < FX_MS || p.hot.length > 0 || !!p.over;
+      let busy = age < FX_MS || p.hot.length > 0 || !!p.over || bits.length > 0 || Math.abs(shake) > 0.05 || Math.abs(shakeV) > 0.5;
 
       const shadow = Math.max(1.5, u * 0.1);
       const fontPx = (s: number) => `800 ${Math.round(s)}px ${font}`;
@@ -223,17 +286,53 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
         }
 
         const isNew = it.key === f?.key && age < FX_MS;
-        const land = isNew ? clamp(age / LAND_MS) : 1;
-        const e = easeOutBack(land);
-        const lift = (1 - e) * -u * 1.6;
-        const scale = 1 + (1 - land) * 0.3;
+        // Lift, fall (stretching), then squash on impact and wobble to rest.
+        let ty = 0, sx = 1, sy = 1, rot = 0, alpha = 1, fall = 1;
+        if (isNew) {
+          // Fall only as far as there's room above the tile; with little room (the top row), the tile
+          // drops toward the board from nearer the viewer instead, starting larger and shrinking down.
+          const lift = u * 0.35;
+          const H = Math.max(0, Math.min(u * 2.6, b.y - lift - 6));
+          const zoom = 1 + 0.45 * (1 - H / (u * 2.6));
+          if (age < RISE_MS) {
+            const q = age / RISE_MS;
+            ty = -H - lift * Math.sin((q * Math.PI) / 2);
+            alpha = q; sx = sy = 1.06 * zoom; rot = -0.14 * q; fall = 0;
+          } else if (age < HIT_MS) {
+            const q = (age - RISE_MS) / DROP_MS, e = q * q;
+            const z = 1 + (zoom - 1) * (1 - e);
+            ty = (-H - lift) * (1 - e);
+            sy = (1 + 0.16 * q) * z; sx = (1 - 0.08 * q) * z; rot = -0.14 * (1 - q); fall = e;
+          } else {
+            const q = (age - HIT_MS) / 1000, d = Math.exp(-q * 9) * Math.cos(q * 26);
+            sy = 1 - 0.22 * d; sx = 1 + 0.16 * d;
+          }
+          // A contact shadow grows under the falling tile.
+          if (age < HIT_MS) {
+            ctx.save();
+            ctx.globalAlpha = 0.16 * fall;
+            ctx.fillStyle = C.ink;
+            ctx.beginPath(); ctx.ellipse(b.x + b.w / 2, b.y + b.h + 2, (b.w / 2) * (0.5 + 0.5 * fall), Math.max(1.5, u * 0.12), 0, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          }
+          // The moment of impact: chips, dust and a jolt through the board.
+          if (age >= HIT_MS && hitN !== f!.n) {
+            hitN = f!.n;
+            const cols = f!.orb ? [C.magenta, C.mustard, C.bone, C.magenta] : [FACE[it.ink], C.mustard, FACE[it.ink]];
+            burst(b.x + b.w / 2, b.y + 2, f!.orb ? 18 : 9, cols);
+            dust(b.x + b.w / 2, b.y + b.h, b.w, 6);
+            jolt(f!.orb ? 150 : 70);
+          }
+        }
         const face = FACE[it.ink];
         const text = it.ink === "bone" ? C.ink : C.bone;
         ctx.save();
-        ctx.globalAlpha = isNew ? clamp(land * 2.2) : 1;
-        ctx.translate(b.x + b.w / 2, b.y + b.h / 2 + lift);
-        ctx.rotate(isNew ? (1 - land) * -0.25 : 0);
-        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        // Scale around the tile's bottom edge, so a squash looks like it's pressing into the board.
+        ctx.translate(b.x + b.w / 2, b.y + b.h + ty);
+        ctx.scale(sx, sy);
+        ctx.translate(0, -b.h / 2);
+        ctx.rotate(rot);
         const x = -b.w / 2, y = -b.h / 2, r = Math.max(3, u * 0.24);
         rr(ctx, x + shadow, y + shadow, b.w, b.h, r);
         ctx.fillStyle = C.ink;
@@ -263,7 +362,7 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
 
         if (isNew) {
           const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
-          const ring = clamp((age - 180) / (f!.orb ? 1000 : 700));
+          const ring = clamp((age - HIT_MS) / (f!.orb ? 1000 : 700));
           if (ring > 0 && ring < 1) {
             ctx.save();
             ctx.globalAlpha = 1 - ring;
@@ -274,24 +373,8 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
             ctx.stroke();
             ctx.restore();
           }
-          const sp = clamp((age - 200) / 640);
-          if (sp > 0 && sp < 1) {
-            ctx.save();
-            ctx.globalAlpha = 1 - sp;
-            const col = f!.orb ? C.magenta : it.ink === "bone" ? C.mustard : face;
-            for (let i = 0; i < 10; i++) {
-              const a = (i * Math.PI) / 5;
-              const d = u * 0.4 + sp * u * 1.6;
-              const s = (i % 2 ? 4 : 6) * (1 - sp * 0.6);
-              ctx.fillStyle = C.ink;
-              ctx.fillRect(cx + Math.cos(a) * d - s / 2 - 1, cy + Math.sin(a) * d - s / 2 - 1, s + 2, s + 2);
-              ctx.fillStyle = col;
-              ctx.fillRect(cx + Math.cos(a) * d - s / 2, cy + Math.sin(a) * d - s / 2, s, s);
-            }
-            ctx.restore();
-          }
           if (f!.orb) {
-            const t = clamp((age - 250) / 1250);
+            const t = clamp((age - HIT_MS - 40) / 1250);
             if (t > 0 && t < 1) {
               const rise = t < 0.18 ? (t / 0.18) * 14 : 14 + (t - 0.18) * 20;
               ctx.save();
@@ -316,6 +399,7 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
           }
         }
       }
+      drawBits();
       if (still) busy = false;
       raf = busy ? requestAnimationFrame(paint) : 0;
     };

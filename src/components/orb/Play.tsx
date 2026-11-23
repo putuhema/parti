@@ -121,7 +121,8 @@ export function OrbPlay({ room }: { room: OrbView }) {
       const id = ++flingId.current;
       const turnNo = g.turnNo;
       setFling({ t, turnNo, x: start.x, y: start.y, go: false });
-      requestAnimationFrame(() => requestAnimationFrame(() => { if (flingId.current === id) setFling({ t, turnNo, x: end.x + end.w / 2, y: end.y + end.h / 2, go: true }); }));
+      // A short wind-up (the tile tucks in) before it flies to the end.
+      setTimeout(() => { if (flingId.current === id) setFling({ t, turnNo, x: end.x + end.w / 2, y: end.y + end.h / 2, go: true }); }, 90);
     }
     void send({ kind: "cast", index: i, side });
   }
@@ -129,48 +130,73 @@ export function OrbPlay({ room }: { room: OrbView }) {
   const castOn = (side: Side) => { if (sel !== null) castIndex(sel, side); };
 
   // Drag a tile from your hand onto a glowing end.
+  // The pointer is captured on press, so fast flicks and releases off the tile still reach these handlers.
+  // The ghost moves through a ref (no re-render per pixel); React state only changes when the drag starts,
+  // when the end under it changes, and when it ends. A drag belongs to one turn and dies with it.
   const handRef = useRef<HTMLDivElement>(null);
-  const press = useRef<{ i: number; x: number; y: number; id: number } | null>(null);
+  const ghostRef = useRef<HTMLSpanElement>(null);
+  const press = useRef<{ i: number; x: number; y: number; id: number; turnNo: number } | null>(null);
   const dragged = useRef(false);
-  const [drag, setDrag] = useState<{ i: number; x: number; y: number; over: Side | null } | null>(null);
+  const overRef = useRef<Side | null>(null);
+  const [dragState, setDrag] = useState<{ i: number; x: number; y: number; over: Side | null; turnNo: number } | null>(null);
+  const drag = dragState && dragState.turnNo === g.turnNo && myTurn ? dragState : null;
+  /** The end nearest the pointer, within a generous reach of the end's box (fingers cover a lot). */
   const endUnder = (x: number, y: number): Side | null => {
+    let best: Side | null = null, bestD = 44;
     for (const s of ["L", "R"] as Side[]) {
       const r = endsRef.current[s];
-      if (r && x > r.x - 24 && x < r.x + r.w + 24 && y > r.y - 30 && y < r.y + r.h + 30) return s;
+      if (!r) continue;
+      // The ghost floats just above the finger, so measure from a point a little higher.
+      const px = x, py = y - 14;
+      const dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+      const d = Math.hypot(dx, dy);
+      if (d < bestD) { bestD = d; best = s; }
     }
-    return null;
+    return best;
+  };
+  const placeGhost = (x: number, y: number) => {
+    const el = ghostRef.current;
+    if (el) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
   };
   function onDown(e: React.PointerEvent, i: number) {
-    if (!myTurn || busy) return;
-    press.current = { i, x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (!myTurn || busy || e.button > 0) return;
+    press.current = { i, x: e.clientX, y: e.clientY, id: e.pointerId, turnNo: g.turnNo };
     dragged.current = false;
+    overRef.current = null;
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* the pointer may already be gone */ }
   }
   function onMove(e: React.PointerEvent) {
     const p = press.current;
     if (!p || p.id !== e.pointerId) return;
+    if (p.turnNo !== g.turnNo || !myTurn) { onCancel(); return; }
     if (!dragged.current) {
       if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 8) return;
       dragged.current = true;
-      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* the pointer may already be gone */ }
       setSel(p.i);
       feedback.tap();
+      setDrag({ i: p.i, x: e.clientX, y: e.clientY, over: null, turnNo: p.turnNo });
     }
+    placeGhost(e.clientX, e.clientY);
     const over = endUnder(e.clientX, e.clientY);
-    setDrag((d) => {
-      if (d?.over !== over && over && fitsOf(g.hand[p.i]).includes(over)) feedback.move();
-      return { i: p.i, x: e.clientX, y: e.clientY, over };
-    });
+    if (over !== overRef.current) {
+      overRef.current = over;
+      if (over && fitsOf(g.hand[p.i] ?? [-1, -1]).includes(over)) feedback.move();
+      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY, over } : d));
+    }
   }
   function onUp(e: React.PointerEvent) {
     const p = press.current;
     press.current = null;
-    if (!p || !dragged.current) return;
-    const over = endUnder(e.clientX, e.clientY);
+    if (!p || p.id !== e.pointerId || !dragged.current) return;
     setDrag(null);
-    if (over && fitsOf(g.hand[p.i]).includes(over)) castIndex(p.i, over, { x: e.clientX, y: e.clientY });
+    overRef.current = null;
+    if (p.turnNo !== g.turnNo || !myTurn) return;
+    const over = endUnder(e.clientX, e.clientY);
+    const t = g.hand[p.i];
+    if (over && t && fitsOf(t).includes(over)) castIndex(p.i, over, { x: e.clientX, y: e.clientY });
     else if (over) { feedback.wrong(); say(`That tile doesn't match the ${over === "L" ? "left" : "right"} end`); }
   }
-  function onCancel() { press.current = null; setDrag(null); }
+  function onCancel() { press.current = null; overRef.current = null; setDrag(null); }
 
   // What just happened, for the animations (nothing replays from before you opened the page).
   const lastN = g.log.length ? g.log[g.log.length - 1].n : -1;
@@ -272,7 +298,7 @@ export function OrbPlay({ room }: { room: OrbView }) {
               return (
                 <button
                   key={tileKey(t)} className={`ow-handbtn${myTurn && ok ? " playable" : ""}`} disabled={!myTurn} aria-pressed={sel === i}
-                  onPointerDown={(e) => onDown(e, i)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
+                  onPointerDown={(e) => onDown(e, i)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onLostPointerCapture={() => { if (press.current) onCancel(); }}
                   onClick={() => { if (dragged.current) { dragged.current = false; return; } feedback.tap(); setSel(sel === i ? null : i); }}
                 >
                   <Domino t={t} state={away ? "lifted" : sel === i ? "selected" : myTurn && !ok ? "dim" : undefined} />
@@ -296,7 +322,7 @@ export function OrbPlay({ room }: { room: OrbView }) {
       )}
 
       {drag && g.hand[drag.i] && (
-        <span className={`ow-ghost${drag.over ? (selFits.includes(drag.over) ? " ok" : " bad") : ""}`} style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+        <span ref={ghostRef} className={`ow-ghost${drag.over ? (selFits.includes(drag.over) ? " ok" : " bad") : ""}`} style={{ left: drag.x, top: drag.y }} aria-hidden="true">
           <Domino t={g.hand[drag.i]} state="selected" />
         </span>
       )}

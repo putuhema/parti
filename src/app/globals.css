@@ -1939,6 +1939,8 @@ body:has(.ow-screen) { background: #F4C64E; }
 /* the last move */
 .ow-log { margin: 0; height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 2px; overflow: hidden; padding: 10px 14px; border-radius: 16px; background: var(--ow-ink); color: var(--ow-bone); font-size: 15px; line-height: 1.35; font-weight: 500; }
 .ow-log b { font-weight: 800; }
+/* On phones the last move is one line; long ones end in "…" rather than slipping under the hand. */
+.ow-log > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ow-loglabel { display: none; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ow-mustard); }
 
 /* hand dock */
@@ -1963,7 +1965,7 @@ body:has(.ow-screen) { background: #F4C64E; }
 .ow-handbtn[aria-pressed="true"] small { color: var(--ow-coral); }
 .ow-actions { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .ow-actions .ow-btn:nth-child(3) { grid-column: 1 / -1; min-height: 44px; }
-.ow-btn { flex: 1; min-height: 50px; padding: 0 12px; border-radius: 999px; font: 800 15px var(--font-allo), sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; transition: transform 100ms, box-shadow 100ms; }
+.ow-btn { flex: 1; min-height: 50px; padding: 0 10px; border-radius: 999px; font: 800 14px var(--font-allo), sans-serif; letter-spacing: .04em; white-space: nowrap; text-transform: uppercase; cursor: pointer; transition: transform 100ms, box-shadow 100ms; }
 .ow-btn.cast { background: var(--ow-coral); color: var(--ow-bone); border: 3px solid var(--ow-bone); box-shadow: 3px 3px 0 var(--ow-bone); }
 .ow-btn.cast:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: none; }
 .ow-btn.ghost { background: transparent; color: var(--ow-bone); border: 3px solid var(--ow-bone); }
@@ -1988,6 +1990,7 @@ body:has(.ow-screen) { background: #F4C64E; }
   .ow-plmeta small { font-size: 14px; }
   .ow-pips span { width: 14px; height: 14px; }
   .ow-loglabel { display: block; }
+  .ow-log > span:last-child { white-space: normal; }
   .ow-log { margin-top: auto; height: 132px; padding: 16px 18px; font-size: 16px; line-height: 1.45; border-radius: 20px; justify-content: flex-start; }
   .ow-table { grid-area: table; min-height: 0; padding: 24px 28px; gap: 14px; border-radius: 28px; }
   .ow-tablehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
@@ -2045,8 +2048,19 @@ body:has(.ow-screen) { background: #F4C64E; }
 .ow-ghost.fling { transform: translate(-50%, -50%) scale(1.05); transition: left 220ms cubic-bezier(.3,.7,.3,1), top 220ms cubic-bezier(.3,.7,.3,1), transform 220ms; }
 .ow-ghost.fling.go { transform: translate(-50%, -50%) scale(.8) rotate(8deg); }
 
+/* anticipation and life: a springy pick-up, a wind-up before a fling, and idle breathing */
+.ow-ghost:not(.fling) > .ow-dom { animation: ow-pickup 300ms cubic-bezier(.3,1.7,.5,1); }
+@keyframes ow-pickup { from { transform: scale(.8) rotate(4deg); } to { transform: none; } }
+.ow-ghost.fling:not(.go) > .ow-dom { animation: ow-wind 90ms ease-out both; }
+@keyframes ow-wind { to { transform: scale(.84) rotate(-9deg); } }
+.ow-pl.turn .ow-hat svg { transform-origin: 50% 100%; animation: ow-breathe 2.4s ease-in-out infinite; }
+@keyframes ow-breathe { 50% { transform: translateY(-1.5px) scaleY(1.05); } }
+.ow-handbtn[aria-pressed="true"] .ow-dom.selected { animation: ow-bob 1.6s ease-in-out infinite; }
+@keyframes ow-bob { 0%, 100% { transform: translateY(-8px) rotate(-5deg); } 50% { transform: translateY(-11px) rotate(-3deg); } }
+
 @media (prefers-reduced-motion: reduce) {
   .ow-flash, .ow-orbleave, .ow-pips .pop, .ow-hexwrap .ow-hat, .ow-hexpop, .ow-log { animation: none; }
+  .ow-ghost > .ow-dom, .ow-pl.turn .ow-hat svg, .ow-handbtn[aria-pressed="true"] .ow-dom.selected { animation: none !important; }
   .ow-orbleave, .ow-flash { display: none; }
   .ow-dom, .ow-ghost.fling { transition: none; }
 }
