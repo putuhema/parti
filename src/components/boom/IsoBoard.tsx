@@ -2,8 +2,9 @@
 
 import type { CSSProperties } from "react";
 import { GROUPS, SPACES } from "../../../convex/lib/boom/rules";
-import { ANCHOR, DEPTH, SLAB, TH, TILE, TW, diamond } from "./iso";
-import { SHOW_LABELS, TILE_ART } from "./tiles";
+import { ANCHOR, DEPTH, SEA, SLAB, TH, TILE, TW, diamond } from "./iso";
+import { ASSETS, SHOW_LABELS, type Asset } from "./assets";
+import { Sprite } from "./Sprite";
 import { money, short, type BoomGameView } from "./common";
 
 // The pieces of the isometric board: the ground the ring sits on, and one tile per space. Tiles show your art
@@ -20,13 +21,14 @@ const SPECIAL: Record<string, { icon: string; c: string; label: string }> = {
   bonus: { icon: "✉️", c: "#CFE9DA", label: "FAJAR" },
   tax: { icon: "🧾", c: "#F7D3DF", label: "PUNGLI" },
   judol: { icon: "🎰", c: "#3B2D5C", label: "JUDOL" },
+  fish: { icon: "🎣", c: "#9ED7EE", label: "MANCING" },
 };
 const INK = "#231B1A", BONE = "#F3EDE0";
 
 /** The art key for a space, most specific first. */
-export function artFor(i: number): string | undefined {
+export function artFor(i: number): Asset | undefined {
   const s = SPACES[i];
-  return TILE_ART[`space-${i}`] ?? TILE_ART[s.kind === "lot" ? `lot-${s.group}` : s.kind];
+  return ASSETS[`tile:space-${i}`] ?? ASSETS[`tile:${s.kind === "lot" ? `lot-${s.group}` : s.kind}`];
 }
 
 /** Darken a hex colour by `k` (0–1), for the shaded side faces. */
@@ -70,8 +72,7 @@ export function IsoTile({ i, g, x, y, z, ink, offer, label, onTap }: {
       onClick={onTap}
       aria-label={label}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- tile art is a fixed-size sprite on a transformed layer */}
-      {art ? <img className="jn-itart" src={art} alt="" draggable={false} /> : <Block top={top} side={side} />}
+      {art ? <Sprite a={art} className="jn-itart" /> : <Block top={top} side={side} />}
       {/* The top face, as a flat square sheared onto the diamond: labels and the owner's outline lie on it. */}
       <span className={`jn-itface${dark ? " dark" : ""}`}>
         {SHOW_LABELS && (
@@ -94,25 +95,54 @@ export function tileLabel(i: number, g: BoomGameView, ownerName: string | null) 
   return s.name;
 }
 
-/** The ground: the base slab under the board and the grid of cells inside the ring (or your ground art). */
-export function IsoGround({ cells, w, h, corners }: { cells: { x: number; y: number; z: number }[]; w: number; h: number; corners: [number, number][] }) {
-  const ground = TILE_ART.ground;
-  const [tp, rp, bp, lp] = corners; // outer vertices of the whole grid's top face
-  const drop = DEPTH; // the ground sits at the foot of the ring tiles
-  const g = (p: [number, number], dy = 0) => `${p[0]},${p[1] + drop + dy}`;
+export type LandCell = { x: number; y: number; z: number; track: boolean; left: boolean; right: boolean };
+
+/**
+ * The ground: the sea filling the whole grid, and the plus-shaped land rising out of it. Land cells show their
+ * cliff faces only where the next cell (down-left or down-right on screen) is sea. Spaces off the track show a
+ * faint grid, or your `ground` art.
+ */
+export function IsoGround({ cells, sea, waves, w, h }: { cells: LandCell[]; sea: [number, number][]; waves: { x: number; y: number }[]; w: number; h: number }) {
+  const ground = ASSETS["tile:ground"];
+  const g = DEPTH; // the land's top is at the foot of the track tiles
+  const s = DEPTH + SLAB; // sea level
+  const [tp, rp, bp, lp] = sea;
+  const at = (p: [number, number], dy: number) => `${p[0]},${p[1] + dy}`;
+  const sorted = [...cells].sort((a, b) => a.z - b.z);
   return (
     <>
       <svg className="jn-ground" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-        <polygon points={`${g(lp)} ${g(bp)} ${g(bp, SLAB)} ${g(lp, SLAB)}`} fill="#D9C9A8" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
-        <polygon points={`${g(bp)} ${g(rp)} ${g(rp, SLAB)} ${g(bp, SLAB)}`} fill="#BFA882" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
-        <polygon points={`${g(tp)} ${g(rp)} ${g(bp)} ${g(lp)}`} fill="#E9DFC9" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
-        {!ground && cells.map((c) => <polygon key={`${c.x},${c.y}`} points={diamond(c.x, c.y, drop)} fill="none" stroke={INK} strokeOpacity=".09" strokeWidth="1.5" />)}
+        {/* the sea, on its own thin base */}
+        <polygon points={`${at(lp, s)} ${at(bp, s)} ${at(bp, s + SEA)} ${at(lp, s + SEA)}`} fill="#4E9FB6" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+        <polygon points={`${at(bp, s)} ${at(rp, s)} ${at(rp, s + SEA)} ${at(bp, s + SEA)}`} fill="#3F8AA0" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+        <polygon points={`${at(tp, s)} ${at(rp, s)} ${at(bp, s)} ${at(lp, s)}`} fill="#7CC8EC" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+        {waves.map((v, k) => (
+          <path key={k} d={`M${v.x - 14} ${v.y + s} q7 -6 14 0 t14 0`} fill="none" stroke="#F3EDE0" strokeOpacity=".7" strokeWidth="2.5" strokeLinecap="round" />
+        ))}
+        {/* the land, back to front: cliffs where it meets the sea, then the top */}
+        {sorted.map((c) => {
+          const L = [c.x - TW / 2, c.y + g] as const, B = [c.x, c.y + TH / 2 + g] as const, R = [c.x + TW / 2, c.y + g] as const;
+          return (
+            <g key={`${c.x},${c.y}`}>
+              {c.left && <polygon points={`${L[0]},${L[1]} ${B[0]},${B[1]} ${B[0]},${B[1] + SLAB} ${L[0]},${L[1] + SLAB}`} fill="#D9C9A8" stroke={INK} strokeWidth="2.5" strokeLinejoin="round" />}
+              {c.right && <polygon points={`${B[0]},${B[1]} ${R[0]},${R[1]} ${R[0]},${R[1] + SLAB} ${B[0]},${B[1] + SLAB}`} fill="#BFA882" stroke={INK} strokeWidth="2.5" strokeLinejoin="round" />}
+              <polygon points={diamond(c.x, c.y, g)} fill="#E9DFC9" stroke={c.track || ground ? "none" : INK} strokeOpacity=".1" strokeWidth="1.5" />
+            </g>
+          );
+        })}
+        {/* the land's outline, so the plus reads crisply against the sea */}
+        {sorted.map((c) => (
+          <g key={`o${c.x},${c.y}`} stroke={INK} strokeWidth="2.5" strokeLinecap="round">
+            {c.left && <line x1={c.x - TW / 2} y1={c.y + g} x2={c.x} y2={c.y + TH / 2 + g} />}
+            {c.right && <line x1={c.x} y1={c.y + TH / 2 + g} x2={c.x + TW / 2} y2={c.y + g} />}
+          </g>
+        ))}
       </svg>
-      {ground && cells.map((c) => (
-        // eslint-disable-next-line @next/next/no-img-element -- same as tile art
-        <img key={`${c.x},${c.y}`} className="jn-itground" src={ground} alt="" draggable={false} style={{ left: c.x - ANCHOR.x, top: c.y - ANCHOR.y + drop, zIndex: c.z * 2 - 1 }} />
+      {ground && cells.filter((c) => !c.track).map((c) => (
+        <span key={`${c.x},${c.y}`} className="jn-itground" style={{ left: c.x - ANCHOR.x, top: c.y - ANCHOR.y + g, zIndex: c.z * 2 - 1 }}>
+          <Sprite a={ground} />
+        </span>
       ))}
     </>
   );
 }
-

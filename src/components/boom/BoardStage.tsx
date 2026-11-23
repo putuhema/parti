@@ -111,6 +111,28 @@ export function BoardStage({ players, event, centers, cell, boardRef }: {
         case "sold":
           act(e.by, { pose: "slump", d: 0.2 }, { pose: "slump", d: 0.5 }, { pose: "stand", d: 0.3 });
           break;
+        case "fish": {
+          if (!e.amount) { if (e.success === undefined) act(e.by, { pose: "scratch", d: 0.3 }, { pose: "shrug", d: 0.4 }, { pose: "stand", d: 0.3 }); break; }
+          const f = figs.get(e.by);
+          act(e.by, { pose: "windup", d: 0.12 }, { pose: "cheer", d: 0.2 }, { pose: "cheer", d: 0.5 }, { pose: "stand", d: 0.3 });
+          if (f) coins(f.x + p.cell, f.y, f.x, f.y - p.cell * 0.7, Math.min(10, 3 + Math.round(e.amount / 60)));
+          break;
+        }
+        case "market": {
+          const f = figs.get(e.by);
+          act(e.by, { pose: "give", d: 0.2 }, { pose: "cheer", d: 0.3 }, { pose: "stand", d: 0.3 });
+          if (f) coins(f.x + p.cell, f.y - p.cell, f.x, f.y - p.cell * 0.7, 8);
+          break;
+        }
+        case "journey":
+          if (e.amount && e.amount > 0) act(e.by, { pose: "crouch", d: 0.15 }, { pose: "cheer", d: 0.2 }, { pose: "cheer", d: 0.4 }, { pose: "stand", d: 0.3 });
+          else act(e.by, { pose: "handsUp", d: 0.15 }, { pose: "handsUp", d: 0.6 }, { pose: "slump", d: 0.4 }, { pose: "stand", d: 0.3 });
+          jolt(70);
+          break;
+        case "begal":
+          if (e.amount) { act(e.by, { pose: "slump", d: 0.2 }, { pose: "slump", d: 0.6 }, { pose: "stand", d: 0.3 }); jolt(110); }
+          else act(e.by, { pose: "crouch", d: 0.08 }, { pose: "leap", d: 0.2 }, { pose: "cheer", d: 0.4 }, { pose: "stand", d: 0.3 });
+          break;
         case "auction": {
           if (!e.amount) break;
           const f = figs.get(e.by);

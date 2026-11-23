@@ -17,13 +17,20 @@ there, flat on the tile, and figures and buildings stand on the anchor.
 The board rotates in quarter turns, but tile images are never rotated, so draw them so they look right from
 this one angle.
 
-Then register the file in `src/components/boom/tiles.ts`:
+Then register the file in `src/components/boom/assets.ts`:
 
 ```ts
-export const TILE_ART: Record<string, string> = {
-  "lot-6": "/boom/tiles/lot-jawa.png",
+export const ASSETS: Record<string, Asset> = {
+  "tile:lot-6": { src: "/boom/tiles/lot-jawa.png" },
+  "tile:start": { src: "/boom/tiles/start-sheet.png", frames: 8, fps: 10 }, // an animated sprite sheet
 };
 ```
 
-Keys: `space-<n>` for one space, or `lot-0` … `lot-7` (by island group), `hub`, `start`, `jail`, `jackpot`,
-`wheel`, `surprise`, `bonus`, `tax`, and `ground` for the empty cells inside the ring.
+Tile keys: `tile:space-<n>` for one space, or `tile:lot-0` … `tile:lot-7` (by island group), `tile:hub`,
+`tile:start`, `tile:jail`, `tile:jackpot`, `tile:wheel`, `tile:surprise`, `tile:bonus`, `tile:tax`, `tile:judol`,
+`tile:fish`, and `tile:ground` for the cells off the track.
+
+The same file swaps everything else too: the little dioramas on each space and out at sea (`diorama:…`), the
+buildings (`building:0` … `building:3`) and the catches at Mancing (`fish:…`). Any of them can be a still image,
+an animated GIF/APNG/WebP, or a sprite sheet, with a motion preset (`bob`, `sway`, `float`, `pulse`, `spin`,
+`wiggle`, `blink`) on top.

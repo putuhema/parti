@@ -1,5 +1,5 @@
 /**
- * Juragan Nusantara: a property-trading board game on a tall ring of 34 spaces, island-hopping across Indonesia.
+ * Juragan Nusantara: a property-trading board game on a plus-shaped track of 52 spaces, island-hopping across Indonesia.
  * Pure rules, no database: the server runs them, the tests replay them, and the phone reads the tables.
  */
 
@@ -41,7 +41,7 @@ export const GROUPS = [
 ] as const;
 
 export type Space =
-  | { kind: "start" | "jail" | "jackpot" | "wheel" | "surprise" | "bonus" | "tax" | "judol"; name: string }
+  | { kind: "start" | "jail" | "jackpot" | "wheel" | "surprise" | "bonus" | "tax" | "judol" | "fish"; name: string }
   | { kind: "lot"; name: string; group: number; price: number }
   | { kind: "hub"; name: string; price: number; icon: string };
 
@@ -50,36 +50,66 @@ const hub = (name: string, icon: string): Space => ({ kind: "hub", name, price: 
 const surprise: Space = { kind: "surprise", name: "Kejutan" };
 const bonus: Space = { kind: "bonus", name: "Serangan Fajar" };
 
+const fajar = bonus;
+const pungli: Space = { kind: "tax", name: "Pungli" };
+const judol: Space = { kind: "judol", name: "Judol" };
+const mancing: Space = { kind: "fish", name: "Mancing" };
+
 /**
- * Clockwise from START in the top-right corner: down the right side, along the bottom, up the left, across the top.
- * The trip hops island to island and ends in Jakarta. The joke spaces are gentle political satire (generic tropes,
- * never real people): "jail" is Diperiksa (called in for questioning), the jackpot is the Dana Aspirasi pot,
- * tax is Pungli, the bonus is a Serangan Fajar envelope, and the wheel is a Kampanye rally.
+ * A plus-shaped board, like ludo: four arms, three spaces wide, around a 15 × 15 grid. The track runs clockwise
+ * around the outside of the plus (52 spaces), with the four corner spaces on the arm tips: START on the top arm,
+ * Diperiksa on the right, the Dana Aspirasi on the bottom, Kampanye on the left. Between tips, each stretch of 12
+ * holds two island groups, a transport hub where the arms meet, and the joke spaces. The trip hops island to
+ * island from Papua and ends in Jakarta. The satire is generic tropes, never real people: Diperiksa is being called
+ * in for questioning, Pungli is a shakedown, Serangan Fajar a dawn envelope, Kampanye a rally, Judol online gambling.
  */
 export const SPACES: Space[] = [
   { kind: "start", name: "Start" },
-  lot("Merauke", 0, 60), bonus, lot("Jayapura", 0, 60), hub("Pelabuhan", "⛴️"), lot("Ambon", 1, 100),
-  surprise, lot("Kupang", 1, 100), lot("Labuan Bajo", 1, 120), lot("Manado", 2, 140), lot("Makassar", 2, 160),
+  // east: Papua, Maluku & Nusa Tenggara
+  lot("Merauke", 0, 60), fajar, lot("Jayapura", 0, 60), lot("Sorong", 0, 80), surprise, hub("Pelabuhan", "⛴️"),
+  lot("Ambon", 1, 100), pungli, lot("Ternate", 1, 100), lot("Kupang", 1, 120), judol, lot("Labuan Bajo", 1, 140),
   { kind: "jail", name: "Diperiksa" },
-  lot("Banjarmasin", 3, 180), lot("Pontianak", 3, 180), hub("Bandara", "✈️"), lot("Balikpapan", 3, 200), { kind: "tax", name: "Pungli" },
+  // Sulawesi, Kalimantan
+  lot("Manado", 2, 140), mancing, lot("Makassar", 2, 160), lot("Palu", 2, 160), fajar, hub("Bandara", "✈️"),
+  lot("Banjarmasin", 3, 180), lot("Pontianak", 3, 180), surprise, lot("Samarinda", 3, 200), pungli, lot("Balikpapan", 3, 220),
   { kind: "jackpot", name: "Dana Aspirasi" },
-  lot("Padang", 4, 220), surprise, lot("Palembang", 4, 220), lot("Medan", 4, 240), hub("Stasiun", "🚆"),
-  lot("Lombok", 5, 260), { kind: "judol", name: "Judol" }, lot("Bali", 5, 280), lot("Yogyakarta", 6, 300), lot("Bandung", 6, 300),
+  // Sumatra, Bali & Lombok
+  lot("Padang", 4, 220), surprise, lot("Palembang", 4, 240), lot("Medan", 4, 260), fajar, hub("Stasiun", "🚆"),
+  lot("Lombok", 5, 260), judol, lot("Gili", 5, 280), lot("Ubud", 5, 280), mancing, lot("Kuta", 5, 300),
   { kind: "wheel", name: "Kampanye" },
-  lot("Surabaya", 6, 320), surprise, hub("Terminal", "🚌"), lot("Kota Tua", 7, 350), lot("Menteng", 7, 400),
+  // Jawa, Jakarta
+  lot("Yogyakarta", 6, 300), fajar, lot("Bandung", 6, 320), lot("Surabaya", 6, 320), surprise, hub("Terminal", "🚌"),
+  lot("Kota Tua", 7, 350), pungli, lot("Kemang", 7, 380), lot("SCBD", 7, 400), pungli, lot("Menteng", 7, 420),
 ];
-export const N = SPACES.length; // 34
+export const N = SPACES.length; // 52
 export const JAIL = SPACES.findIndex((s) => s.kind === "jail");
-export const COLS = 7;
-export const ROWS = 12;
+/** The grid the plus sits in: arms ARM long and three wide around a 3 × 3 middle. */
+export const ARM = 6;
+export const COLS = ARM * 2 + 3;
+export const ROWS = COLS;
+const LO = ARM, HI = ARM + 2, MID = ARM + 1, END = COLS - 1;
 
-/** Where space `i` sits on the 7×12 grid. */
-export function cellOf(i: number): { col: number; row: number } {
-  if (i <= 11) return { col: 6, row: i };
-  if (i <= 17) return { col: 17 - i, row: 11 };
-  if (i <= 28) return { col: 0, row: 28 - i };
-  return { col: i - 28, row: 0 };
-}
+/** The track, in order: clockwise around the outside of the plus, starting on the top arm's tip. */
+const TRACK: { col: number; row: number }[] = (() => {
+  const t: { col: number; row: number }[] = [{ col: MID, row: 0 }];
+  for (let r = 0; r < ARM; r++) t.push({ col: HI, row: r }); // down the top arm's right side
+  for (let c = HI + 1; c <= END; c++) t.push({ col: c, row: LO }); // out along the right arm's top
+  t.push({ col: END, row: MID }); // right tip
+  for (let c = END; c > HI; c--) t.push({ col: c, row: HI }); // back along its bottom
+  for (let r = HI + 1; r <= END; r++) t.push({ col: HI, row: r }); // down the bottom arm's right side
+  t.push({ col: MID, row: END }); // bottom tip
+  for (let r = END; r > HI; r--) t.push({ col: LO, row: r }); // up its left side
+  for (let c = LO - 1; c >= 0; c--) t.push({ col: c, row: HI }); // out along the left arm's bottom
+  t.push({ col: 0, row: MID }); // left tip
+  for (let c = 0; c < LO; c++) t.push({ col: c, row: LO }); // back along its top
+  for (let r = LO - 1; r >= 0; r--) t.push({ col: LO, row: r }); // up the top arm's left side
+  return t;
+})();
+
+/** Where space `i` sits on the 15 × 15 grid. */
+export const cellOf = (i: number): { col: number; row: number } => TRACK[((i % N) + N) % N];
+/** Is this cell part of the plus (land), rather than the sea in the corners? */
+export const onPlus = (col: number, row: number) => col >= 0 && row >= 0 && col <= END && row <= END && ((col >= LO && col <= HI) || (row >= LO && row <= HI));
 
 export const HUB_RENT = [0, 40, 80, 140, 220]; // by how many transport hubs the owner has
 const LOT_RENT = [0.15, 0.45, 0.9, 1.6]; // share of the price, by level
@@ -100,7 +130,7 @@ const sameGroup = (i: number) => SPACES.map((_, k) => k).filter((k) => groupOf(i
 // ---------- The game ----------
 export type BoomEvent = {
   n: number;
-  kind: "roll" | "buy" | "build" | "rent" | "tax" | "bonus" | "card" | "jackpot" | "wheel" | "jail" | "skip" | "lobby" | "sold" | "bankrupt" | "left" | "lap" | "gamble" | "auction";
+  kind: "roll" | "buy" | "build" | "rent" | "tax" | "bonus" | "card" | "jackpot" | "wheel" | "jail" | "skip" | "lobby" | "sold" | "bankrupt" | "left" | "lap" | "gamble" | "auction" | "fish" | "walk" | "journey" | "begal" | "market";
   by: Seat;
   dice?: [number, number];
   from?: number;
@@ -127,7 +157,66 @@ export type BoomEvent = {
   reels?: [number, number, number];
   slot?: SlotResult;
   spin?: number; // which spin this was on this visit (1-based)
+  // Mancing: what was on the hook, what came up (-1: it got away), and whether the pull was too early.
+  hook?: Hook;
+  catch?: number;
+  early?: boolean;
+  // A journey event on the way: begal, dompet, razia or macet.
+  sub?: JourneyKind;
+  gift?: number; // a fish handed over (oleh-oleh in Diperiksa, to the begal, or as rent)
+  bag?: number[]; // fish sold at the market
+  boxed?: boolean; // the catch went in the cool box (rather than sold)
 };
+
+// ---------- Mancing: the fishing port ----------
+// Cast, wait for the bite, and pull while the bobber is under. The server picks what's on the line and when it
+// bites; the phone sends when you pulled (ms after the cast), so the catch can't be faked. Bigger fish give you
+// less time. Some of what comes up isn't fish at all.
+export const FISH = [
+  { key: "teri", name: "Ikan teri", icon: "🐟", value: 40, w: 26, win: 900 },
+  { key: "kembung", name: "Ikan kembung", icon: "🐟", value: 80, w: 22, win: 760 },
+  { key: "tongkol", name: "Tongkol", icon: "🐠", value: 150, w: 16, win: 620 },
+  { key: "kerapu", name: "Kerapu", icon: "🐡", value: 250, w: 10, win: 500 },
+  { key: "tuna", name: "Tuna sirip kuning", icon: "🐟", value: 450, w: 5, win: 400 },
+  { key: "sepatu", name: "Sepatu bekas", icon: "👞", value: 0, w: 8, win: 900 },
+  { key: "botol", name: "Botol plastik", icon: "🧴", value: 0, w: 9, win: 900 },
+  { key: "karung", name: "Karung barang bukti", icon: "💰", value: 500, w: 4, win: 420 },
+] as const;
+export const FISH_NOTE: Partial<Record<(typeof FISH)[number]["key"], string>> = {
+  sepatu: "Laut kita, laut sampah.",
+  botol: "Plastik lagi. Lautnya capek.",
+  karung: "Karung penuh uang tunai. Barang bukti siapa ini?",
+};
+export type Hook = { fish: number; bite: number; win: number };
+// What you catch goes in your kotak ikan (cool box), up to BAG_MAX. A fish is worth more as a favour than as cash:
+// hand one over as oleh-oleh to walk out of Diperiksa, throw one to the begal instead of your wallet, or pay rent
+// with it at RENT_FISH times its value (the bank covers the owner). Whatever's left sells at the fish market each
+// time you pass START. A full box sells a new catch straight away. The cash sack never goes in the box.
+export const BAG_MAX = 3;
+export const RENT_FISH = 2;
+export const isJunk = (k: number) => FISH[k].value === 0;
+const bagOf = (g: BoomGame, p: Seat) => (g.bag ??= {})[p] ?? (g.bag[p] = []);
+/** Take a fish out of someone's box: the cheapest (a favour) or the dearest (paying rent). */
+function takeFish(g: BoomGame, p: Seat, which: "cheap" | "dear"): number | null {
+  const bag = bagOf(g, p);
+  if (!bag.length) return null;
+  const order = [...bag].sort((a, b) => FISH[a].value - FISH[b].value);
+  const k = which === "cheap" ? order[0] : order[order.length - 1];
+  bag.splice(bag.indexOf(k), 1);
+  return k;
+}
+export const hasFish = (g: Pick<BoomGame, "bag">, p: Seat) => (g.bag?.[p]?.length ?? 0) > 0;
+export const fishHit = (h: Hook, ms: number) => ms >= h.bite && ms <= h.bite + h.win;
+
+// ---------- Perjalanan: things that happen on the way ----------
+// Now and then a long move is interrupted part way along. Begal (motorbike robbers) block the road: hand over the
+// wallet or try to get away (a timing QTE). Or you find a dropped wallet, hit a police razia, or get stuck in macet.
+export type JourneyKind = "begal" | "dompet" | "razia" | "macet";
+export const JOURNEY_CHANCE = 0.14;
+export const BEGAL_GIVE = 100; // what the robbers take if you hand it over
+export const BEGAL_HURT = 200; // what they take if you run and they catch you
+export const RAZIA_FEE = 50;
+export type Ambush = { qte: Qte; mid: number; rest: number };
 
 // ---------- Lelang: a space someone passed on goes to auction ----------
 // Everyone still in can bid, not just whoever's turn it is. The first bid opens at 20% of the price, then
@@ -196,7 +285,7 @@ export interface BoomGame {
   level: number[];
   pot: number;
   turn: Seat;
-  phase: "roll" | "buy" | "build" | "dilemma" | "jailed" | "rent" | "gamble" | "auction";
+  phase: "roll" | "buy" | "build" | "dilemma" | "jailed" | "rent" | "gamble" | "auction" | "fish" | "ambush";
   streak: number; // doubles in a row
   again: boolean; // rolled doubles: same player rolls again
   round: number;
@@ -206,6 +295,9 @@ export interface BoomGame {
   nego?: Nego; // the rent waiting on the player whose turn it is (pay, or haggle)
   spins?: number; // spins taken at the Judol slot on this visit
   auction?: Auction; // a space someone passed on, up for grabs
+  hook?: Hook; // the line in the water at the Mancing port
+  ambush?: Ambush; // begal blocking the road, part way through a move
+  bag?: Record<string, number[]>; // each player's kotak ikan: FISH indices
   busy: number; // ms of animation the latest move needs before anyone can act
   deadline?: number;
   sched?: number;
@@ -224,6 +316,11 @@ export function eventMs(e: BoomEvent): number {
   if (e.kind === "lobby") return 2300; // replay the mash count
   if (e.kind === "gamble") return e.bet ? 2600 : 900; // the reels spin and stop one by one
   if (e.kind === "auction") return 1700; // the gavel comes down
+  if (e.kind === "walk") return 250 + ((e.to! - e.from! + N) % N) * 190;
+  if (e.kind === "journey") return e.sub === "begal" ? 900 : 1900;
+  if (e.kind === "begal") return e.risky ? 2700 : 1600;
+  if (e.kind === "fish") return e.hook ? 2400 : 900;
+  if (e.kind === "market") return 1400;
   return 1100;
 }
 
@@ -236,6 +333,7 @@ export function newGame(players: Seat[], maxRounds: number, now: number, lead = 
     cash: Object.fromEntries(players.map((p) => [p, START_CASH])),
     pos: Object.fromEntries(players.map((p) => [p, 0])),
     jail: Object.fromEntries(players.map((p) => [p, 0])),
+    bag: Object.fromEntries(players.map((p) => [p, []])),
     owner: Array(N).fill(null),
     level: Array(N).fill(0),
     pot: POT_SEED,
@@ -321,7 +419,8 @@ function sendToJail(g: BoomGame, p: Seat) {
  */
 export type Art =
   | "baliho" | "pita" | "orangdalam" | "tidur" | "studibanding" | "amplop" | "sembako" | "mangkrak"
-  | "mobildinas" | "ott" | "meme" | "blusukan" | "joget" | "sponsor" | "kaos" | "audit";
+  | "mobildinas" | "ott" | "meme" | "blusukan" | "joget" | "sponsor" | "kaos" | "audit"
+  | "begal" | "mancing" | "dompet" | "razia" | "macet";
 
 /** What an option does: money (positive to you, negative into the pot) and maybe a trip to Diperiksa. */
 export type Outcome = { amount: number; jail?: boolean; note?: string };
@@ -415,6 +514,13 @@ function land(g: BoomGame, p: Seat, rng: Rng) {
     const paid = charge(g, p, TAX);
     g.pot += paid;
     note(g, { kind: "tax", by: p, amount: paid });
+  } else if (s.kind === "fish") {
+    // Something takes the bait 1.2–3.8 s after the cast.
+    const total = FISH.reduce((a, f) => a + f.w, 0);
+    let r = rng() * total, k = 0;
+    while (r >= FISH[k].w && k < FISH.length - 1) { r -= FISH[k].w; k += 1; }
+    g.hook = { fish: k, bite: 1200 + Math.floor(rng() * 2600), win: FISH[k].win };
+    g.phase = "fish";
   } else if (s.kind === "judol") {
     if (g.cash[p] >= BETS[0]) { g.spins = 0; g.phase = "gamble"; }
   } else if (s.kind === "bonus") {
@@ -486,15 +592,25 @@ function settle(g: BoomGame, now: number) {
     }
   }
   if (g.phase === "roll") g.again = false;
-  const wait = isBot(g.turn) ? BOT_MS : g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" ? DILEMMA_MS : CHOICE_MS;
+  const wait = isBot(g.turn) ? BOT_MS : g.phase === "roll" ? ROLL_MS : g.phase === "dilemma" || g.phase === "ambush" ? DILEMMA_MS : CHOICE_MS;
   g.deadline = now + g.busy + wait;
 }
 
 /** A jailed player waits (misses this turn) or pays the fee and mashes; enough taps and they roll now. */
-export function resolveJail(g: BoomGame, lobby: boolean, taps: number | null, now: number) {
+export function resolveJail(g: BoomGame, lobby: boolean, taps: number | null, now: number, gift = false) {
   if (g.done || g.phase !== "jailed") return;
   g.busy = 0;
   const p = g.turn;
+  // Oleh-oleh: a fish for the investigators, and you walk out and roll now.
+  const fish = gift ? takeFish(g, p, "cheap") : null;
+  if (fish !== null) {
+    note(g, { kind: "lobby", by: p, gift: fish, success: true, amount: 0 });
+    g.jail[p] = 0;
+    g.phase = "roll";
+    g.again = false;
+    g.deadline = now + g.busy + (isBot(p) ? BOT_MS : ROLL_MS);
+    return;
+  }
   if (lobby) {
     const target = mashTarget(g.round);
     const landed = Math.min(Math.max(0, Math.round(taps ?? 0)), Math.floor((MASH_CAP * MASH_MS) / 1000));
@@ -517,11 +633,22 @@ export function resolveJail(g: BoomGame, lobby: boolean, taps: number | null, no
 }
 
 /** Pay the rent in full, or haggle: `holdMs` is how long the meter was held before release. */
-export function resolveRent(g: BoomGame, haggle: boolean, holdMs: number | null, now: number) {
+export function resolveRent(g: BoomGame, haggle: boolean, holdMs: number | null, now: number, payFish = false) {
   if (g.done || g.phase !== "rent" || !g.nego) return;
   g.busy = 0;
   const p = g.turn;
   const n = g.nego;
+  // Paying in fish: the owner gets the full rent (the bank makes up the difference); you pay what the fish didn't cover.
+  const fish = payFish ? takeFish(g, p, "dear") : null;
+  if (fish !== null) {
+    g.nego = undefined;
+    g.phase = "roll";
+    const due = Math.max(0, n.rent - FISH[fish].value * RENT_FISH);
+    const paid = charge(g, p, due);
+    if (!g.out.includes(n.owner)) g.cash[n.owner] += n.rent;
+    note(g, { kind: "rent", by: p, other: n.owner, tile: n.tile, amount: paid, gift: fish });
+    return settle(g, now);
+  }
   let due = n.rent;
   let info: BoomEvent["nego"];
   if (haggle) {
@@ -601,16 +728,138 @@ export function roll(g: BoomGame, rng: Rng, now: number) {
     return settle(g, now);
   }
   const from = g.pos[p];
-  const to = (from + dice[0] + dice[1]) % N;
-  g.pos[p] = to;
+  const steps = dice[0] + dice[1];
   g.again = double;
+  // Sometimes the road has other plans: something happens part way along.
+  if (steps >= 4 && rng() < JOURNEY_CHANCE) {
+    const k = 2 + Math.floor(rng() * (steps - 3)); // somewhere in the middle of the move
+    const mid = (from + k) % N;
+    const r = rng();
+    const sub: JourneyKind = r < 0.45 ? "begal" : r < 0.65 ? "dompet" : r < 0.85 ? "razia" : "macet";
+    g.pos[p] = mid;
+    note(g, { kind: "roll", by: p, dice, from, to: mid });
+    lap(g, p, from, mid);
+    if (sub === "begal") {
+      note(g, { kind: "journey", by: p, sub, tile: mid });
+      g.ambush = { qte: newQte(-1, g.round, rng), mid, rest: steps - k };
+      g.phase = "ambush";
+      return settle(g, now);
+    }
+    if (sub === "macet") {
+      note(g, { kind: "journey", by: p, sub, tile: mid });
+      land(g, p, rng);
+      return settle(g, now);
+    }
+    const amount = sub === "dompet" ? 50 + 25 * Math.floor(rng() * 4) : toPot(g, p, RAZIA_FEE);
+    if (sub === "dompet") g.cash[p] += amount;
+    note(g, { kind: "journey", by: p, sub, tile: mid, amount });
+    if (g.out.includes(p)) return settle(g, now);
+    walk(g, p, steps - k);
+    land(g, p, rng);
+    return settle(g, now);
+  }
+  const to = (from + steps) % N;
+  g.pos[p] = to;
   note(g, { kind: "roll", by: p, dice, from, to });
+  lap(g, p, from, to);
+  land(g, p, rng);
+  settle(g, now);
+}
+
+/** Passing START pays gajian. */
+function lap(g: BoomGame, p: Seat, from: number, to: number) {
   if (to < from) {
     g.cash[p] += LAP_BONUS;
     note(g, { kind: "lap", by: p, amount: LAP_BONUS });
+    // Passing the fish market at START sells whatever's in the cool box.
+    const bag = bagOf(g, p);
+    if (bag.length) {
+      const amount = bag.reduce((a, k) => a + FISH[k].value, 0);
+      g.cash[p] += amount;
+      note(g, { kind: "market", by: p, amount, bag: [...bag] });
+      bag.length = 0;
+    }
   }
-  land(g, p, rng);
+}
+/** Carry on along the track after a stop on the way. */
+function walk(g: BoomGame, p: Seat, steps: number) {
+  const from = g.pos[p];
+  const to = (from + steps) % N;
+  g.pos[p] = to;
+  note(g, { kind: "walk", by: p, from, to });
+  lap(g, p, from, to);
+}
+
+/** Begal on the road: hand it over, or run (a timing QTE: `ms` after the bar appeared). Then the move carries on. */
+export function resolveAmbush(g: BoomGame, run: boolean, ms: number | null, now: number, rng: Rng = Math.random, gift = false) {
+  if (g.done || g.phase !== "ambush" || !g.ambush) return;
+  g.busy = 0;
+  const p = g.turn;
+  const a = g.ambush;
+  let paid: number, success: boolean | undefined, tapped: number | undefined;
+  const fish = gift ? takeFish(g, p, "cheap") : null;
+  if (fish !== null) {
+    // The begal settle for a fish. Everybody's got to eat.
+    note(g, { kind: "begal", by: p, tile: a.mid, gift: fish, amount: 0 });
+    g.ambush = undefined;
+    g.phase = "roll";
+    walk(g, p, a.rest);
+    land(g, p, rng);
+    return settle(g, now);
+  }
+  if (run) {
+    tapped = ms === null ? QTE_MS + 1 : Math.max(0, Math.round(ms));
+    success = qteHit(a.qte, tapped);
+    paid = success ? 0 : charge(g, p, BEGAL_HURT);
+  } else paid = charge(g, p, BEGAL_GIVE);
+  note(g, { kind: "begal", by: p, tile: a.mid, risky: run, success, qte: run ? a.qte : undefined, ms: tapped, amount: -paid });
+  g.ambush = undefined;
+  g.phase = "roll";
+  if (!g.out.includes(p)) {
+    walk(g, p, a.rest);
+    land(g, p, rng);
+  }
   settle(g, now);
+}
+/** Bots run about half the time, and get away more often than not. */
+export function botAmbush(g: BoomGame, rng: Rng) {
+  const q = g.ambush!.qte;
+  if (rng() < 0.5) return { run: false, ms: null };
+  const hit = rng() < 0.6;
+  const target = hit ? q.c : Math.min(1, q.c + q.w / 2 + 0.1);
+  return { run: true, ms: Math.round(((((target / 2 - q.phase) % 1) + 1) % 1) * q.period) };
+}
+
+/** At the Mancing port: fish (`ms` is when you pulled, after the cast) or walk on (`cast` false). */
+export function resolveFish(g: BoomGame, cast: boolean, ms: number | null, now: number) {
+  if (g.done || g.phase !== "fish" || !g.hook) return;
+  g.busy = 0;
+  const p = g.turn;
+  const h = g.hook;
+  g.hook = undefined;
+  g.phase = "roll";
+  if (!cast) {
+    note(g, { kind: "fish", by: p, amount: 0 });
+    return settle(g, now);
+  }
+  const pulled = ms === null ? -1 : Math.max(0, Math.round(ms));
+  const got = pulled >= 0 && fishHit(h, pulled);
+  let amount = 0, boxed = false;
+  if (got && !isJunk(h.fish)) {
+    const bag = bagOf(g, p);
+    // The cash sack pays out on the spot; a fish goes in the box, or sells now if the box is full.
+    if (FISH[h.fish].key !== "karung" && bag.length < BAG_MAX) { bag.push(h.fish); boxed = true; }
+    else { amount = FISH[h.fish].value; g.cash[p] += amount; }
+  }
+  note(g, { kind: "fish", by: p, hook: h, catch: got ? h.fish : -1, early: pulled >= 0 && pulled < h.bite, ms: pulled, amount, boxed });
+  settle(g, now);
+}
+/** Bots usually fish, and land it about two times in three. */
+export function botFish(g: BoomGame, rng: Rng) {
+  const h = g.hook!;
+  if (rng() < 0.15) return { cast: false, ms: null };
+  const hit = rng() < 0.65;
+  return { cast: true, ms: hit ? h.bite + Math.floor(h.win * (0.2 + rng() * 0.6)) : rng() < 0.5 ? h.bite - 300 : h.bite + h.win + 200 };
 }
 
 /** Answer the buy or build offer for the space you're standing on. */
@@ -755,8 +1004,21 @@ export function onDeadline(g: BoomGame, rng: Rng, now: number) {
   }
   if (g.phase === "jailed") {
     // A person who doesn't answer waits it out.
+    // Bots always pay in fish if they have one.
+    if (isBot(g.turn) && hasFish(g, g.turn)) return resolveJail(g, false, null, now, true);
     const b = isBot(g.turn) ? botJail(g, rng) : { lobby: false, taps: null };
     return resolveJail(g, b.lobby, b.taps, now);
+  }
+  if (g.phase === "ambush") {
+    // A person who freezes hands the wallet over.
+    if (isBot(g.turn) && hasFish(g, g.turn) && rng() < 0.7) return resolveAmbush(g, false, null, now, rng, true);
+    const b = isBot(g.turn) ? botAmbush(g, rng) : { run: false, ms: null };
+    return resolveAmbush(g, b.run, b.ms, now, rng);
+  }
+  if (g.phase === "fish") {
+    // A person who doesn't answer walks on.
+    const b = isBot(g.turn) ? botFish(g, rng) : { cast: false, ms: null };
+    return resolveFish(g, b.cast, b.ms, now);
   }
   if (g.phase === "gamble") {
     // A person who doesn't answer walks away from the slot.
@@ -764,6 +1026,7 @@ export function onDeadline(g: BoomGame, rng: Rng, now: number) {
   }
   if (g.phase === "rent") {
     // A person who doesn't answer pays in full.
+    if (isBot(g.turn) && hasFish(g, g.turn) && g.nego!.rent >= 100) return resolveRent(g, false, null, now, true);
     const b = isBot(g.turn) ? botRent(g, rng) : { haggle: false, holdMs: null };
     return resolveRent(g, b.haggle, b.holdMs, now);
   }
@@ -789,6 +1052,8 @@ export function leaveGame(g: BoomGame, p: Seat, now: number) {
   g.nego = undefined;
   g.spins = undefined;
   g.auction = undefined;
+  g.hook = undefined;
+  g.ambush = undefined;
   g.again = false;
   settle(g, now);
 }

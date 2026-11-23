@@ -2,7 +2,7 @@
 
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
-import { SPACES, isBot, type BoomEvent } from "../../../convex/lib/boom/rules";
+import { FISH, SPACES, isBot, type BoomEvent } from "../../../convex/lib/boom/rules";
 import { roomPaints } from "@/components/ui";
 
 export type BoomView = NonNullable<FunctionReturnType<typeof api.boom.view>>;
@@ -47,12 +47,32 @@ export function describe(e: BoomEvent, nameOf: (id?: string | null) => string, m
     case "build": return { text: `${who} built on ${tile}`, tone: tone(true) };
     case "rent": {
       const to = e.other === me ? "you" : nameOf(e.other);
+      if (e.gift !== undefined) return { text: `${who} paid ${to} the rent on ${tile} with a ${FISH[e.gift].name.toLowerCase()} ${FISH[e.gift].icon}${e.amount ? ` (+${amt})` : ""}`, tone: e.other === me ? "good" : tone(true) };
       const how = e.nego ? (e.nego.result === "deal" ? " after a good haggle" : e.nego.result === "over" ? " (haggled too hard!)" : " (the haggle went nowhere)") : "";
       return { text: `${who} paid ${to} ${amt} rent on ${tile}${how}`, tone: e.other === me ? "good" : tone(false) };
     }
-    case "lobby": return { text: `${who} tried to lobby out: ${e.taps}/${e.target} taps, ${e.success ? "walked free!" : "no luck."} −${amt}`, tone: tone(!!e.success) };
+    case "lobby": if (e.gift !== undefined) return { text: `${who} gave the investigators a ${FISH[e.gift].name.toLowerCase()} ${FISH[e.gift].icon} and walked free`, tone: tone(true) };
+      return { text: `${who} tried to lobby out: ${e.taps}/${e.target} taps, ${e.success ? "walked free!" : "no luck."} −${amt}`, tone: tone(!!e.success) };
     case "tax": return { text: `${who} paid ${amt} in pungli`, tone: tone(false) };
     case "bonus": return { text: `${who} got a serangan fajar envelope: +${amt}`, tone: tone(true) };
+    case "walk": return { text: `${who} carries on`, tone: "info" };
+    case "journey":
+      return e.sub === "begal" ? { text: `Begal! ${who} is ambushed on the road`, tone: tone(false) }
+        : e.sub === "dompet" ? { text: `${who} found a dropped wallet: +${amt}`, tone: tone(true) }
+        : e.sub === "razia" ? { text: `Razia! ${who} paid ${amt} to get through`, tone: tone(false) }
+        : { text: `Macet total! ${who} is stuck at ${tile}`, tone: tone(false) };
+    case "begal":
+      if (e.gift !== undefined) return { text: `${who} threw the begal a ${FISH[e.gift].name.toLowerCase()} ${FISH[e.gift].icon} and rode on`, tone: tone(true) };
+      return !e.risky ? { text: `${who} handed the wallet to the begal: −${amt}`, tone: tone(false) }
+        : e.success ? { text: `${who} got away from the begal!`, tone: tone(true) }
+        : { text: `The begal caught ${who}: −${amt}`, tone: tone(false) };
+    case "fish": {
+      if (!e.hook) return { text: `${who} walked past the fishing port`, tone: "info" };
+      if (e.catch === undefined || e.catch < 0) return { text: `${who}'s fish got away${e.early ? " (pulled too soon)" : ""}`, tone: tone(false) };
+      const f = FISH[e.catch];
+      return { text: `${who} caught ${f.name.toLowerCase()} ${f.icon}${e.boxed ? " into the cool box" : f.value ? ` +${money(f.value)}` : ""}`, tone: tone(f.value > 0) };
+    }
+    case "market": return { text: `${who} sold ${e.bag?.map((k) => FISH[k].icon).join("") ?? "fish"} at the fish market: +${amt}`, tone: tone(true) };
     case "auction":
       return e.amount
         ? { text: `Lelang! ${who} won ${tile} for ${amt}`, tone: tone(true) }

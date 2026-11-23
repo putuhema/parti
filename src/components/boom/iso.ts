@@ -18,8 +18,9 @@ export const HEAD = 44;
 export const TILE = 128;
 /** Where the centre of the top face sits inside a tile image. */
 export const ANCHOR = { x: TW / 2, y: HEAD + TH / 2 };
-/** How thick the base slab under the whole board is. */
-export const SLAB = 16;
+/** How thick the land (the plus) is above the sea, and how deep the sea's own base is. */
+export const SLAB = 22;
+export const SEA = 12;
 
 export type Rot = 0 | 1 | 2 | 3;
 export type Cell = { col: number; row: number };
@@ -40,7 +41,7 @@ export const turnedSize = (cols: number, rows: number, rot: Rot) => (rot % 2 ? {
 /** The whole board's size in world pixels. */
 export function worldSize(cols: number, rows: number) {
   const k = cols + rows;
-  return { w: (k * TW) / 2, h: HEAD + (k * TH) / 2 + DEPTH + SLAB };
+  return { w: (k * TW) / 2, h: HEAD + (k * TH) / 2 + DEPTH + SLAB + SEA };
 }
 
 /** The centre of a turned cell's top face, in world pixels, and its draw order. */

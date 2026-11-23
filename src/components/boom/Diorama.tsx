@@ -7,6 +7,8 @@
 
 import type { ReactNode } from "react";
 import { SPACES } from "../../../convex/lib/boom/rules";
+import { animFor, assetFor } from "./assets";
+import { Sprite, animClass } from "./Sprite";
 
 const INK = "#231B1A";
 type Pt = [number, number];
@@ -73,9 +75,11 @@ function Palm({ u, v, s = 1, flip = false }: { u: number; v: number; s?: number;
     <g>
       <Shadow u={u} v={v} r={4 * s} />
       <path d={`M${x} ${y} Q${x + 1 * k} ${y - 9 * s} ${tx} ${ty}`} fill="none" stroke="#8A5A3A" strokeWidth={2 * s} strokeLinecap="round" />
-      {[-1, -0.4, 0.4, 1].map((a) => (
-        <path key={a} d={`M${tx} ${ty} q${7 * a * s} ${-3 * s} ${9 * a * s} ${3 * s}`} fill="none" stroke="#2F9E5A" strokeWidth={2.2 * s} strokeLinecap="round" />
-      ))}
+      <g className="jn-fronds" style={{ transformOrigin: `${tx}px ${ty}px` }}>
+        {[-1, -0.4, 0.4, 1].map((a) => (
+          <path key={a} d={`M${tx} ${ty} q${7 * a * s} ${-3 * s} ${9 * a * s} ${3 * s}`} fill="none" stroke="#2F9E5A" strokeWidth={2.2 * s} strokeLinecap="round" />
+        ))}
+      </g>
       <circle cx={tx} cy={ty + 1} r={1.4 * s} fill="#8A5A3A" />
     </g>
   );
@@ -88,8 +92,10 @@ function Flag({ u, v, h, c, c2 = "#F3EDE0" }: { u: number; v: number; h: number;
   return (
     <g>
       <path d={`M${x} ${y} V${y - h}`} stroke={INK} strokeWidth="1.4" strokeLinecap="round" />
-      <rect x={x} y={y - h} width="9" height="3" fill={c} {...S} strokeWidth=".8" />
-      <rect x={x} y={y - h + 3} width="9" height="3" fill={c2} {...S} strokeWidth=".8" />
+      <g className="jn-flag" style={{ transformOrigin: `${x}px ${y - h}px` }}>
+        <rect x={x} y={y - h} width="9" height="3" fill={c} {...S} strokeWidth=".8" />
+        <rect x={x} y={y - h + 3} width="9" height="3" fill={c2} {...S} strokeWidth=".8" />
+      </g>
     </g>
   );
 }
@@ -163,6 +169,79 @@ const SCENES: Record<string, () => ReactNode> = {
       <Box u={-2} v={-10} w={6} d={6} h={26} top="#B9D7E3" side="#7FB0C4" />
       <Box u={4} v={2} w={5} d={5} h={12} top="#9FC7D8" side="#6C9FB5" />
       {(() => { const [x, y] = P(-1, 8); return <><Shadow u={-1} v={8} r={3} /><polygon points={`${x - 2},${y} ${x + 2},${y} ${x + 1},${y - 22} ${x - 1},${y - 22}`} fill="#F3EDE0" {...S} /><path d={`M${x} ${y - 22} q-3 -4 0 -7 q3 3 0 7`} fill="#F4C64E" {...S} strokeWidth=".9" /></>; })()}
+    </>
+  ),
+  // ---- out at sea, and the middle of the plus ----
+  islet: () => (
+    <>
+      <polygon points={pts(P(-9, -9), P(9, -9), P(9, 9), P(-9, 9))} fill="#F2D9A0" {...S} />
+      <polygon points={pts(P(-9, 9), P(9, 9), P(9, 9, -3), P(-9, 9, -3))} fill="#D9B97E" {...S} />
+      <polygon points={pts(P(9, -9), P(9, 9), P(9, 9, -3), P(9, -9, -3))} fill="#C4A46A" {...S} />
+      <Palm u={-2} v={-2} s={1.1} />
+      <Palm u={4} v={3} s={0.8} flip />
+    </>
+  ),
+  perahu: () => {
+    const [x, y] = P(0, 0);
+    return (
+      <>
+        <ellipse cx={x} cy={y + 1} rx="16" ry="5" fill="#F3EDE0" opacity=".45" />
+        <path d={`M${x - 15} ${y - 4} Q${x} ${y + 5} ${x + 15} ${y - 4} L${x + 11} ${y - 1} Q${x} ${y + 3} ${x - 11} ${y - 1} Z`} fill="#E2574C" {...S} />
+        <path d={`M${x - 15} ${y - 4} Q${x} ${y + 5} ${x + 15} ${y - 4}`} fill="none" stroke="#F4C64E" strokeWidth="1.6" />
+        <path d={`M${x} ${y - 2} V${y - 24}`} stroke={INK} strokeWidth="1.4" strokeLinecap="round" />
+        <path d={`M${x + 1} ${y - 23} Q${x + 13} ${y - 13} ${x + 1} ${y - 5} Z`} fill="#F3EDE0" {...S} />
+      </>
+    );
+  },
+  kapal: () => (
+    <>
+      <Box u={-10} v={-4} w={18} d={7} h={5} top="#F3EDE0" side="#E2574C" />
+      <Box u={-6} v={-3} w={8} d={5} h={5} top="#F3EDE0" side="#D9CBB0" z={5} />
+      <Box u={-4} v={-2} w={2} d={2} h={6} top="#231B1A" side="#F4C64E" z={10} />
+    </>
+  ),
+  dewan: () => {
+    // The Gedung Dewan: a wide hall on a podium, a colonnade, a green dome, and a flag. Satire stays generic.
+    const [x, y] = P(1, 1, 14);
+    return (
+      <>
+        <Shadow u={0} v={0} r={22} />
+        <Box u={-14} v={-14} w={28} d={28} h={3} top="#E9DFC9" side="#CDBE9C" />
+        <Box u={-12} v={-8} w={24} d={16} h={11} top="#F3EDE0" side="#E0D3B8" z={3} />
+        {[-10, -6, -2, 2, 6, 10].map((u) => { const [a, b] = P(u, 8, 3); return <path key={u} d={`M${a} ${b} V${b - 11}`} stroke="#B9AC90" strokeWidth="1.6" />; })}
+        <path d={`M${x - 13} ${y} Q${x - 12} ${y - 16} ${x} ${y - 17} Q${x + 12} ${y - 16} ${x + 13} ${y} Z`} fill="#3DAE4A" {...S} />
+        <path d={`M${x - 8} ${y - 2} Q${x - 7} ${y - 12} ${x} ${y - 13}`} fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="1.6" strokeLinecap="round" />
+        <path d={`M${x} ${y - 17} V${y - 30}`} stroke={INK} strokeWidth="1.3" strokeLinecap="round" />
+        <g className="jn-flag" style={{ transformOrigin: `${x}px ${y - 30}px` }}>
+          <rect x={x} y={y - 30} width="9" height="3" fill="#E2574C" {...S} strokeWidth=".7" />
+          <rect x={x} y={y - 27} width="9" height="3" fill="#F3EDE0" {...S} strokeWidth=".7" />
+        </g>
+        <Tree u={-12} v={12} s={0.8} />
+        <Tree u={12} v={-12} s={0.8} />
+        <Tree u={12} v={12} s={0.9} />
+      </>
+    );
+  },
+  ikan: () => {
+    // A fish leaping out of the sea (it arcs up and back in, on a loop).
+    const [x, y] = P(0, 0);
+    return (
+      <>
+        <ellipse cx={x} cy={y} rx="7" ry="2.4" fill="none" stroke="#F3EDE0" strokeWidth="1.4" opacity=".8" className="jn-splash" />
+        <g className="jn-leap" style={{ transformOrigin: `${x}px ${y}px` }}>
+          <path d={`M${x - 6} ${y - 10} q6 -6 12 0 q-6 6 -12 0 Z M${x + 6} ${y - 10} l4 -3 v6 Z`} fill="#69BFD6" {...S} />
+          <circle cx={x - 3} cy={y - 11} r=".9" fill={INK} />
+        </g>
+      </>
+    );
+  },
+  fish: () => ( // Mancing: a wooden pier over the water, a hut, and a rod with its line out
+    <>
+      <Water r={13} />
+      {[-8, -3, 2].map((u) => <Box key={u} u={u} v={-6} w={4} d={12} h={1.5} top="#C98A4B" side="#8A5A3A" z={2} />)}
+      <Box u={-12} v={-12} w={8} d={7} h={8} top="#F3EDE0" side="#B98A5A" />
+      <Roof u={-12} v={-12} w={8} d={7} h={8} rh={4} c="#E2574C" />
+      {(() => { const [x, y] = P(4, -2, 4); const [bx, by] = P(12, 6); return <><path d={`M${x} ${y} L${x + 10} ${y - 16}`} stroke="#8A5A3A" strokeWidth="1.6" strokeLinecap="round" /><path d={`M${x + 10} ${y - 16} Q${bx + 4} ${y - 10} ${bx} ${by - 1}`} fill="none" stroke={INK} strokeWidth=".6" /><circle cx={bx} cy={by - 1} r="1.8" fill="#E2574C" stroke={INK} strokeWidth=".6" className="jn-bob" /></>; })()}
     </>
   ),
   // ---- transport hubs ----
@@ -259,9 +338,12 @@ export function dioramaFor(i: number): string | null {
   return SCENES[key] ? key : null;
 }
 
+/** A scene: your art from assets.ts if there is some for `diorama:<scene>`, else the built-in drawing. */
 export function Diorama({ scene }: { scene: string }) {
+  const own = assetFor(`diorama:${scene}`);
+  if (own) return <Sprite a={own} className="jn-dio" />;
   return (
-    <svg className="jn-dio" viewBox="0 0 64 64" aria-hidden="true">
+    <svg className={`jn-dio${animClass(animFor(`diorama:${scene}`))}`} viewBox="0 0 64 64" aria-hidden="true">
       {SCENES[scene]()}
     </svg>
   );

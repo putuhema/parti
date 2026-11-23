@@ -4,15 +4,26 @@ import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { api } from "../../../convex/_generated/api";
-import { CARDS, CHOICE_MS, COLS, DILEMMA_MS, GROUPS, HOLD_FILL_MS, LAP_BONUS, LOBBY_FEE, MASH_MS, N, NEGO_DEAL, NEGO_OVER, QTE_MS, ROLL_MS, ROWS, SPACES, TAX, HUB_RENT, RAISES, nextBid, openingBid, BETS, SLOT, SLOT_PAY, SLOT_SPINS, baseRent, buildCost, cellOf, eventMs, isBot, mashTarget, priceOf, type Art, type BoomEvent, type Outcome, type Qte } from "../../../convex/lib/boom/rules";
+import { CARDS, CHOICE_MS, COLS, DILEMMA_MS, GROUPS, HOLD_FILL_MS, LAP_BONUS, LOBBY_FEE, MASH_MS, N, NEGO_DEAL, NEGO_OVER, QTE_MS, ROLL_MS, ROWS, SPACES, TAX, HUB_RENT, RENT_FISH, BEGAL_GIVE, BEGAL_HURT, FISH, FISH_NOTE, RAISES, nextBid, openingBid, BETS, SLOT, SLOT_PAY, SLOT_SPINS, baseRent, buildCost, cellOf, onPlus, eventMs, isBot, mashTarget, priceOf, type Art, type BoomEvent, type Outcome, type Qte } from "../../../convex/lib/boom/rules";
 import { Countdown, Toast } from "@/components/words/common";
 import { Confetti, Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { BoardStage, type StageEvent } from "./BoardStage";
-import { CORNERS, IsoGround, IsoTile, artFor, tileLabel } from "./IsoBoard";
+import { CORNERS, IsoGround, IsoTile, artFor, tileLabel, type LandCell } from "./IsoBoard";
 import { Diorama, dioramaFor } from "./Diorama";
-import { TH, TW, place, turn, turnedSize, worldSize, type Rot } from "./iso";
+import { ASSETS } from "./assets";
+import { Sprite } from "./Sprite";
+import { DEPTH, SLAB, TH, TW, place, turn, turnedSize, worldSize, type Rot } from "./iso";
+
+/** What floats in the four corners of sea around the plus. */
+const SEA_PROPS = [
+  { col: 2, row: 2, scene: "islet" }, { col: 4, row: 4, scene: "perahu" },
+  { col: 12, row: 2, scene: "kapal" }, { col: 10, row: 4, scene: "islet" },
+  { col: 2, row: 12, scene: "perahu" }, { col: 4, row: 10, scene: "islet" },
+  { col: 12, row: 12, scene: "islet" }, { col: 10, row: 10, scene: "perahu" },
+  { col: 1, row: 4, scene: "ikan" }, { col: 13, row: 4, scene: "ikan" }, { col: 4, row: 13, scene: "ikan" }, { col: 11, row: 12, scene: "ikan" },
+];
 import { Building, BUILDING_NAMES } from "./Building";
 import { CardScene } from "./CardScene";
 import { TimingBar } from "./TimingBar";
@@ -20,7 +31,7 @@ import { HoldMeter, MashMeter } from "./QteMeters";
 import { describe, money, short, useNameOf, type BoomGameView, type BoomView } from "./common";
 
 type NameOf = (id?: string | null) => string;
-type Banner = { n: number; text: string; tone: "good" | "bad" | "info"; kind: BoomEvent["kind"]; by: string; art?: Art; raw?: string; amount?: number; choice?: string; risky?: boolean; success?: boolean; note?: string; qte?: Qte; ms?: number; taps?: number; target?: number; nego?: BoomEvent["nego"]; other?: string; tile?: number; bet?: number; reels?: [number, number, number]; slot?: BoomEvent["slot"]; spin?: number };
+type Banner = { n: number; text: string; tone: "good" | "bad" | "info"; kind: BoomEvent["kind"]; by: string; art?: Art; raw?: string; amount?: number; choice?: string; risky?: boolean; success?: boolean; note?: string; qte?: Qte; ms?: number; taps?: number; target?: number; nego?: BoomEvent["nego"]; other?: string; tile?: number; bet?: number; reels?: [number, number, number]; slot?: BoomEvent["slot"]; spin?: number; hook?: BoomEvent["hook"]; catch?: number; early?: boolean; sub?: BoomEvent["sub"]; gift?: number; boxed?: boolean };
 /** "+Rp150rb", "−Rp100rb", plus "· Diperiksa" when the outcome sends you in. */
 const outcome = (o: Outcome) => `${o.amount > 0 ? `+${money(o.amount)}` : o.amount < 0 ? `−${money(-o.amount)}` : "Rp0"}${o.jail ? " · Diperiksa" : ""}`;
 type Dice = { faces: [number, number]; rolling: boolean };
@@ -79,15 +90,25 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const world = worldSize(COLS, ROWS);
   const at = useMemo(() => SPACES.map((_, i) => place(turn(cellOf(i), COLS, ROWS, rot), turned.rows)), [rot, turned.rows]);
   const ground = useMemo(() => {
-    const ring = new Set(SPACES.map((_, i) => `${cellOf(i).col},${cellOf(i).row}`));
-    const cells: { x: number; y: number; z: number }[] = [];
-    for (let col = 0; col < COLS; col++) for (let row = 0; row < ROWS; row++) {
-      if (!ring.has(`${col},${row}`)) cells.push(place(turn({ col, row }, COLS, ROWS, rot), turned.rows));
-    }
+    const key = (c: { col: number; row: number }) => `${c.col},${c.row}`;
+    const track = new Set(SPACES.map((_, i) => key(cellOf(i))));
+    const all: { col: number; row: number }[] = [];
+    for (let col = 0; col < COLS; col++) for (let row = 0; row < ROWS; row++) all.push({ col, row });
+    // Land in turned coordinates, so "is the next cell sea?" follows the screen.
+    const landT = new Set(all.filter((c) => onPlus(c.col, c.row)).map((c) => key(turn(c, COLS, ROWS, rot))));
+    const cells: LandCell[] = all.filter((c) => onPlus(c.col, c.row)).map((c) => {
+      const t = turn(c, COLS, ROWS, rot);
+      return { ...place(t, turned.rows), track: track.has(key(c)), left: !landT.has(`${t.col},${t.row + 1}`), right: !landT.has(`${t.col + 1},${t.row}`) };
+    });
     const P = (col: number, row: number) => place({ col, row }, turned.rows);
     const tp = P(0, 0), rp = P(turned.cols - 1, 0), bp = P(turned.cols - 1, turned.rows - 1), lp = P(0, turned.rows - 1);
-    const corners: [number, number][] = [[tp.x, tp.y - TH / 2], [rp.x + TW / 2, rp.y], [bp.x, bp.y + TH / 2], [lp.x - TW / 2, lp.y]];
-    return { cells, corners };
+    const sea: [number, number][] = [[tp.x, tp.y - TH / 2], [rp.x + TW / 2, rp.y], [bp.x, bp.y + TH / 2], [lp.x - TW / 2, lp.y]];
+    // Little waves and islands out at sea, and the Gedung Dewan in the middle of the plus.
+    const waves = all.filter((c) => !onPlus(c.col, c.row) && (c.col * 7 + c.row * 3) % 5 === 0).map((c) => place(turn(c, COLS, ROWS, rot), turned.rows));
+    const isles = SEA_PROPS.map(({ col, row, scene }) => ({ ...place(turn({ col, row }, COLS, ROWS, rot), turned.rows), scene }));
+    const mid = Math.floor(COLS / 2);
+    const centre = place(turn({ col: mid, row: mid }, COLS, ROWS, rot), turned.rows);
+    return { cells, sea, waves, isles, centre };
   }, [rot, turned.rows, turned.cols]);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -144,7 +165,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
       const d = describe(e, nameOf, room.meId);
       // The card itself shows the satire, so the news line just says who drew it.
       const short = e.kind === "card" ? `${nameOf(e.by)} drew a Kejutan card` : e.kind === "wheel" ? `${nameOf(e.by)} spun the Kampanye wheel` : d.text;
-      const b: Banner = { n: e.n, kind: e.kind, by: e.by, art: e.art, raw: e.text, amount: e.amount, tone: d.tone, text: short, choice: e.choice, risky: e.risky, success: e.success, note: e.note, qte: e.qte, ms: e.ms, taps: e.taps, target: e.target, nego: e.nego, other: e.other, tile: e.tile, bet: e.bet, reels: e.reels, slot: e.slot, spin: e.spin };
+      const b: Banner = { n: e.n, kind: e.kind, by: e.by, art: e.art, raw: e.text, amount: e.amount, tone: d.tone, text: short, choice: e.choice, risky: e.risky, success: e.success, note: e.note, qte: e.qte, ms: e.ms, taps: e.taps, target: e.target, nego: e.nego, other: e.other, tile: e.tile, bet: e.bet, reels: e.reels, slot: e.slot, spin: e.spin, hook: e.hook, catch: e.catch, early: e.early, sub: e.sub, gift: e.gift, boxed: e.boxed };
       setBanner(b);
       // The rail keeps the full line (card text included) for the last few events.
       if (e.kind !== "roll") setHistory((h) => [...h, { ...b, text: d.text }].slice(-5));
@@ -157,6 +178,17 @@ export function BoomPlay({ room }: { room: BoomView }) {
       setDice({ faces: e.dice!, rolling: false });
       say();
       await sleep(250);
+      for (let at = e.from!; at !== e.to; ) {
+        at = (at + 1) % N;
+        const here = at;
+        setTokens((t) => ({ ...t, [e.by]: here }));
+        if (e.by === room.meId) feedback.tap();
+        await sleep(190);
+      }
+      return;
+    }
+    if (e.kind === "walk") {
+      // Carrying on after a stop on the way: hop the rest of the move.
       for (let at = e.from!; at !== e.to; ) {
         at = (at + 1) % N;
         const here = at;
@@ -208,6 +240,13 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const pendLand = settled && offer !== null ? offer : null;
   // At the Judol slot: bet, spin, maybe spin again.
   const pendGamble = settled && !g.done && g.phase === "gamble";
+  // The cool box: the fish you'd hand over as a favour (cheapest) or as rent (dearest).
+  const myBag = [...(g.bag?.[room.meId] ?? [])].sort((a, b) => FISH[a].value - FISH[b].value);
+  const cheapFish = myBag.length ? myBag[0] : null;
+  const dearFish = myBag.length ? myBag[myBag.length - 1] : null;
+  // Mancing and begal: a line in the water, or robbers on the road.
+  const pendFish = settled && !g.done && g.phase === "fish" && g.hook ? g.hook : null;
+  const pendAmbush = settled && !g.done && g.phase === "ambush" && g.ambush ? g.ambush : null;
   // Lelang: a live auction everyone can bid in (bids update the board state without new events).
   const auc = !g.done && g.phase === "auction" && g.auction ? g.auction : null;
   // A Kejutan dilemma waiting on the player whose turn it is (shown once the board has caught up).
@@ -300,7 +339,31 @@ export function BoomPlay({ room }: { room: BoomView }) {
     return () => clearTimeout(t);
   }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function send(move: { kind: "roll" } | { kind: "gamble"; bet: number } | { kind: "bid"; raise: number } | { kind: "choose"; yes: boolean } | { kind: "dilemma"; risky: boolean; ms?: number } | { kind: "jail"; lobby: boolean; taps?: number } | { kind: "rent"; haggle: boolean; holdMs?: number }) {
+  // Running from the begal: the same timing bar as a risky Kejutan.
+  const [runAState, setRunA] = useState<{ key: string; start: number; stopAt: number | null } | null>(null);
+  const runA = pendAmbush && runAState && runAState.key === stepKey ? runAState : null;
+  function goRun() {
+    if (!pendAmbush || runA || sending) return;
+    feedback.unlock();
+    feedback.tick();
+    setRunA({ key: stepKey, start: performance.now(), stopAt: null });
+  }
+  function tapRun() {
+    if (!runA || runA.stopAt !== null) return;
+    const ms = Math.round(performance.now() - runA.start);
+    setRunA({ ...runA, stopAt: ms });
+    void send({ kind: "ambush", run: true, ms });
+  }
+  useEffect(() => {
+    if (!runA || runA.stopAt !== null) return;
+    const t = setTimeout(() => {
+      setRunA((r) => (r && r.stopAt === null ? { ...r, stopAt: QTE_MS + 1 } : r));
+      void send({ kind: "ambush", run: true, ms: QTE_MS + 1 });
+    }, Math.max(0, runA.start + QTE_MS + 150 - performance.now()));
+    return () => clearTimeout(t);
+  }, [runA]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function send(move: { kind: "roll" } | { kind: "fish"; cast: boolean; ms?: number } | { kind: "ambush"; run: boolean; ms?: number; gift?: boolean } | { kind: "gamble"; bet: number } | { kind: "bid"; raise: number } | { kind: "choose"; yes: boolean } | { kind: "dilemma"; risky: boolean; ms?: number } | { kind: "jail"; lobby: boolean; taps?: number; gift?: boolean } | { kind: "rent"; haggle: boolean; holdMs?: number; fish?: boolean }) {
     if (sending) return;
     feedback.unlock();
     feedback.tap();
@@ -322,6 +385,10 @@ export function BoomPlay({ room }: { room: BoomView }) {
     ? mine ? (hold ? (hold.start === null ? "Hold the button, let go in the green zone" : "Let go in the green zone!") : `Rent due on ${SPACES[pendRent.tile].name}: ${money(pendRent.rent)}`) : `${nameOf(g.turn)} owes ${nameOf(pendRent.owner)} rent…`
     : pend
     ? g.turn === room.meId ? (run && run.stopAt === null ? "Tap when the needle is in the zone!" : run ? "…" : "Kejutan! Play it safe, or take the risk?") : `${nameOf(g.turn)} is deciding…`
+    : pendAmbush
+    ? mine ? (runA && runA.stopAt === null ? "Tap when the needle is in the zone!" : "Begal! Serahkan, atau kabur?") : `${nameOf(g.turn)} is held up by begal…`
+    : pendFish
+    ? mine ? "Mancing! Lempar kail, tarik saat pelampung tenggelam." : `${nameOf(g.turn)} is fishing…`
     : auc
     ? `Lelang ${SPACES[auc.tile].name}! ${auc.leader ? `${auc.leader === room.meId ? "You lead" : `${nameOf(auc.leader)} leads`} at ${money(auc.bid)}` : "Anyone can bid"}`
     : pendGamble
@@ -332,6 +399,9 @@ export function BoomPlay({ room }: { room: BoomView }) {
   const card = banner && (banner.kind === "card" || banner.kind === "wheel") && banner.art ? banner : null;
   // A quick time event that just finished, replayed for everyone.
   const qteDone = banner && (banner.kind === "lobby" || (banner.kind === "rent" && banner.nego)) ? banner : null;
+  const lastFish = banner && banner.kind === "fish" && banner.hook ? banner : null;
+  const lastBegal = banner && banner.kind === "begal" ? banner : null;
+  const lastJourney = banner && banner.kind === "journey" && banner.sub && banner.sub !== "begal" ? banner : null;
   const lastAuction = banner && banner.kind === "auction" && banner.tile !== undefined ? banner : null;
   const lastSpin = banner && banner.kind === "gamble" && banner.bet && banner.reels ? banner : null;
   const negoPrice = (r: number, k: number) => money(Math.round((r * k) / 5) * 5);
@@ -368,7 +438,10 @@ export function BoomPlay({ room }: { room: BoomView }) {
           <Head ink={inkOf(p)} />
           <span className="ow-plname">
             <b>{nameOf(p)}</b>
-            <span className="ow-plmeta"><small key={g.cash[p]} className="jn-cash">{g.out.includes(p) ? "Bangkrut" : money(g.cash[p])}</small></span>
+            <span className="ow-plmeta">
+              <small key={g.cash[p]} className="jn-cash">{g.out.includes(p) ? "Bangkrut" : money(g.cash[p])}</small>
+              {(g.bag?.[p]?.length ?? 0) > 0 && <span className="jn-bag" title="Kotak ikan" aria-label={`Cool box: ${g.bag[p].map((k) => FISH[k].name).join(", ")}`}>{g.bag[p].map((k, n) => <i key={n}>{FISH[k].icon}</i>)}</span>}
+            </span>
           </span>
         </span>
       ))}
@@ -422,7 +495,12 @@ export function BoomPlay({ room }: { room: BoomView }) {
           >
             {/* The world: ground, tiles, buildings and figures, all in world pixels, moved and scaled by the camera. */}
             <div className={`jn-world${fading ? " fading" : ""}${panning ? " panning" : ""}`} ref={boardRef} style={{ width: world.w, height: world.h, transform: camera, opacity: fit ? undefined : 0 }}>
-              <IsoGround cells={ground.cells} corners={ground.corners} w={world.w} h={world.h} />
+              <IsoGround cells={ground.cells} sea={ground.sea} waves={ground.waves} w={world.w} h={world.h} />
+              {/* islands and boats out at sea, and the Gedung Dewan in the middle */}
+              {ground.isles.map((p) => (
+                <span key={`s${p.x},${p.y}`} className="jn-dioprop sea" style={{ left: p.x, top: p.y + DEPTH + SLAB, zIndex: 1 }} aria-hidden="true"><Diorama scene={p.scene} /></span>
+              ))}
+              <span className="jn-dioprop centre" style={{ left: ground.centre.x, top: ground.centre.y + DEPTH, zIndex: ground.centre.z * 2 + 1 }} aria-hidden="true"><Diorama scene="dewan" /></span>
               {SPACES.map((_, i) => (
                 <IsoTile key={i} i={i} g={g} {...at[i]} ink={g.owner[i] ? inkOf(g.owner[i]) : null} offer={offer === i}
                   label={tileLabel(i, g, g.owner[i] ? nameOf(g.owner[i]) : null)} onTap={() => { feedback.tap(); setInfo(i); }} />
@@ -439,7 +517,9 @@ export function BoomPlay({ room }: { room: BoomView }) {
               {/* Buildings stand upright on their spaces, drawn in the same back-to-front order as the tiles. */}
               {SPACES.map((sp, i) => sp.kind === "lot" && g.owner[i] ? (
                 <span key={`b${i}`} className="jn-prop" style={{ left: at[i].x, top: at[i].y + 8, zIndex: at[i].z * 2 + 1, height: g.level[i] ? 74 : 54 }} aria-hidden="true">
-                  <Building key={`${g.owner[i]}-${g.level[i]}`} level={g.level[i]} ink={inkOf(g.owner[i])} className="pop" />
+                  {ASSETS[`building:${g.level[i]}`]
+                    ? <Sprite key={`${g.owner[i]}-${g.level[i]}`} a={ASSETS[`building:${g.level[i]}`]} className="jn-bld pop" />
+                    : <Building key={`${g.owner[i]}-${g.level[i]}`} level={g.level[i]} ink={inkOf(g.owner[i])} className="pop" />}
                 </span>
               ) : null)}
             <BoardStage
@@ -465,6 +545,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
                     <div className="jn-opts">
                       <Choice kind="safe" act={myTurn} busy={sending} title="Tunggu" sub="Skip this turn" onPick={() => send({ kind: "jail", lobby: false })} />
                       <Choice kind="risky" act={myTurn} busy={sending} title="Lobi orang dalam" sub={`−${money(LOBBY_FEE)} · tap ${mashTarget(g.round)}× in ${MASH_MS / 1000}s`} onPick={startMash} />
+                      {myTurn && cheapFish !== null && <FishGift fish={cheapFish} busy={sending} title="Oleh-oleh ikan" sub="Bebas, lempar dadu sekarang" onPick={() => send({ kind: "jail", lobby: false, gift: true })} />}
                     </div>
                   )}
                   <p className="jn-cardwho">{mine ? (mash ? "Tap anywhere, as fast as you can!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
@@ -487,6 +568,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
                     <div className="jn-opts">
                       <Choice kind="safe" act={myTurn} busy={sending} title="Bayar" sub={money(pendRent.rent)} onPick={() => send({ kind: "rent", haggle: false })} />
                       <Choice kind="risky" act={myTurn} busy={sending} title="Nego!" sub={`${negoPrice(pendRent.rent, NEGO_DEAL)} on a deal · ${negoPrice(pendRent.rent, NEGO_OVER)} if you push too hard`} onPick={armHold} />
+                      {myTurn && dearFish !== null && <FishGift fish={dearFish} busy={sending} title="Bayar pakai ikan" sub={`worth ${money(FISH[dearFish].value * RENT_FISH)} · you pay ${money(Math.max(0, pendRent.rent - FISH[dearFish].value * RENT_FISH))}`} onPick={() => send({ kind: "rent", haggle: false, fish: true })} />}
                     </div>
                   )}
                   <p className="jn-cardwho">{mine ? (hold ? "Hold, then let go in the green zone" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
@@ -513,6 +595,31 @@ export function BoomPlay({ room }: { room: BoomView }) {
                   <p className="jn-cardwho">{g.turn === room.meId ? (run ? "Tap anywhere on the card!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
                 </div>
               </div>
+            ) : pendAmbush ? (
+              // Begal: hand it over, or run; while running, a tap anywhere stops the needle.
+              <div className={`jn-cardlayer${runA && runA.stopAt === null ? " live" : ""}`} onPointerDown={runA && runA.stopAt === null ? (e) => { e.preventDefault(); tapRun(); } : undefined}>
+                <div key={stepKey} className={`jn-card${myTurn ? " act" : ""}`}>
+                  <span className="jn-cardtag">BEGAL!</span>
+                  <CardScene art="begal" hero={inkOf(g.turn)} />
+                  <p className="jn-cardtext">Dua begal motor menghadang di tengah jalan!</p>
+                  {runA ? (
+                    <>
+                      <TimingBar q={pendAmbush.qte} mode={{ kind: "live", start: runA.start, stopAt: runA.stopAt }} />
+                      {runA.stopAt === null && <span className="jn-tapcall">KABUR!</span>}
+                    </>
+                  ) : (
+                    <div className="jn-opts">
+                      <Choice kind="safe" act={myTurn} busy={sending} title="Serahkan dompet" sub={`−${money(BEGAL_GIVE)}`} onPick={() => send({ kind: "ambush", run: false })} />
+                      <Choice kind="risky" act={myTurn} busy={sending} title="Kabur!" sub={`lolos: gratis · ketangkap: −${money(BEGAL_HURT)}`} onPick={goRun} />
+                      {myTurn && cheapFish !== null && <FishGift fish={cheapFish} busy={sending} title="Kasih ikan aja" sub="Begal juga butuh makan" onPick={() => send({ kind: "ambush", run: false, gift: true })} />}
+                    </div>
+                  )}
+                  <p className="jn-cardwho">{mine ? (runA ? "Tap anywhere on the card!" : "Your call") : `${nameOf(g.turn)} is deciding…`}</p>
+                </div>
+              </div>
+            ) : pendFish ? (
+              <FishCard key={stepKey} hook={pendFish} act={myTurn} busy={sending} who={mine ? null : nameOf(g.turn)} ink={inkOf(g.turn)}
+                onDone={(cast, ms) => send(ms === undefined ? { kind: "fish", cast } : { kind: "fish", cast, ms })} />
             ) : pendLand !== null ? (
               <div className="jn-cardlayer">
                 <LandCard key={stepKey} i={pendLand} g={g} build={g.phase === "build"} act={myTurn} busy={sending} ink={inkOf(g.turn)}
@@ -561,10 +668,58 @@ export function BoomPlay({ room }: { room: BoomView }) {
                   onBet={(bet) => send({ kind: "gamble", bet })}
                 />
               </div>
+            ) : lastFish ? (
+              <div className="jn-cardlayer">
+                <div key={lastFish.n} className="jn-card jn-catch">
+                  <span className="jn-cardtag">MANCING</span>
+                  {lastFish.catch !== undefined && lastFish.catch >= 0 ? (
+                    <>
+                      <span className="jn-catchart" aria-hidden="true">{ASSETS[`fish:${FISH[lastFish.catch].key}`] ? <Sprite a={ASSETS[`fish:${FISH[lastFish.catch].key}`]} /> : FISH[lastFish.catch].icon}</span>
+                      <h3 className="jn-landname">{FISH[lastFish.catch].name}</h3>
+                      {FISH_NOTE[FISH[lastFish.catch].key] && <p className="jn-cardnote">{FISH_NOTE[FISH[lastFish.catch].key]}</p>}
+                      <div className="jn-bidbox"><b className={`jn-qtestamp${FISH[lastFish.catch].value ? " win" : ""}`}>{lastFish.boxed ? "MASUK KOTAK!" : FISH[lastFish.catch].value ? `DAPAT! +${money(FISH[lastFish.catch].value)}` : "ZONK"}</b></div>
+                      {lastFish.boxed && <p className="jn-fishuses">🧊 Worth {money(FISH[lastFish.catch].value)} at the market. Or use it: walk out of Diperiksa, pay off begal, or pay rent at ×{RENT_FISH}.</p>}
+                    </>
+                  ) : (
+                    <>
+                      <span className="jn-catchart" aria-hidden="true">💨</span>
+                      <h3 className="jn-landname">Lepas!</h3>
+                      <p className="jn-cardnote">{lastFish.early ? "Ditarik terlalu cepat." : "Telat narik. Ikannya kabur."}</p>
+                    </>
+                  )}
+                  <p className="jn-cardwho">{nameOf(lastFish.by)}</p>
+                </div>
+              </div>
+            ) : lastBegal ? (
+              <div className="jn-cardlayer">
+                <div key={lastBegal.n} className="jn-card">
+                  <span className="jn-cardtag">BEGAL</span>
+                  <CardScene art="begal" hero={inkOf(lastBegal.by)} />
+                  <p className={`jn-cardchoice${lastBegal.risky ? " risky" : ""}`}>→ {lastBegal.gift !== undefined ? `Kasih ${FISH[lastBegal.gift].name.toLowerCase()} ${FISH[lastBegal.gift].icon}` : lastBegal.risky ? "Kabur!" : "Serahkan dompet"}</p>
+                  {lastBegal.risky && lastBegal.qte && lastBegal.ms !== undefined && <TimingBar q={lastBegal.qte} mode={{ kind: "replay", ms: lastBegal.ms, success: !!lastBegal.success }} />}
+                  <p className="jn-cardwho">{nameOf(lastBegal.by)} {lastBegal.amount ? `−${money(Math.abs(lastBegal.amount))}` : "lolos!"}</p>
+                </div>
+              </div>
+            ) : lastJourney ? (
+              <div className="jn-cardlayer">
+                <div key={lastJourney.n} className="jn-card">
+                  <span className="jn-cardtag">PERJALANAN</span>
+                  <CardScene art={lastJourney.sub as Art} hero={inkOf(lastJourney.by)} />
+                  <p className="jn-cardtext">{JOURNEY_TEXT[lastJourney.sub as "dompet" | "razia" | "macet"]}</p>
+                  <p className="jn-cardwho">{nameOf(lastJourney.by)}{lastJourney.amount ? ` ${lastJourney.sub === "dompet" ? "+" : "−"}${money(Math.abs(lastJourney.amount))}` : ""}</p>
+                </div>
+              </div>
             ) : qteDone ? (
               <div className="jn-cardlayer">
                 <div key={qteDone.n} className="jn-card">
-                  {qteDone.kind === "lobby" ? (
+                  {qteDone.kind === "lobby" && qteDone.gift !== undefined ? (
+                    <>
+                      <span className="jn-cardtag">OLEH-OLEH</span>
+                      <span className="jn-catchart" aria-hidden="true">{FISH[qteDone.gift].icon}</span>
+                      <p className="jn-cardtext">“Sedikit oleh-oleh dari laut, Pak.” Pemeriksaan selesai.</p>
+                      <p className="jn-cardwho">{nameOf(qteDone.by)} walks free</p>
+                    </>
+                  ) : qteDone.kind === "lobby" ? (
                     <>
                       <span className="jn-cardtag">LOBI ORANG DALAM</span>
                       <CardScene art="ott" hero={inkOf(qteDone.by)} />
@@ -733,6 +888,78 @@ function AuctionCard({ a, g, deadline, me, canBid, busy, nameOf, inkOf, onBid }:
   );
 }
 
+/** Pay with a fish from the cool box: a full-width option under the usual two. */
+function FishGift({ fish, busy, title, sub, onPick }: { fish: number; busy: boolean; title: string; sub: string; onPick: () => void }) {
+  return (
+    <button type="button" className="jn-optchip jn-choice jn-fishgift" disabled={busy} onClick={onPick}>
+      <span className="jn-fishgifticon" aria-hidden="true">{FISH[fish].icon}</span>
+      <span><b>{title}</b>{FISH[fish].name} · {sub}</span>
+    </button>
+  );
+}
+
+const JOURNEY_TEXT = {
+  dompet: "Ada dompet jatuh di pinggir jalan. Rezeki anak soleh!",
+  razia: "Razia di tikungan. Surat lengkap, tapi tetap ada 'uang damai'.",
+  macet: "Macet total. Perjalanan berhenti di sini.",
+};
+
+/** Mancing: cast, wait for the bite, and pull while the bobber is under. Timing is measured from the cast. */
+function FishCard({ hook, act, busy, who, ink, onDone }: {
+  hook: NonNullable<BoomGameView["hook"]>; act: boolean; busy: boolean; who: string | null; ink: string; onDone: (cast: boolean, ms?: number) => void;
+}) {
+  const [cast, setCast] = useState<number | null>(null);
+  const [now, setNow] = useState(0);
+  const [pulled, setPulled] = useState<number | null>(null);
+  useEffect(() => {
+    if (cast === null || pulled !== null) return;
+    let raf = 0;
+    const loop = () => {
+      const t = performance.now() - cast;
+      setNow(t);
+      // Nothing pulled by the time it's long gone: it got away.
+      if (t > hook.bite + hook.win + 900) { setPulled(-1); onDone(true); return; }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [cast, pulled]); // eslint-disable-line react-hooks/exhaustive-deps
+  const biting = cast !== null && now >= hook.bite && now <= hook.bite + hook.win;
+  useEffect(() => { if (biting) feedback.tick(); }, [biting]);
+  function pull() {
+    if (cast === null || pulled !== null) return;
+    const ms = Math.round(performance.now() - cast);
+    setPulled(ms);
+    feedback.tap();
+    onDone(true, ms);
+  }
+  const live = act && cast !== null && pulled === null;
+  return (
+    <div className={`jn-cardlayer${live ? " live" : ""}`} onPointerDown={live ? (e) => { e.preventDefault(); pull(); } : undefined}>
+      <div className={`jn-card jn-fishing${act ? " act" : ""}`} style={{ "--f": ink } as CSSProperties}>
+        <span className="jn-cardtag">MANCING</span>
+        {cast === null ? <CardScene art="mancing" hero={ink} /> : (
+          <div className={`jn-pond${biting ? " bite" : ""}`} aria-live="polite">
+            <span className="jn-line" />
+            <span className="jn-bobber" />
+            {biting && <b className="jn-bang">!</b>}
+            <span className="jn-ripple" />
+          </div>
+        )}
+        <p className="jn-cardtext">{cast === null ? "Pelabuhan ikan. Lempar kail, lalu tarik saat pelampung tenggelam!" : pulled !== null ? "…" : biting ? "TARIK SEKARANG!" : "Tunggu… jangan buru-buru."}</p>
+        {act && cast === null && (
+          <div className="jn-landacts">
+            <button type="button" className="ow-btn cast" disabled={busy} onClick={() => { feedback.unlock(); feedback.tick(); setCast(performance.now()); }}>Lempar kail</button>
+            <button type="button" className="ow-btn ghost" disabled={busy} onClick={() => onDone(false)}>Lewati</button>
+          </div>
+        )}
+        {live && <span className="jn-tapcall">{biting ? "TARIK!" : "…"}</span>}
+        {!act && <p className="jn-cardwho">{who} is fishing…</p>}
+      </div>
+    </div>
+  );
+}
+
 const SLOT_STAMP = { jackpot: "JACKPOT!!", triple: "MAXWIN ×4", pair: "MENANG ×2", zonk: "ZONK", raid: "GEREBEK!" } as const;
 const playedSpins = new Set<number>(); // spins whose reels already rolled on this phone
 
@@ -864,6 +1091,7 @@ const ABOUT: Record<string, string> = {
   start: `Everyone begins here. It's gajian every time you pass: collect ${money(LAP_BONUS)}.`,
   jail: "Just passing through is fine. If you get called in for questioning, you sit out your next turn.",
   jackpot: "Land here to cash in the dana aspirasi. Pungli and fines keep topping it up.",
+  fish: `A fishing port. Cast, wait for the bite, and pull while the bobber is under; bigger fish give you less time. Catches go in your cool box (up to 3): hand one over to walk out of Diperiksa, to pay off begal, or to pay rent at ×${RENT_FISH} its value. Whatever's left sells at the fish market when you pass START.`,
   judol: `Judi online, satire edition. Bet ${money(BETS[0])} to ${money(BETS[2])}: a pair pays ×${SLOT_PAY.pair}, three of a kind ×${SLOT_PAY.triple}, 7-7-7 ×${SLOT_PAY.jackpot}. Two sirens is a raid and you're called in. Up to ${SLOT_SPINS} spins, and the bandar always wins in the end.`,
   wheel: "A kampanye rally: rake in sponsors, blow the budget, or get audited and called in.",
   surprise: "Draw a Kejutan card of political satire. It might pay you, cost you, or move you.",

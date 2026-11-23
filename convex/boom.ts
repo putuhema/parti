@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { addXp, befriend, findPlayer, freeCode, requirePlayer } from "./lib/helpers";
-import { BOOM_MAX, BOTS, ROUND_CHOICES, choose, isBot, leaveGame, newGame, onDeadline, rentOf, placeBid, resolveDilemma, resolveGamble, resolveJail, resolveRent, roll, worthOf, type BoomGame, type Seat } from "./lib/boom/rules";
+import { BOOM_MAX, BOTS, ROUND_CHOICES, choose, isBot, leaveGame, newGame, onDeadline, rentOf, placeBid, resolveAmbush, resolveFish, resolveDilemma, resolveGamble, resolveJail, resolveRent, roll, worthOf, type BoomGame, type Seat } from "./lib/boom/rules";
 
 type Room = Doc<"boomRooms">;
 
@@ -162,13 +162,17 @@ export const act = mutation({
       // A Kejutan dilemma: the side picked, and for the risky side the ms after the timing bar appeared when they tapped.
       v.object({ kind: v.literal("dilemma"), risky: v.boolean(), ms: v.optional(v.number()) }),
       // Diperiksa: wait it out, or lobby (how many taps landed in the mash window).
-      v.object({ kind: v.literal("jail"), lobby: v.boolean(), taps: v.optional(v.number()) }),
+      v.object({ kind: v.literal("jail"), lobby: v.boolean(), taps: v.optional(v.number()), gift: v.optional(v.boolean()) }),
       // Rent: pay in full, or haggle (how long the meter was held).
-      v.object({ kind: v.literal("rent"), haggle: v.boolean(), holdMs: v.optional(v.number()) }),
+      v.object({ kind: v.literal("rent"), haggle: v.boolean(), holdMs: v.optional(v.number()), fish: v.optional(v.boolean()) }),
       // Judol: the bet for this spin (0 walks away).
       v.object({ kind: v.literal("gamble"), bet: v.number() }),
       // Lelang: anyone still in can raise the bid (by 10 or 50), whoever's turn it is.
       v.object({ kind: v.literal("bid"), raise: v.number() }),
+      // Mancing: fish (and when you pulled, ms after the cast) or walk on.
+      v.object({ kind: v.literal("fish"), cast: v.boolean(), ms: v.optional(v.number()) }),
+      // Begal: hand it over, or run (a timing QTE).
+      v.object({ kind: v.literal("ambush"), run: v.boolean(), ms: v.optional(v.number()), gift: v.optional(v.boolean()) }),
     ),
   },
   handler: async (ctx, { code, move }) => {
@@ -191,10 +195,16 @@ export const act = mutation({
       roll(g, Math.random, now);
     } else if (move.kind === "jail") {
       if (g.phase !== "jailed") throw new ConvexError("You're not being questioned");
-      resolveJail(g, move.lobby, move.taps ?? null, now);
+      resolveJail(g, move.lobby, move.taps ?? null, now, !!move.gift);
     } else if (move.kind === "rent") {
       if (g.phase !== "rent") throw new ConvexError("There's no rent to settle");
-      resolveRent(g, move.haggle, move.holdMs ?? null, now);
+      resolveRent(g, move.haggle, move.holdMs ?? null, now, !!move.fish);
+    } else if (move.kind === "fish") {
+      if (g.phase !== "fish") throw new ConvexError("You're not at the fishing port");
+      resolveFish(g, move.cast, move.ms ?? null, now);
+    } else if (move.kind === "ambush") {
+      if (g.phase !== "ambush") throw new ConvexError("Nobody's stopping you");
+      resolveAmbush(g, move.run, move.ms ?? null, now, Math.random, !!move.gift);
     } else if (move.kind === "gamble") {
       if (g.phase !== "gamble") throw new ConvexError("You're not at the Judol table");
       resolveGamble(g, move.bet, Math.random, now);
@@ -267,6 +277,7 @@ export const view = query({
         cash: g.cash,
         pos: g.pos,
         jail: g.jail,
+        bag: g.bag ?? {},
         owner: g.owner,
         level: g.level,
         rents: g.owner.map((_, i) => rentOf(g, i)),
@@ -280,6 +291,8 @@ export const view = query({
         qte: g.qte ?? null,
         nego: g.nego ?? null,
         spins: g.spins ?? 0,
+        hook: g.hook ?? null,
+        ambush: g.ambush ? { qte: g.ambush.qte, mid: g.ambush.mid } : null,
         // The auction without the bots' private limits.
         auction: g.auction ? { tile: g.auction.tile, bid: g.auction.bid, leader: g.auction.leader, from: g.auction.from, bids: g.auction.bids } : null,
         deadline: g.deadline ?? null,

@@ -217,6 +217,80 @@ function scene(art: Art, hero: string): Scene {
           label(ctx, art === "ott" ? "OTT!" : "AUDIT", 150, 26, 12, CORAL);
         },
       };
+    case "begal":
+      // Two masked riders roar in on a motorbike; the hero puts their hands up.
+      return {
+        cast: [
+          me([{ pose: "handsUp", d: 0.3 }, { pose: "handsUp", d: 0.6 }, { pose: "shrug", d: 0.3 }], 52),
+          npc([{ pose: "sit", d: 0.5 }, { pose: "point", d: 0.4 }], 150, true, { y: GROUND - 16, scale: 0.8, shirt: INK }),
+          npc([{ pose: "sit", d: 0.5 }, { pose: "sit", d: 0.4 }], 172, true, { y: GROUND - 16, scale: 0.8, shirt: INK }),
+        ],
+        draw(ctx, t, cast) {
+          const x = 130 + Math.max(0, 60 - t * 120);
+          cast[1].x = x + 22; cast[2].x = x + 42;
+          for (let i = 0; i < 3; i++) { const k = (t * 1.6 + i / 3) % 1; ctx.globalAlpha = 0.5 * (1 - k); ctx.fillStyle = GREY; ctx.beginPath(); ctx.arc(x + 70 + k * 30, GROUND - 8 - k * 6, 4 + k * 5, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+          label(ctx, "SERAHKAN!", 160, 22, 11, CORAL);
+        },
+        front(ctx, t) {
+          const x = 130 + Math.max(0, 60 - t * 120);
+          box(ctx, x + 10, GROUND - 22, 52, 12, CORAL, 5);
+          for (const wx of [x + 16, x + 56]) { ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(wx, GROUND - 6, 6, 0, 7); ctx.fill(); ctx.fillStyle = GREY; ctx.beginPath(); ctx.arc(wx, GROUND - 6, 2.5, 0, 7); ctx.fill(); }
+        },
+      };
+    case "mancing":
+      // Sitting on the pier with a rod; the bobber bobs on the water.
+      return {
+        cast: [me([{ pose: "sit", d: 0.8 }, { pose: "sit", d: 0.6 }], 56, { y: GROUND - 18 })],
+        draw(ctx, t) {
+          ctx.fillStyle = "#7CC8EC"; ctx.fillRect(0, GROUND - 4, W, H - GROUND + 4);
+          for (let x = 10; x < W; x += 28) { ctx.strokeStyle = BONE; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x + Math.sin(t * 2 + x) * 3, GROUND + 6, 5, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+          box(ctx, 6, GROUND - 20, 84, 8, "#B98A5A", 2);
+          ctx.fillStyle = INK; ctx.fillRect(20, GROUND - 12, 4, 16); ctx.fillRect(70, GROUND - 12, 4, 16);
+          const bob = Math.sin(t * 3) * 2 + (t % 3 > 2.4 ? 5 : 0);
+          ctx.strokeStyle = "#8A5A3A"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(66, GROUND - 52); ctx.lineTo(118, GROUND - 78); ctx.stroke();
+          ctx.strokeStyle = INK; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(118, GROUND - 78); ctx.quadraticCurveTo(150, GROUND - 40, 160, GROUND - 2 + bob); ctx.stroke();
+          ctx.fillStyle = CORAL; ctx.beginPath(); ctx.arc(160, GROUND - 2 + bob, 4, Math.PI, 0); ctx.fill(); ctx.fillStyle = BONE; ctx.beginPath(); ctx.arc(160, GROUND - 2 + bob, 4, 0, Math.PI); ctx.fill();
+          if (t % 3 > 2.4) label(ctx, "!", 160, GROUND - 22, 16, CORAL);
+        },
+      };
+    case "dompet":
+      // A wallet on the road; the hero spots it, picks it up, and cheers.
+      return {
+        cast: [me([{ pose: "stand", d: 0.4 }, { pose: "point", d: 0.4 }, { pose: "crouch", d: 0.3 }, { pose: "cheer", d: 0.4 }, { pose: "cheer", d: 0.5 }], 96)],
+        draw(ctx, t) {
+          const k = t % 2.0;
+          if (k < 1.1) box(ctx, 120, GROUND - 8, 16, 8, "#8A5A3A", 2);
+          else for (let i = 0; i < 3; i++) { const y = GROUND - 60 - ((k - 1.1) * 40 + i * 9) % 30; box(ctx, 104 + i * 12, y, 8, 8, MUST, 4); }
+        },
+      };
+    case "razia":
+      // A checkpoint: cones, a stop sign, an officer with a hand out.
+      return {
+        cast: [me([{ pose: "shrug", d: 0.4 }, { pose: "give", d: 0.5 }, { pose: "stand", d: 0.4 }], 70), npc([{ pose: "give", d: 0.5 }, { pose: "point", d: 0.4 }], 150)],
+        draw(ctx) {
+          for (const x of [24, 112, 196]) { ctx.fillStyle = "#FF9A1F"; ctx.beginPath(); ctx.moveTo(x - 6, GROUND); ctx.lineTo(x, GROUND - 16); ctx.lineTo(x + 6, GROUND); ctx.closePath(); ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = BONE; ctx.fillRect(x - 3, GROUND - 9, 6, 3); }
+          ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(180, GROUND); ctx.lineTo(180, GROUND - 60); ctx.stroke();
+          ctx.fillStyle = CORAL; ctx.beginPath(); ctx.arc(180, GROUND - 66, 12, 0, 7); ctx.fill(); ctx.stroke();
+          label(ctx, "STOP", 180, GROUND - 66, 7, BONE);
+          label(ctx, "RAZIA", 110, 20, 12, CORAL);
+        },
+      };
+    case "macet":
+      // Bumper to bumper. The hero gives up and sits on the kerb.
+      return {
+        cast: [me([{ pose: "scratch", d: 0.5 }, { pose: "sit", d: 0.6 }, { pose: "sit", d: 0.8 }, { pose: "sleep", d: 0.8 }], 36)],
+        draw(ctx, t) {
+          const cols = ["#69BFD6", CORAL, MUST, "#3FA77A"];
+          for (let i = 0; i < 4; i++) {
+            const x = 64 + i * 40 + Math.sin(t * 2 + i) * 0.6;
+            box(ctx, x, GROUND - 22, 34, 14, cols[i], 5);
+            ctx.fillStyle = "#CFE9F2"; ctx.fillRect(x + 8, GROUND - 30, 16, 8);
+            ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x + 8, GROUND - 6, 4, 0, 7); ctx.arc(x + 27, GROUND - 6, 4, 0, 7); ctx.fill();
+          }
+          if (Math.floor(t * 2) % 2) label(ctx, "TIN TIN!", 150, 22, 10, CORAL);
+          label(ctx, "MACET", 60, 22, 12);
+        },
+      };
     case "joget":
       return {
         cast: [me([{ pose: "danceA", d: 0.28 }, { pose: "danceB", d: 0.28 }], 110, { y: GROUND - 14 }), npc([{ pose: "cheer", d: 0.3 }, { pose: "stand", d: 0.3 }], 40, false, { scale: 0.8 }), npc([{ pose: "stand", d: 0.3 }, { pose: "cheer", d: 0.3 }], 186, true, { scale: 0.8 })],
