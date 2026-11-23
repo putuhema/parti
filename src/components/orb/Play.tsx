@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { BOT_MS, ORBS_TO_WIN, POOL, TURN_MS, isBot, type LogItem, type Side, type Tile } from "../../../convex/lib/orb/rules";
 import { TimerBar, Toast } from "@/components/words/common";
+import { ChainCanvas, type EndRects } from "./ChainCanvas";
 import { Confetti, Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
@@ -59,10 +60,6 @@ export function Domino({ t, ink = "bone", tilt = 0, vertical, size = "md", state
   );
 }
 
-/** A ring of sparks in the caster's ink. */
-function Sparks() {
-  return <span className="ow-sparks" aria-hidden="true">{Array.from({ length: 10 }, (_, i) => <span key={i} style={{ ["--a" as string]: `${i * 36}deg` }} />)}</span>;
-}
 
 function Pips({ n, light, pop }: { n: number; light?: boolean; pop?: boolean }) {
   return (
@@ -102,9 +99,8 @@ export function OrbPlay({ room }: { room: OrbView }) {
   // A tile flying from the hand to an end while the cast is on its way.
   const [fling, setFling] = useState<{ t: Tile; turnNo: number; x: number; y: number; go: boolean } | null>(null);
   const flingId = useRef(0);
-  const endL = useRef<HTMLButtonElement>(null);
-  const endR = useRef<HTMLButtonElement>(null);
-  const endEl = (side: Side) => (side === "L" ? endL : endR).current;
+  // The canvas reports where its two open ends sit on screen.
+  const endsRef = useRef<EndRects>({ L: null, R: null });
 
   async function send(move: { kind: "cast"; index: number; side: Side } | { kind: "draw" }) {
     if (!myTurn || busy) return;
@@ -120,12 +116,12 @@ export function OrbPlay({ room }: { room: OrbView }) {
     if (!myTurn || busy || !t || !fitsOf(t).includes(side)) return;
     const slot = handRef.current?.children[i]?.getBoundingClientRect();
     const start = from ?? (slot ? { x: slot.left + slot.width / 2, y: slot.top + 22 } : null);
-    const end = endEl(side)?.getBoundingClientRect();
+    const end = endsRef.current[side];
     if (start && end && !reduced()) {
       const id = ++flingId.current;
       const turnNo = g.turnNo;
       setFling({ t, turnNo, x: start.x, y: start.y, go: false });
-      requestAnimationFrame(() => requestAnimationFrame(() => { if (flingId.current === id) setFling({ t, turnNo, x: end.left + end.width / 2, y: end.top + end.height / 2, go: true }); }));
+      requestAnimationFrame(() => requestAnimationFrame(() => { if (flingId.current === id) setFling({ t, turnNo, x: end.x + end.w / 2, y: end.y + end.h / 2, go: true }); }));
     }
     void send({ kind: "cast", index: i, side });
   }
@@ -139,8 +135,8 @@ export function OrbPlay({ room }: { room: OrbView }) {
   const [drag, setDrag] = useState<{ i: number; x: number; y: number; over: Side | null } | null>(null);
   const endUnder = (x: number, y: number): Side | null => {
     for (const s of ["L", "R"] as Side[]) {
-      const r = endEl(s)?.getBoundingClientRect();
-      if (r && x > r.left - 24 && x < r.right + 24 && y > r.top - 30 && y < r.bottom + 30) return s;
+      const r = endsRef.current[s];
+      if (r && x > r.x - 24 && x < r.x + r.w + 24 && y > r.y - 30 && y < r.y + r.h + 30) return s;
     }
     return null;
   };
@@ -155,7 +151,7 @@ export function OrbPlay({ room }: { room: OrbView }) {
     if (!dragged.current) {
       if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 8) return;
       dragged.current = true;
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* the pointer may already be gone */ }
       setSel(p.i);
       feedback.tap();
     }
@@ -231,22 +227,17 @@ export function OrbPlay({ room }: { room: OrbView }) {
           <p aria-live="polite">{hint}</p>
         </div>
 
-        <div className={`ow-chain${g.chain.length > 9 ? " dense" : ""}${g.chain.length > 16 ? " tiny" : ""}`}>
-          <div className="ow-chainrow">
-            <button ref={endL} className={`ow-end${myTurn && selFits.includes("L") ? " hot" : ""}${drag?.over === "L" ? (selFits.includes("L") ? " over" : " nope") : ""}`} disabled={!myTurn || !selFits.includes("L")} onClick={() => castOn("L")} aria-label={`Cast on the left end, ${g.ends.L}`}>{g.ends.L}</button>
-            {g.chain.map((c) => {
-              const k = tileKey([c.a, c.b]);
-              const isNew = k === newKey;
-              return (
-                <Domino key={k} t={[c.a, c.b]} ink={inkOf(c.by)} size="sm" vertical={c.a === c.b} className={isNew ? `ow-new${fresh?.orb ? " orbed" : ""}` : ""}>
-                  {isNew && <Sparks />}
-                  {isNew && fresh?.orb && <span className="ow-plus">+1 orb</span>}
-                </Domino>
-              );
-            })}
-            <button ref={endR} className={`ow-end${myTurn && selFits.includes("R") ? " hot" : ""}${drag?.over === "R" ? (selFits.includes("R") ? " over" : " nope") : ""}`} disabled={!myTurn || !selFits.includes("R")} onClick={() => castOn("R")} aria-label={`Cast on the right end, ${g.ends.R}`}>{g.ends.R}</button>
-          </div>
-        </div>
+        <ChainCanvas
+          chain={g.chain}
+          ends={g.ends}
+          inkOf={inkOf}
+          hot={myTurn ? selFits : []}
+          over={drag?.over ? { side: drag.over, ok: selFits.includes(drag.over) } : null}
+          fresh={newKey && fresh ? { n: fresh.n, key: newKey, orb: !!fresh.orb } : null}
+          onEnd={castOn}
+          endsRef={endsRef}
+          label={`The chain: ${g.chain.length} ${g.chain.length === 1 ? "tile" : "tiles"}. Left end ${g.ends.L}, right end ${g.ends.R}.`}
+        />
 
         <div className="ow-pool">
           <span className="ow-orbs">
@@ -257,7 +248,7 @@ export function OrbPlay({ room }: { room: OrbView }) {
           <span className="ow-poolnote"><b>Orb pool · {g.pool} left</b>Cast a double to claim one.</span>
         </div>
 
-        {last && <p key={last.n} className="ow-log"><LogLine l={last} name={name} inkOf={inkOf} /></p>}
+        <p key={last?.n ?? "start"} className="ow-log">{last ? <LogLine l={last} name={name} inkOf={inkOf} /> : "The duel begins. Match the first tile’s ends."}</p>
       </section>
 
       {!g.done && (myTurn ? <TimerBar deadline={g.deadline} total={TURN_MS} /> : !isBot(g.turn) ? <TimerBar deadline={g.deadline} total={TURN_MS} /> : <TimerBar deadline={g.deadline} total={BOT_MS} />)}
