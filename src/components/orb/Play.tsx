@@ -207,18 +207,24 @@ export function OrbPlay({ room }: { room: OrbView }) {
     <main className={`screen tight ow-screen ow-play${myTurn ? " myturn" : ""}`}>
       <Header room={room} />
 
-      <div className="ow-players">
-        {g.players.map((p) => (
-          <span key={p} className={`ow-pl ink-${inkOf(p)}${g.turn === p && !g.done ? " turn" : ""}`}>
-            {fresh?.hex === p ? <span key={`hex${fresh.n}`} className="ow-hexwrap"><Hat ink={inkOf(p)} /><span className="ow-hexpop">Hexed! +1</span></span> : <Hat ink={inkOf(p)} />}
-            <span className="ow-plname">
-              <b>{p === me ? "You" : g.names[p]}</b>
-              <small>{g.counts[p]} {g.counts[p] === 1 ? "tile" : "tiles"}</small>
+      <aside className="ow-rail" aria-label="Wizards">
+        <span className="ow-raillabel">Wizards</span>
+        <div className="ow-players">
+          {g.players.map((p) => (
+            <span key={p} className={`ow-pl ink-${inkOf(p)}${g.turn === p && !g.done ? " turn" : ""}`}>
+              {fresh?.hex === p ? <span key={`hex${fresh.n}`} className="ow-hexwrap"><Hat ink={inkOf(p)} /><span className="ow-hexpop">Hexed! +1</span></span> : <Hat ink={inkOf(p)} />}
+              <span className="ow-plname">
+                <b>{p === me ? "You" : g.names[p]}</b>
+                <span className="ow-plmeta">
+                  <small>{g.counts[p]} {g.counts[p] === 1 ? "tile" : "tiles"}</small>
+                  <Pips n={g.orbs[p] ?? 0} light={g.turn === p && !g.done} pop={!!fresh?.orb && fresh.who === p} />
+                </span>
+              </span>
             </span>
-            <Pips n={g.orbs[p] ?? 0} light={g.turn === p && !g.done} pop={!!fresh?.orb && fresh.who === p} />
-          </span>
-        ))}
-      </div>
+          ))}
+        </div>
+        <p key={last?.n ?? "start"} className="ow-log"><span className="ow-loglabel">Last spell</span><span>{last ? <LogLine l={last} name={name} inkOf={inkOf} /> : "The duel begins. Match the first tile’s ends."}</span></p>
+      </aside>
 
       <section className={`ow-table${drag ? " dragging" : ""}`} aria-label="The table">
         {fresh?.orb && <span key={`flash${fresh.n}`} className="ow-flash" aria-hidden="true" />}
@@ -241,24 +247,23 @@ export function OrbPlay({ room }: { room: OrbView }) {
 
         <div className="ow-pool">
           <span className="ow-orbs">
-            {Array.from({ length: POOL }, (_, i) => i < g.pool ? <OrbGlyph key={i} size={30} body="#D23A8C" ray="#F3EDE0" /> : (
-              <span key={i} className="ow-orbgone">{fresh?.orb && i === g.pool && <span key={`leave${fresh.n}`} className="ow-orbleave"><OrbGlyph size={30} body="#D23A8C" ray="#F3EDE0" /></span>}</span>
+            {Array.from({ length: POOL }, (_, i) => i < g.pool ? <OrbGlyph key={i} size={28} body="#D23A8C" ray="#F3EDE0" /> : (
+              <span key={i} className="ow-orbgone">{fresh?.orb && i === g.pool && <span key={`leave${fresh.n}`} className="ow-orbleave"><OrbGlyph size={28} body="#D23A8C" ray="#F3EDE0" /></span>}</span>
             ))}
           </span>
-          <span className="ow-poolnote"><b>Orb pool · {g.pool} left</b>Cast a double to claim one.</span>
+          <span className="ow-poolnote"><b>Orb pool · {g.pool} left</b><span>{g.pool > 0 ? "Cast a double to claim one" : "All orbs claimed: empty your hand to win"}</span></span>
         </div>
-
-        <p key={last?.n ?? "start"} className="ow-log">{last ? <LogLine l={last} name={name} inkOf={inkOf} /> : "The duel begins. Match the first tile’s ends."}</p>
       </section>
 
-      {!g.done && (myTurn ? <TimerBar deadline={g.deadline} total={TURN_MS} /> : !isBot(g.turn) ? <TimerBar deadline={g.deadline} total={TURN_MS} /> : <TimerBar deadline={g.deadline} total={BOT_MS} />)}
+      <div className="ow-timer">{!g.done && <TimerBar deadline={g.deadline} total={isBot(g.turn) ? BOT_MS : TURN_MS} />}</div>
 
       {g.isPlayer && (
         <section className="ow-dock" aria-label="Your hand">
           <span className="ow-leaf a" /><span className="ow-leaf b" /><span className="ow-leaf c" />
           <div className="ow-dockhead">
-            <span>Your hand · {g.hand.length}</span>
-            <span>Bog · {g.bog}</span>
+            <span>Your hand <b>{g.hand.length}</b></span>
+            <span className="ow-docktimer">{!g.done && <TimerBar deadline={g.deadline} total={isBot(g.turn) ? BOT_MS : TURN_MS} />}</span>
+            <span>Bog <b>{g.bog}</b></span>
           </div>
           <div className="ow-hand" ref={handRef}>
             {g.hand.map((t, i) => {

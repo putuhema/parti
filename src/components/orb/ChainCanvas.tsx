@@ -6,13 +6,14 @@ import type { Ink } from "./Play";
 
 // The chain is painted on one fixed-size canvas, so a growing chain never moves the page around.
 // Tiles snake back and forth in rows and shrink until the whole chain, both open ends included, fits.
+// Where a row runs out, a dashed U-turn arrow shows the chain carrying on along the next row.
 
 export type EndRects = Record<Side, { x: number; y: number; w: number; h: number } | null>;
 export type Fresh = { n: number; key: string; orb: boolean } | null;
 
 const C = { bone: "#F3EDE0", ink: "#231B1A", muted: "#5A4A44", coral: "#E2574C", coralSoft: "#FBE3DF", moss: "#3FA77A", magenta: "#D23A8C", mustard: "#F4C64E" };
 const FACE: Record<Ink, string> = { plum: "#5E4A8C", lagoon: "#69BFD6", moss: "#3FA77A", magenta: "#D23A8C", bone: "#F3EDE0" };
-const HEIGHT = 196; // CSS px; the board never changes size
+// The board's height comes from CSS (fixed per screen size), so the chain never pushes the page around.
 const LAND_MS = 520;
 const FX_MS = 1500;
 
@@ -20,42 +21,56 @@ type Item =
   | { kind: "end"; side: Side; value: number }
   | { kind: "tile"; key: string; left: number; right: number; ink: Ink; double: boolean };
 type Box = { item: Item; x: number; y: number; w: number; h: number };
+type Turn = { side: "right" | "left"; from: Box; to: Box };
 
 const keyOf = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
 
-/** Lay the items out in rows that snake left→right, then right→left, at tile unit `u`. */
+/** Lay the items out in rows that snake left→right, then right→left, at tile unit `u`.
+ *  A margin is kept on both sides for the U-turn arrows between rows. */
 function layout(items: Item[], width: number, u: number) {
   const gap = Math.max(3, Math.round(u * 0.22));
   const rowH = u * 2;
-  const rowGap = Math.max(6, Math.round(u * 0.45));
+  const rowGap = Math.max(8, Math.round(u * 0.55));
+  const margin = Math.round(u * 0.9);
+  const inner = width - margin * 2;
   const size = (it: Item) => (it.kind === "end" ? { w: u * 1.4, h: u * 1.4 } : it.double ? { w: u, h: u * 2 } : { w: u * 2, h: u });
   const rows: Item[][] = [[]];
   let used = 0;
   for (const it of items) {
     const w = size(it).w;
-    if (rows[rows.length - 1].length && used + gap + w > width) { rows.push([]); used = 0; }
+    if (rows[rows.length - 1].length && used + gap + w > inner) { rows.push([]); used = 0; }
     used += (rows[rows.length - 1].length ? gap : 0) + w;
     rows[rows.length - 1].push(it);
   }
   const boxes: Box[] = [];
+  const rowBoxes: Box[][] = [];
   rows.forEach((row, r) => {
     const rtl = r % 2 === 1;
     const y0 = r * (rowH + rowGap);
-    let x = rtl ? width : 0;
+    let x = rtl ? margin + inner : margin;
+    const mine: Box[] = [];
     for (const raw of row) {
       // On a right-to-left row a tile is mirrored so its touching halves still meet.
       const item: Item = raw.kind === "tile" && rtl ? { ...raw, left: raw.right, right: raw.left } : raw;
       const { w, h } = size(item);
       const bx = rtl ? x - w : x;
-      boxes.push({ item, x: bx, y: y0 + (rowH - h) / 2, w, h });
+      const b = { item, x: bx, y: y0 + (rowH - h) / 2, w, h };
+      boxes.push(b);
+      mine.push(b);
       x = rtl ? bx - gap : bx + w + gap;
     }
+    rowBoxes.push(mine);
   });
-  return { boxes, height: rows.length * rowH + (rows.length - 1) * rowGap };
+  const turns: Turn[] = [];
+  for (let r = 0; r + 1 < rowBoxes.length; r++) {
+    turns.push({ side: r % 2 === 0 ? "right" : "left", from: rowBoxes[r][rowBoxes[r].length - 1], to: rowBoxes[r + 1][0] });
+  }
+  return { boxes, turns, margin, rowH, height: rows.length * rowH + (rows.length - 1) * rowGap };
 }
 
 function fit(items: Item[], width: number, height: number) {
-  for (let u = 30; u >= 9; u -= 1) {
+  const top = Math.max(16, Math.min(46, Math.floor(height / 4.2)));
+  for (let u = top; u >= 9; u -= 1) {
     const l = layout(items, width, u);
     if (l.height <= height) return { ...l, u };
   }
@@ -99,6 +114,7 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let raf = 0;
     let width = el.clientWidth;
+    let HEIGHT = el.clientHeight || 196;
     let font = "sans-serif";
     const readFont = () => { font = getComputedStyle(el).getPropertyValue("--font-allo").trim() || "sans-serif"; };
     readFont();
@@ -119,10 +135,44 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
         { kind: "end", side: "R", value: p.ends.R },
       ];
       const pad = 8;
-      const { boxes, height, u } = fit(items, width - pad * 2, HEIGHT - pad * 2);
+      const { boxes, turns, height, u } = fit(items, width - pad * 2, HEIGHT - pad * 2);
       const oy = pad + (HEIGHT - pad * 2 - height) / 2;
-      const placed = boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + oy }));
+      const shift = (b: Box) => ({ ...b, x: b.x + pad, y: b.y + oy });
+      const placed = boxes.map(shift);
       boxesRef.current = placed;
+
+      // U-turn arrows where the chain drops to the next row, so it reads as one snaking line.
+      for (const t of turns) {
+        const a = shift(t.from), z = shift(t.to);
+        const right = t.side === "right";
+        const ax = right ? a.x + a.w : a.x, zx = right ? z.x + z.w : z.x;
+        const ay = a.y + a.h / 2, zy = z.y + z.h / 2;
+        const edge = right ? Math.max(ax, zx) + u * 0.25 : Math.min(ax, zx) - u * 0.25;
+        const bulge = right ? edge + u * 0.55 : edge - u * 0.55;
+        ctx.save();
+        ctx.strokeStyle = C.muted;
+        ctx.globalAlpha = 0.75;
+        ctx.lineWidth = Math.max(2, u * 0.09);
+        ctx.lineCap = "round";
+        ctx.setLineDash([Math.max(3, u * 0.16), Math.max(3, u * 0.14)]);
+        ctx.beginPath();
+        ctx.moveTo(ax + (right ? 3 : -3), ay);
+        ctx.lineTo(edge, ay);
+        ctx.bezierCurveTo(bulge, ay, bulge, zy, edge, zy);
+        ctx.lineTo(zx + (right ? 5 : -5), zy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Arrowhead pointing back into the next row.
+        const tip = zx + (right ? 3 : -3), dir = right ? 1 : -1, hs = Math.max(5, u * 0.26);
+        ctx.fillStyle = C.muted;
+        ctx.beginPath();
+        ctx.moveTo(tip, zy);
+        ctx.lineTo(tip + dir * hs, zy - hs * 0.7);
+        ctx.lineTo(tip + dir * hs, zy + hs * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
 
       // Where the ends are on screen, for dragging from the hand.
       const rect = el.getBoundingClientRect();
@@ -271,7 +321,7 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
     };
 
     const kick = () => { if (!raf) raf = requestAnimationFrame(paint); };
-    const ro = new ResizeObserver(() => { width = el.clientWidth; kick(); });
+    const ro = new ResizeObserver(() => { width = el.clientWidth; HEIGHT = el.clientHeight || HEIGHT; kick(); });
     ro.observe(el);
     void document.fonts?.ready.then(() => { readFont(); kick(); });
     // Repaint whenever React hands us new props, and on scroll (the end rects move with the page).
@@ -301,7 +351,6 @@ export function ChainCanvas({ chain, ends, inkOf, hot, over, fresh, onEnd, endsR
       <canvas
         ref={canvas}
         className="ow-canvas"
-        style={{ height: HEIGHT }}
         role="img"
         aria-label={label}
         onPointerUp={(e) => { const s = hit(e); if (s && hot.includes(s)) onEnd(s); }}
