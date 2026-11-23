@@ -85,28 +85,25 @@ export default function Home() {
     >
       <h1 className="display" style={{ margin: "2px 4px 0", fontSize: 30 }}>Sudoku</h1>
 
-      <section style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <Mascot size={84} className="bob" />
-        <div style={{ border: "2px solid var(--line)", borderRadius: 18, padding: "14px 16px", fontSize: 18, fontWeight: 800, lineHeight: 1.3 }}>
+      <section style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Mascot size={84} mood="happy" />
+        <div className="speech-bubble">
           Hey {me.name}! Ready to puzzle? Grab a friend and let&apos;s go!
         </div>
       </section>
 
       <Link
         href="/daily"
-        className="card"
+        className="toy-daily"
         onClick={() => feedback.tap()}
-        style={{ background: "var(--sun-soft)", borderColor: "var(--sun-line)", boxShadow: "0 4px 0 #FFD84D", padding: "12px 16px" }}
       >
-        <span style={{ width: 48, flexShrink: 0, borderRadius: 12, overflow: "hidden", background: "#fff", boxShadow: "0 3px 0 var(--sun-edge)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <span style={{ alignSelf: "stretch", textAlign: "center", background: "var(--cherry)", color: "#fff", fontSize: 10, fontWeight: 900, letterSpacing: ".08em", padding: "2px 0" }}>
-            {d ? MONTHS[d.getUTCMonth()] : "TODAY"}
-          </span>
-          <span style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, padding: "4px 0 6px" }}>{d ? d.getUTCDate() : "·"}</span>
+        <span className="toy-cal">
+          <em>{d ? MONTHS[d.getUTCMonth()] : "TODAY"}</em>
+          <b>{d ? d.getUTCDate() : "·"}</b>
         </span>
-        <span className="col">
-          <span style={{ fontSize: 18, fontWeight: 900 }}>Daily Duel</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--sun-ink)" }}>{dailyLine}</span>
+        <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
+          <span className="display" style={{ fontSize: 19, color: "#4A2D00" }}>Daily Duel</span>
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--sun-ink)" }}>{dailyLine}</span>
         </span>
         {daily && daily.run?.timeMs === undefined ? (
           <span style={{ fontSize: 13, fontWeight: 900, color: "#fff", background: "var(--cherry-edge)", padding: "6px 10px", borderRadius: 10 }}>NEW</span>

@@ -37,8 +37,8 @@ export function roomPaints<T extends { id: string; isMe: boolean; seat: number }
 export type { MascotMood };
 
 /** The rigged 3D Vinyl Toy Pum mascot (/models/pum.glb) with mood animations. `size` is the square box size. */
-export function Mascot({ size = 72, mood = "idle", className }: { size?: number; mood?: MascotMood; className?: string }) {
-  return <Mascot3D size={size} mood={mood} className={className} />;
+export function Mascot({ size = 72, mood = "idle", className, nudgeSignal }: { size?: number; mood?: MascotMood; className?: string; nudgeSignal?: number }) {
+  return <Mascot3D size={size} mood={mood} className={className} nudgeSignal={nudgeSignal} />;
 }
 
 // ---------- Icons ----------

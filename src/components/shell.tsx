@@ -11,7 +11,7 @@ export function Logo({ size = 34 }: { size?: number }) {
   return (
     <Link href="/" className="logo" aria-label="pums party, all games" style={{ fontSize: size }} onClick={() => feedback.tap()}>
       <span className="logo-small">pums</span>
-      party
+      party<span className="logo-dot" aria-hidden="true" />
     </Link>
   );
 }

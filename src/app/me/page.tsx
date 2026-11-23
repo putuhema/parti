@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { ShellPage } from "@/components/shell";
-import { Avatar, Icon, ME, Sheet } from "@/components/ui";
+import { Avatar, Icon, ME, Mascot, Sheet, type MascotMood } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
 import { authClient } from "@/lib/auth-client";
@@ -18,6 +18,8 @@ export default function MePage() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(me.name);
   const [error, setError] = useState("");
+  const [kuboMood, setKuboMood] = useState<MascotMood>(me.streak > 0 ? "happy" : "idle");
+  const [kuboNudge, setKuboNudge] = useState(0);
 
   const stats = [
     { label: "Day streak", value: me.streak, icon: <Icon.Flame size={22} />, color: "var(--tangerine-ink)" },
@@ -41,17 +43,39 @@ export default function MePage() {
 
   return (
     <ShellPage tab="me">
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 8 }}>
-        <Avatar name={me.name} paint={ME} size={92} />
-        <h1 className="display" style={{ margin: 0, fontSize: 32 }}>{me.name}</h1>
-        <button className="btn btn-sm btn-white" style={{ color: "var(--plum)" }} onClick={() => { feedback.tap(); setName(me.name); setEditing(true); }}>Change name</button>
+      <div className="toy-hero" style={{ padding: "16px", gap: 14 }}>
+        <button
+          type="button"
+          className="toy-hero-mascot"
+          aria-label="Celebrate with Kubo"
+          onClick={() => {
+            feedback.unlock();
+            feedback.correct();
+            setKuboMood((m) => (m === "joy" ? "happy" : "joy"));
+            setKuboNudge((n) => n + 1);
+          }}
+        >
+          <Mascot size={78} mood={kuboMood} nudgeSignal={kuboNudge} />
+        </button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Avatar name={me.name} paint={ME} size={36} />
+            <h1 className="display" style={{ margin: 0, fontSize: 28, lineHeight: 1.05 }}>{me.name}</h1>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)" }}>
+            {me.tierName} league · {me.wins} {me.wins === 1 ? "win" : "wins"}
+          </span>
+          <button className="toy-mini-btn" onClick={() => { feedback.tap(); setName(me.name); setEditing(true); }}>
+            Edit name
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
         {stats.map((s) => (
-          <div key={s.label} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "14px 16px", borderRadius: 22, background: "#fff", boxShadow: "0 3px 0 var(--cream-3)" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6, color: s.color }}>{s.icon}<span style={{ fontSize: 24, fontWeight: 900 }}>{s.value}</span></span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--plum-soft)" }}>{s.label}</span>
+          <div key={s.label} className="stat-tile">
+            <span style={{ display: "flex", alignItems: "center", gap: 6, color: s.color }}>{s.icon}<span className="display" style={{ fontSize: 24, color: "var(--plum)" }}>{s.value}</span></span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--plum-soft)" }}>{s.label}</span>
           </div>
         ))}
       </div>

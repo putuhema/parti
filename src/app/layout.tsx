@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Fredoka, Nunito } from "next/font/google";
+import { Fredoka, Plus_Jakarta_Sans } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
-const nunito = Nunito({
+const jakarta = Plus_Jakarta_Sans({
   variable: "--font-nunito",
   subsets: ["latin"],
-  weight: ["600", "700", "800", "900"],
+  weight: ["500", "600", "700", "800"],
 });
 
 const fredoka = Fredoka({
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f7f0ea",
+  themeColor: "#faf4ec",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -34,7 +34,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${nunito.variable} ${fredoka.variable}`}>
+    <html lang="en" className={`${jakarta.variable} ${fredoka.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

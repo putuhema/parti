@@ -24,10 +24,10 @@ export default function FriendsPage() {
       <JoinByCode />
 
       {data === undefined ? null : friends.length === 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "28px 16px", borderRadius: 24, background: "var(--cream-2)", textAlign: "center" }}>
-          <Mascot size={72} className="bob" />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "28px 18px", borderRadius: 26, background: "#fff", boxShadow: "var(--vinyl-gleam), 0 4px 0 var(--cream-3), var(--vinyl-drop)", textAlign: "center" }}>
+          <Mascot size={82} mood="idle" />
           <span className="display" style={{ fontSize: 22 }}>No friends yet</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--plum-soft)" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 600, color: "var(--plum-soft)", lineHeight: 1.4 }}>
             Play any room with someone and you become friends. Then you can invite each other from any lobby.
           </span>
         </div>
@@ -35,10 +35,10 @@ export default function FriendsPage() {
         <section style={{ display: "flex", flexDirection: "column", gap: 10 }} aria-label="Your friends">
           <span className="label" style={{ color: "var(--plum-soft)", paddingLeft: 4 }}>Your friends · points this week</span>
           {friends.map((f) => (
-            <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 20, background: "#fff", boxShadow: "0 3px 0 var(--cream-3)" }}>
+            <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 22, background: "#fff", boxShadow: "var(--vinyl-gleam), 0 4px 0 var(--cream-3), var(--vinyl-drop)" }}>
               <Avatar name={f.name} paint={paintFor(f.id)} size={42} />
-              <span style={{ flex: 1, fontSize: 18, fontWeight: 900, color: "var(--plum)" }}>{f.name}</span>
-              <span style={{ fontSize: 16, fontWeight: 900, color: "var(--plum-soft)" }}>{f.value.toLocaleString()}</span>
+              <span style={{ flex: 1, fontSize: 17, fontWeight: 800, color: "var(--plum)" }}>{f.name}</span>
+              <span className="chip chip-sun">{f.value.toLocaleString()} pts</span>
             </div>
           ))}
         </section>

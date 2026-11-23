@@ -23,10 +23,13 @@ export function Mascot3D({
   size = 72,
   mood = "idle",
   className,
+  nudgeSignal,
 }: {
   size?: number;
   mood?: MascotMood;
   className?: string;
+  /** Increment to trigger a playful squish-bounce reaction on the 3D rig. */
+  nudgeSignal?: number;
 }) {
   const wrapRef = useRef<HTMLSpanElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,6 +75,10 @@ export function Mascot3D({
   useEffect(() => {
     handleRef.current?.setSize(size);
   }, [size]);
+
+  useEffect(() => {
+    if (nudgeSignal) handleRef.current?.nudge();
+  }, [nudgeSignal]);
 
   return (
     <span
