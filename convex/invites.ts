@@ -27,6 +27,7 @@ export const GAMES = {
   chain: { name: "Scribble Chain", path: "/chain/room/" },
   bluff: { name: "Bluff Bay", path: "/bluff/room/" },
   stack: { name: "Sky Stack", path: "/stack/room/" },
+  orb: { name: "Orbwick", path: "/orb/room/" },
 } as const;
 
 export const gameKind = v.union(...(Object.keys(GAMES) as (keyof typeof GAMES)[]).map((k) => v.literal(k)));

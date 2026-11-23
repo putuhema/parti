@@ -14,6 +14,22 @@ type Game = { href: string; name: string; sub: string; face: string; edge: strin
 
 const GAMES: Game[] = [
   {
+    href: "/orb",
+    name: "Orbwick",
+    sub: "Domino duels for wizards",
+    face: "#5E4A8C",
+    edge: "#231B1A",
+    ink: "#5E4A8C",
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 104, height: 92 }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 4, top: 14, display: "flex", width: 72, height: 36, borderRadius: 8, background: "#F3EDE0", boxShadow: "3px 3px 0 #231B1A", transform: "rotate(-10deg)", alignItems: "center", justifyContent: "space-around", fontSize: 20, fontWeight: 900, color: "#231B1A" }}><span>5</span><span>6</span></span>
+        <span style={{ position: "absolute", left: 26, top: 48, display: "flex", width: 72, height: 36, borderRadius: 8, background: "#F4C64E", boxShadow: "3px 3px 0 #231B1A", transform: "rotate(8deg)", alignItems: "center", justifyContent: "space-around", fontSize: 20, fontWeight: 900, color: "#231B1A" }}><span>3</span><span>3</span></span>
+        <span style={{ position: "absolute", right: 0, top: 0, width: 30, height: 30, borderRadius: "50%", background: "#D23A8C", border: "3px solid #F3EDE0" }} />
+      </span>
+    ),
+  },
+  {
     href: "/sudoku",
     name: "Sudoku",
     sub: "Race, co-op, daily",
@@ -174,7 +190,6 @@ const GAMES: Game[] = [
     face: "#FFB020",
     edge: "#D98E00",
     ink: "#8A5A00",
-    tag: "NEW",
     art: (
       <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, width: 92 }} aria-hidden="true">
         {[[30, 44, "#FF4B4B"], [18, 56, "#CE82FF"], [10, 66, "#58CC02"], [4, 74, "#1CB0F6"], [0, 84, "#fff"]].map(([l, w, c], i) => (

@@ -414,6 +414,17 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  orbRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    bots: v.number(), // bot wizards to seat with the humans
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see OrbGame in convex/lib/orb/rules.ts
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
   stackRooms: defineTable({
     code: v.string(),
     hostId: v.id("players"),
