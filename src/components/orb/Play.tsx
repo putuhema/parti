@@ -3,7 +3,7 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { BOT_MS, ORBS_TO_WIN, POOL, TURN_MS, isBot, type LogItem, type Side, type Tile } from "../../../convex/lib/orb/rules";
 import { TimerBar, Toast } from "@/components/words/common";
@@ -24,6 +24,9 @@ function inksFor(players: string[], me: string) {
   for (const p of players) map.set(p, p === me ? "plum" : OTHERS[k++ % OTHERS.length]);
   return map;
 }
+
+const tileKey = (t: Tile) => `${Math.min(t[0], t[1])}-${Math.max(t[0], t[1])}`;
+const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ---------- Little pieces ----------
 export function OrbGlyph({ size = 40, body = "#F3EDE0", ray = "#F4C64E" }: { size?: number; body?: string; ray?: string }) {
@@ -47,18 +50,24 @@ function Hat({ ink }: { ink: Ink }) {
   );
 }
 
-export function Domino({ t, ink = "bone", tilt = 0, vertical, size = "md", state }: { t: Tile; ink?: Ink; tilt?: number; vertical?: boolean; size?: "sm" | "md"; state?: "selected" | "dim" | "fits" }) {
+export function Domino({ t, ink = "bone", tilt = 0, vertical, size = "md", state, className = "", children }: { t: Tile; ink?: Ink; tilt?: number; vertical?: boolean; size?: "sm" | "md"; state?: "selected" | "dim" | "lifted"; className?: string; children?: React.ReactNode }) {
   return (
-    <span className={`ow-dom ${size} ink-${ink}${vertical ? " v" : ""}${state ? ` ${state}` : ""}`} style={tilt ? { transform: `rotate(${tilt}deg)` } : undefined} aria-label={`${t[0]} and ${t[1]}`}>
+    <span className={`ow-dom ${size} ink-${ink}${vertical ? " v" : ""}${state ? ` ${state}` : ""} ${className}`} style={tilt ? { transform: `rotate(${tilt}deg)` } : undefined} aria-label={`${t[0]} and ${t[1]}`}>
       <b>{t[0]}</b><i /><b>{t[1]}</b>
+      {children}
     </span>
   );
 }
 
-function Pips({ n, light }: { n: number; light?: boolean }) {
+/** A ring of sparks in the caster's ink. */
+function Sparks() {
+  return <span className="ow-sparks" aria-hidden="true">{Array.from({ length: 10 }, (_, i) => <span key={i} style={{ ["--a" as string]: `${i * 36}deg` }} />)}</span>;
+}
+
+function Pips({ n, light, pop }: { n: number; light?: boolean; pop?: boolean }) {
   return (
     <span className="ow-pips" aria-label={`${n} of ${ORBS_TO_WIN} orbs`}>
-      {Array.from({ length: ORBS_TO_WIN }, (_, i) => <span key={i} className={i < n ? "on" : light ? "off light" : "off"} />)}
+      {Array.from({ length: ORBS_TO_WIN }, (_, i) => <span key={i === n - 1 && pop ? `p${n}` : i} className={`${i < n ? "on" : light ? "off light" : "off"}${i === n - 1 && pop ? " pop" : ""}`} />)}
     </span>
   );
 }
@@ -90,15 +99,88 @@ export function OrbPlay({ room }: { room: OrbView }) {
   const selTile = sel !== null ? g.hand[sel] : undefined;
   const selFits = selTile ? fitsOf(selTile) : [];
 
+  // A tile flying from the hand to an end while the cast is on its way.
+  const [fling, setFling] = useState<{ t: Tile; turnNo: number; x: number; y: number; go: boolean } | null>(null);
+  const flingId = useRef(0);
+  const endL = useRef<HTMLButtonElement>(null);
+  const endR = useRef<HTMLButtonElement>(null);
+  const endEl = (side: Side) => (side === "L" ? endL : endR).current;
+
   async function send(move: { kind: "cast"; index: number; side: Side } | { kind: "draw" }) {
     if (!myTurn || busy) return;
     setBusy(true);
     feedback.tap();
     try { await play({ code: room.code, turnNo: g.turnNo, move }); setSel(null); }
     catch (e) { feedback.wrong(); say(errorText(e, "That spell fizzled")); }
-    finally { setBusy(false); }
+    finally { setBusy(false); flingId.current += 1; setFling(null); }
   }
-  const castOn = (side: Side) => { if (sel !== null && selFits.includes(side)) void send({ kind: "cast", index: sel, side }); };
+  /** Cast tile `i` on `side`, flinging it from (x, y) (or its hand slot) to that end. */
+  function castIndex(i: number, side: Side, from?: { x: number; y: number }) {
+    const t = g.hand[i];
+    if (!myTurn || busy || !t || !fitsOf(t).includes(side)) return;
+    const slot = handRef.current?.children[i]?.getBoundingClientRect();
+    const start = from ?? (slot ? { x: slot.left + slot.width / 2, y: slot.top + 22 } : null);
+    const end = endEl(side)?.getBoundingClientRect();
+    if (start && end && !reduced()) {
+      const id = ++flingId.current;
+      const turnNo = g.turnNo;
+      setFling({ t, turnNo, x: start.x, y: start.y, go: false });
+      requestAnimationFrame(() => requestAnimationFrame(() => { if (flingId.current === id) setFling({ t, turnNo, x: end.left + end.width / 2, y: end.top + end.height / 2, go: true }); }));
+    }
+    void send({ kind: "cast", index: i, side });
+  }
+  const flying = fling && fling.turnNo === g.turnNo ? fling : null;
+  const castOn = (side: Side) => { if (sel !== null) castIndex(sel, side); };
+
+  // Drag a tile from your hand onto a glowing end.
+  const handRef = useRef<HTMLDivElement>(null);
+  const press = useRef<{ i: number; x: number; y: number; id: number } | null>(null);
+  const dragged = useRef(false);
+  const [drag, setDrag] = useState<{ i: number; x: number; y: number; over: Side | null } | null>(null);
+  const endUnder = (x: number, y: number): Side | null => {
+    for (const s of ["L", "R"] as Side[]) {
+      const r = endEl(s)?.getBoundingClientRect();
+      if (r && x > r.left - 24 && x < r.right + 24 && y > r.top - 30 && y < r.bottom + 30) return s;
+    }
+    return null;
+  };
+  function onDown(e: React.PointerEvent, i: number) {
+    if (!myTurn || busy) return;
+    press.current = { i, x: e.clientX, y: e.clientY, id: e.pointerId };
+    dragged.current = false;
+  }
+  function onMove(e: React.PointerEvent) {
+    const p = press.current;
+    if (!p || p.id !== e.pointerId) return;
+    if (!dragged.current) {
+      if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 8) return;
+      dragged.current = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      setSel(p.i);
+      feedback.tap();
+    }
+    const over = endUnder(e.clientX, e.clientY);
+    setDrag((d) => {
+      if (d?.over !== over && over && fitsOf(g.hand[p.i]).includes(over)) feedback.move();
+      return { i: p.i, x: e.clientX, y: e.clientY, over };
+    });
+  }
+  function onUp(e: React.PointerEvent) {
+    const p = press.current;
+    press.current = null;
+    if (!p || !dragged.current) return;
+    const over = endUnder(e.clientX, e.clientY);
+    setDrag(null);
+    if (over && fitsOf(g.hand[p.i]).includes(over)) castIndex(p.i, over, { x: e.clientX, y: e.clientY });
+    else if (over) { feedback.wrong(); say(`That tile doesn't match the ${over === "L" ? "left" : "right"} end`); }
+  }
+  function onCancel() { press.current = null; setDrag(null); }
+
+  // What just happened, for the animations (nothing replays from before you opened the page).
+  const lastN = g.log.length ? g.log[g.log.length - 1].n : -1;
+  const [firstN] = useState(lastN);
+  const fresh = g.log.length && lastN > firstN ? g.log[g.log.length - 1] : null;
+  const newKey = fresh?.kind === "cast" && fresh.tile ? tileKey(fresh.tile) : null;
 
   // Sounds for what just happened.
   const lastLog = useRef(g.log.length ? g.log[g.log.length - 1].n : -1);
@@ -113,17 +195,6 @@ export function OrbPlay({ room }: { room: OrbView }) {
   const wasMine = useRef(myTurn);
   useEffect(() => { if (myTurn && !wasMine.current) feedback.ping(); wasMine.current = myTurn; }, [myTurn]);
 
-  // Keep the end that just grew in view.
-  const strip = useRef<HTMLDivElement>(null);
-  const firstKey = `${g.chain[0].a}${g.chain[0].b}`;
-  const prevFirst = useRef(firstKey);
-  useLayoutEffect(() => {
-    const el = strip.current;
-    if (!el) return;
-    const grewLeft = prevFirst.current !== firstKey;
-    prevFirst.current = firstKey;
-    el.scrollTo({ left: grewLeft ? 0 : el.scrollWidth, behavior: "smooth" });
-  }, [g.chain.length, firstKey]);
 
   const last = g.log[g.log.length - 1];
   const hint = g.done
@@ -132,7 +203,7 @@ export function OrbPlay({ room }: { room: OrbView }) {
     ? "You're watching this duel."
     : myTurn
       ? g.canCast
-        ? sel === null ? `Pick a tile that shows a ${g.ends.L} or a ${g.ends.R}.` : selFits.length ? `Tap a glowing end to cast it.` : "That one doesn't match either end."
+        ? sel === null ? `Drag a tile that shows a ${g.ends.L} or a ${g.ends.R} onto the chain.` : selFits.length ? `Drag it onto a glowing end, or tap the end.` : "That one doesn't match either end."
         : g.bog > 0 ? "Nothing matches. Draw from the bog." : "Nothing matches and the bog is empty. Pass."
       : `${name(g.turn)} ${isBot(g.turn) ? "is muttering a spell… 🤖" : "is choosing a tile…"}`;
 
@@ -143,40 +214,50 @@ export function OrbPlay({ room }: { room: OrbView }) {
       <div className="ow-players">
         {g.players.map((p) => (
           <span key={p} className={`ow-pl ink-${inkOf(p)}${g.turn === p && !g.done ? " turn" : ""}`}>
-            <Hat ink={inkOf(p)} />
+            {fresh?.hex === p ? <span key={`hex${fresh.n}`} className="ow-hexwrap"><Hat ink={inkOf(p)} /><span className="ow-hexpop">Hexed! +1</span></span> : <Hat ink={inkOf(p)} />}
             <span className="ow-plname">
               <b>{p === me ? "You" : g.names[p]}</b>
               <small>{g.counts[p]} {g.counts[p] === 1 ? "tile" : "tiles"}</small>
             </span>
-            <Pips n={g.orbs[p] ?? 0} light={g.turn === p && !g.done} />
+            <Pips n={g.orbs[p] ?? 0} light={g.turn === p && !g.done} pop={!!fresh?.orb && fresh.who === p} />
           </span>
         ))}
       </div>
 
-      <section className="ow-table" aria-label="The table">
+      <section className={`ow-table${drag ? " dragging" : ""}`} aria-label="The table">
+        {fresh?.orb && <span key={`flash${fresh.n}`} className="ow-flash" aria-hidden="true" />}
         <div className="ow-tablehead">
           <h2>{g.done ? "The duel is over." : myTurn ? "Your move." : `${name(g.turn)}'s move.`}</h2>
           <p aria-live="polite">{hint}</p>
         </div>
 
-        <div className="ow-chain" ref={strip}>
+        <div className={`ow-chain${g.chain.length > 9 ? " dense" : ""}${g.chain.length > 16 ? " tiny" : ""}`}>
           <div className="ow-chainrow">
-            <button className={`ow-end${myTurn && selFits.includes("L") ? " hot" : ""}`} disabled={!myTurn || !selFits.includes("L")} onClick={() => castOn("L")} aria-label={`Cast on the left end, ${g.ends.L}`}>{g.ends.L}</button>
-            {g.chain.map((c, i) => (
-              <Domino key={i} t={[c.a, c.b]} ink={inkOf(c.by)} size="sm" vertical={c.a === c.b} />
-            ))}
-            <button className={`ow-end${myTurn && selFits.includes("R") ? " hot" : ""}`} disabled={!myTurn || !selFits.includes("R")} onClick={() => castOn("R")} aria-label={`Cast on the right end, ${g.ends.R}`}>{g.ends.R}</button>
+            <button ref={endL} className={`ow-end${myTurn && selFits.includes("L") ? " hot" : ""}${drag?.over === "L" ? (selFits.includes("L") ? " over" : " nope") : ""}`} disabled={!myTurn || !selFits.includes("L")} onClick={() => castOn("L")} aria-label={`Cast on the left end, ${g.ends.L}`}>{g.ends.L}</button>
+            {g.chain.map((c) => {
+              const k = tileKey([c.a, c.b]);
+              const isNew = k === newKey;
+              return (
+                <Domino key={k} t={[c.a, c.b]} ink={inkOf(c.by)} size="sm" vertical={c.a === c.b} className={isNew ? `ow-new${fresh?.orb ? " orbed" : ""}` : ""}>
+                  {isNew && <Sparks />}
+                  {isNew && fresh?.orb && <span className="ow-plus">+1 orb</span>}
+                </Domino>
+              );
+            })}
+            <button ref={endR} className={`ow-end${myTurn && selFits.includes("R") ? " hot" : ""}${drag?.over === "R" ? (selFits.includes("R") ? " over" : " nope") : ""}`} disabled={!myTurn || !selFits.includes("R")} onClick={() => castOn("R")} aria-label={`Cast on the right end, ${g.ends.R}`}>{g.ends.R}</button>
           </div>
         </div>
 
         <div className="ow-pool">
           <span className="ow-orbs">
-            {Array.from({ length: POOL }, (_, i) => i < g.pool ? <OrbGlyph key={i} size={30} body="#D23A8C" ray="#F3EDE0" /> : <span key={i} className="ow-orbgone" />)}
+            {Array.from({ length: POOL }, (_, i) => i < g.pool ? <OrbGlyph key={i} size={30} body="#D23A8C" ray="#F3EDE0" /> : (
+              <span key={i} className="ow-orbgone">{fresh?.orb && i === g.pool && <span key={`leave${fresh.n}`} className="ow-orbleave"><OrbGlyph size={30} body="#D23A8C" ray="#F3EDE0" /></span>}</span>
+            ))}
           </span>
           <span className="ow-poolnote"><b>Orb pool · {g.pool} left</b>Cast a double to claim one.</span>
         </div>
 
-        {last && <p className="ow-log"><LogLine l={last} name={name} inkOf={inkOf} /></p>}
+        {last && <p key={last.n} className="ow-log"><LogLine l={last} name={name} inkOf={inkOf} /></p>}
       </section>
 
       {!g.done && (myTurn ? <TimerBar deadline={g.deadline} total={TURN_MS} /> : !isBot(g.turn) ? <TimerBar deadline={g.deadline} total={TURN_MS} /> : <TimerBar deadline={g.deadline} total={BOT_MS} />)}
@@ -188,12 +269,17 @@ export function OrbPlay({ room }: { room: OrbView }) {
             <span>Your hand · {g.hand.length}</span>
             <span>Bog · {g.bog}</span>
           </div>
-          <div className="ow-hand">
+          <div className="ow-hand" ref={handRef}>
             {g.hand.map((t, i) => {
               const ok = fitsOf(t).length > 0;
+              const away = drag?.i === i || (flying && tileKey(flying.t) === tileKey(t));
               return (
-                <button key={`${t[0]}${t[1]}${i}`} className="ow-handbtn" disabled={!myTurn} onClick={() => { feedback.tap(); setSel(sel === i ? null : i); }} aria-pressed={sel === i}>
-                  <Domino t={t} state={sel === i ? "selected" : myTurn && !ok ? "dim" : undefined} />
+                <button
+                  key={tileKey(t)} className={`ow-handbtn${myTurn && ok ? " playable" : ""}`} disabled={!myTurn} aria-pressed={sel === i}
+                  onPointerDown={(e) => onDown(e, i)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
+                  onClick={() => { if (dragged.current) { dragged.current = false; return; } feedback.tap(); setSel(sel === i ? null : i); }}
+                >
+                  <Domino t={t} state={away ? "lifted" : sel === i ? "selected" : myTurn && !ok ? "dim" : undefined} />
                   <small>{myTurn && !ok ? "No match" : t[0] === t[1] ? "Double ✶" : t[0] + t[1] === 7 ? "Hex 7" : " "}</small>
                 </button>
               );
@@ -213,6 +299,16 @@ export function OrbPlay({ room }: { room: OrbView }) {
         </section>
       )}
 
+      {drag && g.hand[drag.i] && (
+        <span className={`ow-ghost${drag.over ? (selFits.includes(drag.over) ? " ok" : " bad") : ""}`} style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+          <Domino t={g.hand[drag.i]} state="selected" />
+        </span>
+      )}
+      {flying && (
+        <span className={`ow-ghost fling${flying.go ? " go" : ""}`} style={{ left: flying.x, top: flying.y }} aria-hidden="true">
+          <Domino t={flying.t} />
+        </span>
+      )}
       <Toast toast={toast} onDone={() => setToast(null)} />
       {g.done && <Done room={room} g={g} name={name} inkOf={inkOf} />}
     </main>
