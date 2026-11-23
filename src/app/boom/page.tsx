@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { ShellPage } from "@/components/shell";
-import { GROUPS, SPACES, priceOf } from "../../../convex/lib/boom/rules";
-import { GAME_NAME, short } from "@/components/boom/common";
+import { GAME_NAME } from "@/components/boom/common";
+import { CardScene } from "@/components/boom/CardScene";
 import { Icon, Sheet } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { feedback } from "@/lib/feedback";
@@ -15,7 +15,7 @@ import { useIdentity } from "@/lib/identity";
 const STEPS: [string, string][] = [
   ["Roll and island-hop", "Two dice carry you from Papua to Jakarta. Pass Start for Rp200rb gajian, and doubles roll again."],
   ["Buy and build", "Buy the towns and transport you land on. Land on your own town to build a warung, ruko, then hotel."],
-  ["Collect rent", "Anyone who stops on your spaces pays you. The richest juragan after the last round wins."],
+  ["Dodge the satire", "Pungli, kampanye rallies and Kejutan cards (baliho, OTT, studi banding…) shake up your fortunes."],
 ];
 
 export default function BoomHome() {
@@ -65,16 +65,16 @@ export default function BoomHome() {
         </div>
       }
     >
-      <h1 className="display" style={{ margin: "2px 4px 0", fontSize: 30 }}>{GAME_NAME}</h1>
-
-      <section className="bz-hero" aria-hidden="true">
-        <MiniBoard />
+      <section className="ow-hero jn-hero" aria-hidden="true">
+        <span className="ow-wordmark sm">{GAME_NAME}</span>
+        <span className="ow-tag">Juragan properti, satire politik</span>
+        <span className="jn-herocard"><CardScene art="baliho" hero="#5E4A8C" /></span>
       </section>
 
       <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
         {STEPS.map(([t, s], i) => (
           <li key={t} style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <span style={{ width: 32, height: 32, borderRadius: 11, background: "var(--plum)", color: "#fff", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+            <span style={{ width: 32, height: 32, borderRadius: 11, background: "#231B1A", color: "#F4C64E", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
             <span style={{ display: "flex", flexDirection: "column" }}>
               <span style={{ fontSize: 16, fontWeight: 900 }}>{t}</span>
               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--muted)", lineHeight: 1.3 }}>{s}</span>
@@ -98,24 +98,5 @@ export default function BoomHome() {
         </form>
       </Sheet>
     </ShellPage>
-  );
-}
-
-/** A strip of the board for the intro: towns in their island colours. */
-function MiniBoard() {
-  const lots = [0, 4, 9, 15, 25, 33];
-  return (
-    <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-      {lots.map((i, k) => {
-        const s = SPACES[i];
-        return (
-          <span key={i} style={{ position: "relative", width: 44, height: 56, borderRadius: 10, background: "#fff", boxShadow: "0 3px 0 var(--cream-3)", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", paddingBottom: 5, fontSize: 11, fontWeight: 900, color: "var(--plum)" }}>
-            {s.kind === "lot" && <span style={{ position: "absolute", inset: "0 0 auto 0", height: 13, background: GROUPS[s.group].color }} />}
-            <span style={{ fontSize: 20, lineHeight: 1 }}>{s.kind === "start" ? "🇮🇩" : s.kind === "hub" ? s.icon : k === 2 ? "🛖" : k === 5 ? "🏨" : ""}</span>
-            {s.kind === "start" ? "START" : short(priceOf(i))}
-          </span>
-        );
-      })}
-    </div>
   );
 }

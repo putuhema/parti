@@ -38,23 +38,24 @@ export type Space =
 const lot = (name: string, group: number, price: number): Space => ({ kind: "lot", name, group, price });
 const hub = (name: string, icon: string): Space => ({ kind: "hub", name, price: 200, icon });
 const surprise: Space = { kind: "surprise", name: "Kejutan" };
-const bonus: Space = { kind: "bonus", name: "THR" };
+const bonus: Space = { kind: "bonus", name: "Serangan Fajar" };
 
 /**
  * Clockwise from START in the top-right corner: down the right side, along the bottom, up the left, across the top.
- * The trip hops island to island and ends in Jakarta. "Jail" is a macet (traffic jam), the jackpot is the arisan pot,
- * and the wheel is the pasar malam.
+ * The trip hops island to island and ends in Jakarta. The joke spaces are gentle political satire (generic tropes,
+ * never real people): "jail" is Diperiksa (called in for questioning), the jackpot is the Dana Aspirasi pot,
+ * tax is Pungli, the bonus is a Serangan Fajar envelope, and the wheel is a Kampanye rally.
  */
 export const SPACES: Space[] = [
   { kind: "start", name: "Start" },
   lot("Merauke", 0, 60), bonus, lot("Jayapura", 0, 60), hub("Pelabuhan", "⛴️"), lot("Ambon", 1, 100),
   surprise, lot("Kupang", 1, 100), lot("Labuan Bajo", 1, 120), lot("Manado", 2, 140), lot("Makassar", 2, 160),
-  { kind: "jail", name: "Macet" },
-  lot("Banjarmasin", 3, 180), lot("Pontianak", 3, 180), hub("Bandara", "✈️"), lot("Balikpapan", 3, 200), { kind: "tax", name: "Pajak" },
-  { kind: "jackpot", name: "Arisan" },
+  { kind: "jail", name: "Diperiksa" },
+  lot("Banjarmasin", 3, 180), lot("Pontianak", 3, 180), hub("Bandara", "✈️"), lot("Balikpapan", 3, 200), { kind: "tax", name: "Pungli" },
+  { kind: "jackpot", name: "Dana Aspirasi" },
   lot("Padang", 4, 220), surprise, lot("Palembang", 4, 220), lot("Medan", 4, 240), hub("Stasiun", "🚆"),
   lot("Lombok", 5, 260), bonus, lot("Bali", 5, 280), lot("Yogyakarta", 6, 300), lot("Bandung", 6, 300),
-  { kind: "wheel", name: "Pasar Malam" },
+  { kind: "wheel", name: "Kampanye" },
   lot("Surabaya", 6, 320), surprise, hub("Terminal", "🚌"), lot("Kota Tua", 7, 350), lot("Menteng", 7, 400),
 ];
 export const N = SPACES.length; // 34
@@ -98,6 +99,7 @@ export type BoomEvent = {
   amount?: number;
   other?: Seat;
   text?: string;
+  art?: Art; // which acted-out scene goes with a card or wheel result
 };
 
 export interface BoomGame {
@@ -222,7 +224,15 @@ function sendToJail(g: BoomGame, p: Seat) {
   note(g, { kind: "jail", by: p, to: JAIL });
 }
 
-type Card = { text: string; run: (g: BoomGame, p: Seat) => number };
+/**
+ * The scenes the phone can act out with stick figures. Kejutan cards and Kampanye results are gentle
+ * Indonesian political satire in Bahasa Indonesia: generic tropes only, never real, named people.
+ */
+export type Art =
+  | "baliho" | "pita" | "orangdalam" | "tidur" | "studibanding" | "amplop" | "sembako" | "mangkrak"
+  | "mobildinas" | "ott" | "meme" | "blusukan" | "joget" | "sponsor" | "kaos" | "audit";
+
+type Card = { text: string; art: Art; run: (g: BoomGame, p: Seat) => number };
 const others = (g: BoomGame, p: Seat) => active(g).filter((x) => x !== p);
 const toPot = (g: BoomGame, p: Seat, n: number) => {
   const paid = charge(g, p, n);
@@ -230,13 +240,16 @@ const toPot = (g: BoomGame, p: Seat, n: number) => {
   return -paid;
 };
 export const CARDS: Card[] = [
-  { text: "Your nasi goreng stall went viral.", run: (g, p) => ((g.cash[p] += 100), 100) },
-  { text: "You won the panjat pinang on 17 Agustus.", run: (g, p) => ((g.cash[p] += 60), 60) },
-  { text: "A bumper durian harvest.", run: (g, p) => ((g.cash[p] += 150), 150) },
-  { text: "Ticketed for riding without a helmet.", run: (g, p) => toPot(g, p, 80) },
-  { text: "Your motor needs a servis.", run: (g, p) => toPot(g, p, 60) },
+  { art: "baliho", text: "Balihomu terpasang di setiap tikungan. Wajahmu mendadak terkenal!", run: (g, p) => ((g.cash[p] += 100), 100) },
+  { art: "pita", text: "Kamu gunting pita jembatan yang belum jadi. Tepuk tangan meriah!", run: (g, p) => ((g.cash[p] += 60), 60) },
+  { art: "orangdalam", text: "Keponakanmu menang tender jalan tol. Orang dalam, bos!", run: (g, p) => ((g.cash[p] += 150), 150) },
+  { art: "meme", text: "Fotomu jadi meme nasional. Kaosnya laris manis.", run: (g, p) => ((g.cash[p] += 80), 80) },
+  { art: "tidur", text: "Ketahuan tidur saat rapat paripurna. Viral, kena denda!", run: (g, p) => toPot(g, p, 80) },
+  { art: "studibanding", text: "Studi banding ke luar negeri, pulang cuma bawa gantungan kunci.", run: (g, p) => toPot(g, p, 60) },
+  { art: "blusukan", text: "Blusukan demi konten, sepatu mahalmu masuk got.", run: (g, p) => toPot(g, p, 40) },
   {
-    text: "It's your kondangan! Everyone brings an envelope.",
+    art: "amplop",
+    text: "Syukuran menang pemilu! Semua pemain datang bawa amplop.",
     run: (g, p) => {
       let got = 0;
       for (const o of others(g, p)) got += charge(g, o, 40);
@@ -245,7 +258,8 @@ export const CARDS: Card[] = [
     },
   },
   {
-    text: "Your birthday, so you traktir everyone bakso.",
+    art: "sembako",
+    text: "Jelang pemilu, kamu bagi-bagi sembako ke semua pemain.",
     run: (g, p) => {
       let paid = 0;
       for (const o of others(g, p)) {
@@ -256,25 +270,26 @@ export const CARDS: Card[] = [
       return -paid;
     },
   },
-  { text: "Rainy season! Fix the roof on every building you own.", run: (g, p) => toPot(g, p, 30 * holdings(g, p).reduce((a, i) => a + g.level[i], 0)) },
+  { art: "mangkrak", text: "Proyekmu mangkrak! Bayar perbaikan untuk setiap bangunanmu.", run: (g, p) => toPot(g, p, 30 * holdings(g, p).reduce((a, i) => a + g.level[i], 0)) },
   {
-    text: "Mudik! A free ride home to Start.",
+    art: "mobildinas",
+    text: "Pulang ke Start naik mobil dinas, bensin ditanggung negara.",
     run: (g, p) => {
       g.pos[p] = 0;
       g.cash[p] += LAP_BONUS;
       return LAP_BONUS;
     },
   },
-  { text: "Banjir on the toll road. You're stuck in macet!", run: (g, p) => (sendToJail(g, p), 0) },
+  { art: "ott", text: "Kena OTT! Kamu langsung diperiksa.", run: (g, p) => (sendToJail(g, p), 0) },
 ];
 
-export const WHEEL: { text: string; amount: number; jail?: boolean }[] = [
-  { text: "Your martabak sold out!", amount: 300 },
-  { text: "You won the ring toss.", amount: 150 },
-  { text: "Found some change.", amount: 50 },
-  { text: "Too many snacks.", amount: -50 },
-  { text: "Lost at the game stalls.", amount: -120 },
-  { text: "Parking chaos. Stuck in macet!", amount: 0, jail: true },
+export const WHEEL: { text: string; amount: number; art: Art; jail?: boolean }[] = [
+  { art: "sponsor", text: "Kampanyemu ramai, sponsor berdatangan!", amount: 300 },
+  { art: "joget", text: "Kamu joget di panggung kampanye, penonton suka.", amount: 150 },
+  { art: "amplop", text: "Nemu sisa dana kampanye di laci.", amount: 50 },
+  { art: "kaos", text: "Kebanyakan cetak kaos kampanye.", amount: -50 },
+  { art: "baliho", text: "Artis kampanye minta bayaran dobel.", amount: -120 },
+  { art: "audit", text: "Dana kampanye diaudit. Kamu diperiksa!", amount: 0, jail: true },
 ];
 
 const pick = <T,>(xs: T[], rng: Rng) => xs[Math.floor(rng() * xs.length)];
@@ -311,12 +326,12 @@ function land(g: BoomGame, p: Seat, rng: Rng) {
     const w = pick(WHEEL, rng);
     const amount = w.amount < 0 ? toPot(g, p, -w.amount) : w.amount;
     if (w.amount > 0) g.cash[p] += w.amount;
-    note(g, { kind: "wheel", by: p, text: w.text, amount });
+    note(g, { kind: "wheel", by: p, text: w.text, art: w.art, amount });
     if (w.jail) sendToJail(g, p);
   } else if (s.kind === "surprise") {
     const card = pick(CARDS, rng);
     // The card shows first, then whatever it caused (sales, jail).
-    const e = note(g, { kind: "card", by: p, text: card.text });
+    const e = note(g, { kind: "card", by: p, text: card.text, art: card.art });
     e.amount = card.run(g, p);
     if (g.pos[p] !== i) e.to = g.pos[p];
   }

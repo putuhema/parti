@@ -9,7 +9,7 @@ export type BoomView = NonNullable<FunctionReturnType<typeof api.boom.view>>;
 export type BoomGameView = NonNullable<BoomView["game"]>;
 
 export const GAME_NAME = "Juragan Nusantara";
-export const RULE = "Island-hop across Indonesia from Merauke to Menteng and buy the towns you land on. Others pay you rent when they stop there, and building a warung, ruko or hotel makes it cost more. The richest juragan when the rounds run out wins.";
+export const RULE = "Island-hop across Indonesia from Merauke to Menteng and buy the towns you land on. Others pay you rent when they stop there, and building a warung, ruko or hotel makes it cost more. Watch out for pungli, kampanye rallies and Kejutan cards full of political satire. The richest juragan when the rounds run out wins.";
 const BOT_NAMES: Record<string, string> = { bot1: "Budi", bot2: "Sari" };
 
 /** Game money is in thousands of rupiah: 60 is "60rb" (ribu), 1500 is "1,5jt" (juta). */
@@ -49,19 +49,19 @@ export function describe(e: BoomEvent, nameOf: (id?: string | null) => string, m
       const to = e.other === me ? "you" : nameOf(e.other);
       return { text: `${who} paid ${to} ${amt} rent on ${tile}`, tone: e.other === me ? "good" : tone(false) };
     }
-    case "tax": return { text: `${who} paid ${amt} pajak`, tone: tone(false) };
-    case "bonus": return { text: `${who} got THR: +${amt}`, tone: tone(true) };
+    case "tax": return { text: `${who} paid ${amt} in pungli`, tone: tone(false) };
+    case "bonus": return { text: `${who} got a serangan fajar envelope: +${amt}`, tone: tone(true) };
     case "card": {
       const n = e.amount ?? 0;
       return { text: `${who} drew: ${e.text}${n ? ` ${n > 0 ? "+" : "−"}${amt}` : ""}`, tone: n ? tone(n > 0) : "info" };
     }
-    case "jackpot": return { text: `${who} won the arisan: +${amt}`, tone: tone(true) };
+    case "jackpot": return { text: `${who} cashed in the dana aspirasi: +${amt}`, tone: tone(true) };
     case "wheel": {
       const n = e.amount ?? 0;
-      return { text: `${who} at the pasar malam: ${e.text}${n ? ` ${n > 0 ? "+" : "−"}${amt}` : ""}`, tone: n ? tone(n > 0) : "info" };
+      return { text: `${who} at the kampanye: ${e.text}${n ? ` ${n > 0 ? "+" : "−"}${amt}` : ""}`, tone: n ? tone(n > 0) : "info" };
     }
-    case "jail": return { text: `${who} got stuck in macet`, tone: tone(false) };
-    case "skip": return { text: `${who} sat out a turn in macet`, tone: "info" };
+    case "jail": return { text: `${who} got called in: diperiksa!`, tone: tone(false) };
+    case "skip": return { text: `${who} sat out a turn being questioned`, tone: "info" };
     case "sold": return { text: `${who} sold ${tile} for ${amt}`, tone: tone(false) };
     case "bankrupt": return { text: `${who} went bankrupt`, tone: tone(false) };
     case "left": return { text: `${who} left the game`, tone: "info" };

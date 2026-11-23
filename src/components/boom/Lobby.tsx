@@ -52,7 +52,7 @@ export function BoomLobby({ room }: { room: BoomView }) {
   }
 
   return (
-    <main className="screen tight">
+    <main className="screen tight ow-screen">
       <header className="topbar">
         <button className="icon-btn" aria-label="Leave room" onClick={async () => { await leave({ code: room.code }).catch(() => {}); router.push("/boom"); }}><Icon.Close /></button>
         <span style={{ display: "flex", flexDirection: "column", flex: 1 }}>
@@ -62,10 +62,10 @@ export function BoomLobby({ room }: { room: BoomView }) {
         <button className="icon-btn" style={{ border: "2px solid var(--line)", boxShadow: "0 3px 0 var(--line)" }} aria-label={copied ? "Link copied" : "Share invite link"} onClick={share}><Icon.Share size={18} /></button>
       </header>
 
-      <section className="rise bz-card">
-        <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".06em", color: "var(--plum-soft)" }}>2–{BOOM_MAX} PLAYERS OR VS BOTS · KELILING INDONESIA</span>
-        <span className="display" style={{ fontSize: 26 }}>{GAME_NAME}</span>
-        <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.4, color: "var(--plum)" }}>{RULE}</span>
+      <section className="rise ow-lobbycard">
+        <span className="ow-kicker">2–{BOOM_MAX} players or vs bots · keliling Indonesia</span>
+        <span className="ow-wordmark sm">{GAME_NAME}</span>
+        <span className="ow-lobbytext">{RULE}</span>
       </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
