@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { peersOf } from "../../convex/lib/sudoku";
 import { feedback } from "@/lib/feedback";
-import { Confetti, Icon, type Paint } from "./ui";
+import { Confetti, Icon, Mascot, type Paint } from "./ui";
 
 export type PlaceResult = { correct: boolean; row: boolean; col: boolean; box: boolean; finished: boolean; lockMs?: number };
 
@@ -435,7 +435,7 @@ export function Game({ puzzle, values, onPlace, digitColor, cursors, onSelect, h
         </button>
         {coachTool && (
           <button className={`tool ${coachTool.active ? "on" : ""}${coachTool.pulse ? " pulse" : ""}`} onClick={() => { feedback.unlock(); feedback.tap(); coachTool.onClick(); }} aria-pressed={coachTool.active} aria-label="Coach: explain the next move">
-            <span className="face">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/mascot.png" alt="" width={20} height={25} /></span>
+            <span className="face"><Mascot size={32} mood={coachTool.active ? "talk" : "idle"} /></span>
             <span className="name">{coachTool.pulse ? "STUCK?" : "COACH"}</span>
           </button>
         )}

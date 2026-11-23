@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { Mascot3D, type MascotMood } from "@/components/Mascot3D";
 
 // ---------- Player colors ----------
 export type Paint = { face: string; edge: string; ink: string; soft: string };
@@ -33,13 +34,11 @@ export function roomPaints<T extends { id: string; isMe: boolean; seat: number }
 
 // ---------- Sudoku | Chess switch ----------
 // ---------- Mascot ----------
-/** The party mascot: your drawing in public/mascot.png (198×248). `size` is the height. */
-export function Mascot({ size = 72, className }: { size?: number; mood?: "happy" | "joy" | "wow"; className?: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src="/mascot.png" alt="" aria-hidden="true" draggable={false} className={className}
-      width={Math.round((size * 198) / 248)} height={size} style={{ flexShrink: 0, display: "block" }} />
-  );
+export type { MascotMood };
+
+/** The rigged 3D Vinyl Toy Pum mascot (/models/pum.glb) with mood animations. `size` is the square box size. */
+export function Mascot({ size = 72, mood = "idle", className }: { size?: number; mood?: MascotMood; className?: string }) {
+  return <Mascot3D size={size} mood={mood} className={className} />;
 }
 
 // ---------- Icons ----------

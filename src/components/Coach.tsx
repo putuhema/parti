@@ -40,7 +40,7 @@ export function CoachCard({ lesson, index, stage, progress, onDrill, onMore, onS
   return (
     <section className="coach-card" role="dialog" aria-label="Coach" aria-live="polite">
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Mascot size={44} />
+        <Mascot size={48} mood={!step ? "wow" : stage === 0 ? "think" : "talk"} />
         <span style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
           {!step ? (
             <span style={{ fontSize: 18, fontWeight: 900 }}>Hmm, a tough spot</span>
