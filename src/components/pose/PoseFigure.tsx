@@ -1,21 +1,25 @@
 "use client";
 
-import type { PoseDef } from "../../../convex/lib/pose/poses";
+import type { PoseDef, PoseJoints } from "../../../convex/lib/pose/poses";
 
 type Props = {
-  pose: PoseDef;
+  pose?: PoseDef | null;
+  joints?: PoseJoints | null;
+  accent?: string;
+  label?: string;
   variant?: "card" | "ghost" | "mini";
   className?: string;
 };
 
 /**
- * Clean articulated SVG character illustrating any PoseDef.
- * - `card`: colorful toybox silhouette on a soft tinted card
- * - `ghost`: translucent glowing neon outline overlaid directly on the live camera viewfinder
- * - `mini`: compact badge version for collage & photobooth headers
+ * Clean articulated SVG character illustrating either a built-in PoseDef
+ * or any player's live-captured PoseJoints (for Copycat & Pose Telephone).
  */
-export function PoseFigure({ pose, variant = "card", className = "" }: Props) {
-  const j = pose.joints;
+export function PoseFigure({ pose, joints: rawJoints, accent: rawAccent, label, variant = "card", className = "" }: Props) {
+  const j = pose?.joints ?? rawJoints;
+  if (!j) return null;
+
+  const accent = pose?.accent ?? rawAccent ?? "#FF5B8A";
   const p = (pt: readonly [number, number]) => [pt[0] * 100, pt[1] * 100] as const;
 
   const [hx, hy] = p(j.head);
@@ -32,25 +36,23 @@ export function PoseFigure({ pose, variant = "card", className = "" }: Props) {
   const isGhost = variant === "ghost";
   const isMini = variant === "mini";
 
-  const limbStroke = isGhost ? "rgba(255,255,255,0.88)" : pose.accent;
-  const torsoFill = isGhost ? "rgba(255,255,255,0.14)" : `${pose.accent}24`;
+  const limbStroke = isGhost ? "rgba(255,255,255,0.88)" : accent;
+  const torsoFill = isGhost ? "rgba(255,255,255,0.14)" : `${accent}24`;
   const jointFill = isGhost ? "#FFDE66" : "#FFFFFF";
-  const jointStroke = isGhost ? "rgba(52,40,62,0.55)" : pose.accent;
+  const jointStroke = isGhost ? "rgba(52,40,62,0.55)" : accent;
   const strokeW = isGhost ? 4.2 : isMini ? 6.5 : 5.6;
 
   return (
     <svg
       viewBox="0 0 100 100"
       className={`ps-fig ${isGhost ? "ghost" : ""} ${isMini ? "mini" : ""} ${className}`}
-      aria-label={isGhost ? undefined : `${pose.name} pose illustration`}
+      aria-label={isGhost ? undefined : label ?? `${pose?.name ?? "Custom"} pose illustration`}
       aria-hidden={isGhost ? "true" : undefined}
     >
-      {/* Subtle framing halo */}
       {!isGhost && !isMini && (
-        <circle cx="50" cy="50" r="44" fill={`${pose.accent}12`} stroke={`${pose.accent}28`} strokeWidth="1.2" strokeDasharray="3 3" />
+        <circle cx="50" cy="50" r="44" fill={`${accent}12`} stroke={`${accent}28`} strokeWidth="1.2" strokeDasharray="3 3" />
       )}
 
-      {/* Torso */}
       <polygon
         points={`${lsx},${lsy} ${rsx},${rsy} ${rhx},${rhy} ${lhx},${lhy}`}
         fill={torsoFill}
@@ -60,10 +62,8 @@ export function PoseFigure({ pose, variant = "card", className = "" }: Props) {
         strokeDasharray={isGhost ? "4 3" : undefined}
       />
 
-      {/* Neck */}
       <line x1={nx} y1={ny} x2={hx} y2={hy + 6} stroke={limbStroke} strokeWidth={strokeW * 0.72} strokeLinecap="round" />
 
-      {/* Left arm */}
       <polyline
         points={`${lsx},${lsy} ${lex},${ley} ${lwx},${lwy}`}
         fill="none"
@@ -74,7 +74,6 @@ export function PoseFigure({ pose, variant = "card", className = "" }: Props) {
         strokeDasharray={isGhost ? "5 3" : undefined}
       />
 
-      {/* Right arm */}
       <polyline
         points={`${rsx},${rsy} ${rex},${rey} ${rwx},${rwy}`}
         fill="none"
@@ -85,7 +84,6 @@ export function PoseFigure({ pose, variant = "card", className = "" }: Props) {
         strokeDasharray={isGhost ? "5 3" : undefined}
       />
 
-      {/* Head */}
       <circle
         cx={hx}
         cy={hy}
@@ -108,7 +106,6 @@ export function PoseFigure({ pose, variant = "card", className = "" }: Props) {
         </>
       )}
 
-      {/* Hand / wrist highlights */}
       {[
         [lwx, lwy],
         [rwx, rwy],
@@ -124,7 +121,6 @@ export function PoseFigure({ pose, variant = "card", className = "" }: Props) {
         />
       ))}
 
-      {/* Elbow dots */}
       {!isMini &&
         [
           [lex, ley],

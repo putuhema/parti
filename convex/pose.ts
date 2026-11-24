@@ -3,21 +3,27 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { addXp, befriend, findPlayer, freeCode, requirePlayer } from "./lib/helpers";
-import type { PosePack } from "./lib/pose/poses";
+import type { PoseJoints, PosePack } from "./lib/pose/poses";
 import {
+  MODE_CHOICES,
+  MODE_META,
   PACK_CHOICES,
   POSE_MAX,
   ROUND_CHOICES,
   TIMER_CHOICES,
+  acceptSecretGuess,
   addReaction,
   advance,
   leaveGame,
   newGame,
   onDeadline,
   rateSnap,
+  revealSecret,
   skipTurn,
+  submitGuess,
   submitSnap,
   type PoseGame,
+  type PoseMode,
   type RatingKind,
 } from "./lib/pose/rules";
 
@@ -79,6 +85,7 @@ export const create = mutation({
     await ctx.db.insert("poseRooms", {
       code,
       hostId: me._id,
+      mode: "classic",
       pack: "cute",
       rounds: 5,
       turnSec: 15,
@@ -111,16 +118,23 @@ export const join = mutation({
 export const settings = mutation({
   args: {
     code: v.string(),
+    mode: v.optional(
+      v.union(v.literal("classic"), v.literal("copycat"), v.literal("secret"), v.literal("telephone")),
+    ),
     pack: v.optional(v.union(v.literal("mix"), v.literal("cute"), v.literal("silly"), v.literal("active"))),
     rounds: v.optional(v.number()),
     turnSec: v.optional(v.number()),
   },
-  handler: async (ctx, { code, pack, rounds, turnSec }) => {
+  handler: async (ctx, { code, mode, pack, rounds, turnSec }) => {
     const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can change this");
     if (room.status === "playing") return;
     const patch: Partial<Room> = {};
+    if (mode !== undefined) {
+      if (!(MODE_CHOICES as readonly string[]).includes(mode)) throw new ConvexError("Invalid mode");
+      patch.mode = mode;
+    }
     if (pack !== undefined) {
       if (!(PACK_CHOICES as readonly string[]).includes(pack)) throw new ConvexError("Invalid pack");
       patch.pack = pack;
@@ -144,8 +158,12 @@ export const start = mutation({
     const room = await requireRoom(ctx, code);
     if (room.hostId !== me._id) throw new ConvexError("Only the host can start");
     if (room.status === "playing") return;
+    const mode: PoseMode = (room.mode as PoseMode | undefined) ?? "classic";
     const humans = [...room.members].sort((a, b) => a.seat - b.seat).map((m) => m.playerId);
-    if (humans.length < 1) throw new ConvexError("Need at least 1 player");
+    const minPlayers = MODE_META[mode].minPlayers;
+    if (humans.length < minPlayers) {
+      throw new ConvexError(`Invite at least ${minPlayers} players for ${MODE_META[mode].label}`);
+    }
     for (let i = 0; i < humans.length; i++) {
       for (let j = i + 1; j < humans.length; j++) await befriend(ctx, humans[i], humans[j]);
     }
@@ -168,7 +186,7 @@ export const start = mutation({
     await commit(
       ctx,
       fresh,
-      newGame(players, room.pack as PosePack, room.rounds, room.turnSec, now, COUNTDOWN_MS, Math.random),
+      newGame(players, room.pack as PosePack, room.rounds, room.turnSec, now, COUNTDOWN_MS, Math.random, mode),
     );
   },
 });
@@ -235,28 +253,83 @@ export const snap = mutation({
     code: v.string(),
     storageId: v.id("_storage"),
     aiScore: v.optional(v.number()),
+    joints: v.optional(v.any()),
   },
-  handler: async (ctx, { code, storageId, aiScore }) => {
+  handler: async (ctx, { code, storageId, aiScore, joints }) => {
     const me = await requirePlayer(ctx);
     const room = await requireRoom(ctx, code);
     if (room.status !== "playing" || !room.game) throw new ConvexError("The game isn't running");
     const g = room.game as PoseGame;
     const now = Date.now();
+    const stepBefore = g.mode === "telephone" ? g.chainStep : undefined;
+    const roundBefore = g.round;
+    const poseIdBefore = g.currentTurn.poseId;
+
     try {
-      submitSnap(g, me._id, aiScore, now);
+      submitSnap(g, me._id, aiScore, now, joints as PoseJoints | undefined);
     } catch (err) {
       throw new ConvexError(err instanceof Error ? err.message : "Couldn't save snap");
     }
     await ctx.db.insert("poseSnaps", {
       roomId: room._id,
       gameNo: room.gameNo,
-      round: g.round,
+      round: roundBefore,
+      step: stepBefore,
       playerId: me._id,
-      poseId: g.currentTurn.poseId,
+      poseId: poseIdBefore,
       storageId,
       aiScore: g.currentTurn.aiScore,
+      joints,
       takenAt: now,
     });
+    await commit(ctx, room, g);
+  },
+});
+
+export const guess = mutation({
+  args: { code: v.string(), text: v.string() },
+  handler: async (ctx, { code, text }) => {
+    const me = await requirePlayer(ctx);
+    const room = await requireRoom(ctx, code);
+    if (room.status !== "playing" || !room.game) throw new ConvexError("The game isn't running");
+    const g = room.game as PoseGame;
+    try {
+      submitGuess(g, me._id, text, Date.now());
+    } catch (err) {
+      throw new ConvexError(err instanceof Error ? err.message : "Couldn't submit guess");
+    }
+    await commit(ctx, room, g);
+  },
+});
+
+export const acceptGuess = mutation({
+  args: { code: v.string(), guesserId: v.string() },
+  handler: async (ctx, { code, guesserId }) => {
+    const me = await requirePlayer(ctx);
+    const room = await requireRoom(ctx, code);
+    if (room.status !== "playing" || !room.game) throw new ConvexError("The game isn't running");
+    const g = room.game as PoseGame;
+    try {
+      acceptSecretGuess(g, me._id, guesserId, Date.now());
+    } catch (err) {
+      throw new ConvexError(err instanceof Error ? err.message : "Couldn't accept guess");
+    }
+    await commit(ctx, room, g);
+  },
+});
+
+export const reveal = mutation({
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    const me = await requirePlayer(ctx);
+    const room = await requireRoom(ctx, code);
+    if (room.status !== "playing" || !room.game) return;
+    const g = room.game as PoseGame;
+    if (g.mode !== "secret" || g.phase !== "guessing") return;
+    if (g.currentTurn.playerId !== me._id && room.hostId !== me._id) {
+      throw new ConvexError("Only the actor or host can reveal");
+    }
+    revealSecret(g, Date.now());
     await commit(ctx, room, g);
   },
 });
@@ -321,7 +394,7 @@ export const next = mutation({
     if (room.status !== "playing" || !room.game) return;
     if (!room.members.some((m) => m.playerId === me._id)) throw new ConvexError("Not in this room");
     const g = room.game as PoseGame;
-    if (g.phase !== "reveal" && g.phase !== "roundSummary") return;
+    if (g.phase !== "reveal" && g.phase !== "roundSummary" && g.phase !== "chainReveal") return;
     advance(g, Date.now());
     await commit(ctx, room, g);
   },
@@ -363,6 +436,7 @@ export const view = query({
     );
     const base = {
       code: room.code,
+      mode: (room.mode ?? "classic") as PoseMode,
       pack: room.pack,
       rounds: room.rounds,
       turnSec: room.turnSec,
@@ -386,20 +460,51 @@ export const view = query({
     const snapRows = await ctx.db
       .query("poseSnaps")
       .withIndex("by_roomId_and_gameNo", (q) => q.eq("roomId", room._id).eq("gameNo", room.gameNo))
-      .take(100);
+      .take(120);
 
     const snaps: Record<string, { url: string | null; aiScore?: number; takenAt: number }> = {};
     await Promise.all(
       snapRows.map(async (s) => {
         const url = await ctx.storage.getUrl(s.storageId);
-        snaps[`${s.round}:${s.playerId}`] = { url, aiScore: s.aiScore, takenAt: s.takenAt };
+        const entry = { url, aiScore: s.aiScore, takenAt: s.takenAt };
+        if (s.step !== undefined) snaps[`${s.round}:${s.playerId}:s${s.step}`] = entry;
+        snaps[`${s.round}:${s.playerId}`] = entry;
       }),
     );
+
+    const isMyTurn = g.currentTurn.playerId === me._id;
+
+    // Anti-spoiler masking for Secret Prompt & Pose Telephone
+    let visiblePrompt: string | null = null;
+    if (g.mode === "secret") {
+      if (g.phase === "reveal" || g.done || isMyTurn) visiblePrompt = g.secretPrompt ?? null;
+    } else if (g.mode === "telephone") {
+      if (g.phase === "posing" && isMyTurn) {
+        visiblePrompt =
+          g.chainStep === 0 ? g.secretPrompt ?? null : g.chain[g.chain.length - 1]?.guess ?? null;
+      } else if (g.phase === "chainReveal" || g.done) {
+        visiblePrompt = g.secretPrompt ?? null;
+      }
+    }
+
+    // In telephone guessing step, send ONLY the previous step's skeleton (and snapKey fallback if skeleton wasn't detected)
+    const prevChain = g.mode === "telephone" && g.chain.length > 0 ? g.chain[g.chain.length - 1] : null;
+    const telephoneGuessTarget =
+      g.mode === "telephone" && g.phase === "guessing" && isMyTurn && prevChain
+        ? {
+            joints: prevChain.joints ?? null,
+            fallbackSnapKey: prevChain.joints ? null : prevChain.snapKey ?? null,
+          }
+        : null;
+
+    // Only expose full chain during chainReveal or finished
+    const visibleChain = g.phase === "chainReveal" || g.done ? g.chain : [];
 
     return {
       ...base,
       game: {
         seq: g.seq,
+        mode: g.mode ?? "classic",
         pack: g.pack,
         rounds: g.rounds,
         turnSec: g.turnSec,
@@ -413,6 +518,14 @@ export const view = query({
         phase: g.phase,
         scores: g.scores,
         currentTurn: g.currentTurn,
+        leaderId: g.leaderId ?? null,
+        leaderJoints: g.leaderJoints ?? null,
+        visiblePrompt,
+        guesses: g.guesses ?? [],
+        solvedBy: g.solvedBy ?? null,
+        chainStep: g.chainStep ?? 0,
+        telephoneGuessTarget,
+        chain: visibleChain,
         roundResults: g.roundResults,
         history: g.history,
         hype: g.hype,

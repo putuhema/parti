@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { POSE_BY_ID } from "../../../convex/lib/pose/poses";
+import { POSE_BY_ID, type PoseJoints } from "../../../convex/lib/pose/poses";
 import {
   HYPE_EMOJIS,
+  MODE_META,
   RATING_SCORE,
+  TELEPHONE_STEPS,
   computeTurnScore,
   type RatingKind,
 } from "../../../convex/lib/pose/rules";
@@ -24,6 +26,9 @@ export function PosePlay({ room }: { room: PoseView }) {
   const router = useRouter();
   const generateUploadUrl = useMutation(api.pose.generateUploadUrl);
   const submitSnap = useMutation(api.pose.snap);
+  const submitGuess = useMutation(api.pose.guess);
+  const acceptGuess = useMutation(api.pose.acceptGuess);
+  const revealMut = useMutation(api.pose.reveal);
   const skipTurn = useMutation(api.pose.skip);
   const rateSnap = useMutation(api.pose.rate);
   const reactMut = useMutation(api.pose.react);
@@ -34,29 +39,31 @@ export function PosePlay({ room }: { room: PoseView }) {
   const now = useNow(250);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [guessText, setGuessText] = useState("");
   const [downloading, setDownloading] = useState(false);
 
   const g = room.game!;
+  const modeMeta = MODE_META[g.mode];
   const paints = roomPaints(room.members);
 
-  // Start countdown
   const countingDown = room.startAt !== null && now < room.startAt - 80;
   const countNum = room.startAt ? Math.max(1, Math.ceil((room.startAt - now) / 900)) : 0;
 
-  const currentPose = POSE_BY_ID[g.currentTurn.poseId];
+  const currentPose = g.mode === "classic" ? POSE_BY_ID[g.currentTurn.poseId] ?? null : null;
   const isMyTurn = g.currentTurn.playerId === room.meId;
   const activeName = g.names[g.currentTurn.playerId] ?? "Player";
+  const leaderName = g.leaderId ? g.names[g.leaderId] ?? "Leader" : "Leader";
 
-  // Visible turn countdown (exclude the 4.5s server upload grace buffer)
   const visibleDeadline = g.phase === "posing" && g.deadline ? g.deadline - 4500 : g.deadline;
   const secsLeft =
     visibleDeadline && !countingDown ? Math.max(0, Math.ceil((visibleDeadline - now) / 1000)) : null;
 
   useEffect(() => {
     setError("");
+    setGuessText("");
   }, [g.seq]);
 
-  async function handleCapture(blob: Blob, aiScore?: number) {
+  async function handleCapture(blob: Blob, aiScore?: number, joints?: PoseJoints) {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -69,11 +76,55 @@ export function PosePlay({ room }: { room: PoseView }) {
       });
       if (!res.ok) throw new Error("Upload failed");
       const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-      await submitSnap({ code: room.code, storageId, aiScore });
+      await submitSnap({ code: room.code, storageId, aiScore, joints });
       feedback.correct();
     } catch (e) {
       setError(errorText(e, "Couldn't upload photo"));
       feedback.wrong();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGuessSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!guessText.trim() || busy) return;
+    feedback.tap();
+    setBusy(true);
+    setError("");
+    try {
+      await submitGuess({ code: room.code, text: guessText.trim() });
+      setGuessText("");
+      feedback.correct();
+    } catch (err) {
+      setError(errorText(err));
+      feedback.wrong();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAcceptGuess(guesserId: string) {
+    if (busy) return;
+    feedback.correct();
+    setBusy(true);
+    try {
+      await acceptGuess({ code: room.code, guesserId });
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReveal() {
+    if (busy) return;
+    feedback.tap();
+    setBusy(true);
+    try {
+      await revealMut({ code: room.code });
+    } catch (err) {
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -127,7 +178,7 @@ export function PosePlay({ room }: { room: PoseView }) {
     setDownloading(true);
     try {
       const rounds = g.history;
-      const cols = Math.max(1, g.players.length);
+      const cols = Math.max(1, Math.min(2, g.players.length));
       const cellW = 240;
       const cellH = 310;
       const pad = 28;
@@ -144,19 +195,17 @@ export function PosePlay({ room }: { room: PoseView }) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Warm cream background
       ctx.fillStyle = "#FFF8EE";
       ctx.fillRect(0, 0, width, height);
 
-      // Header
       ctx.fillStyle = "#34283E";
-      ctx.font = "900 30px system-ui, -apple-system, sans-serif";
+      ctx.font = "900 28px system-ui, -apple-system, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`📸 ${GAME_NAME} Strip`, width / 2, 46);
+      ctx.fillText(`${modeMeta.emoji} ${GAME_NAME}: ${modeMeta.label}`, width / 2, 46);
       ctx.fillStyle = "#E0485C";
       ctx.font = "800 16px system-ui, -apple-system, sans-serif";
       ctx.fillText(
-        g.done ? `💞 ${g.done.coupleSync}% Sync · ${rounds.length} Poses · pums party` : "pums party",
+        g.done ? `💞 ${g.done.coupleSync}% Sync · ${rounds.length} Rounds · pums party` : "pums party",
         width / 2,
         74,
       );
@@ -173,16 +222,40 @@ export function PosePlay({ room }: { room: PoseView }) {
       let y = headerH;
       for (const h of rounds) {
         const pose = POSE_BY_ID[h.poseId];
+        const title =
+          g.mode === "classic"
+            ? `#${h.round + 1} ${pose?.emoji ?? "✨"} ${pose?.name ?? h.poseId}`
+            : g.mode === "copycat"
+              ? `#${h.round + 1} 🪞 ${g.names[h.leaderId ?? ""] ?? "Leader"}'s Pose`
+              : `#${h.round + 1} ${modeMeta.emoji} "${h.prompt ?? ""}"`;
         ctx.fillStyle = "#34283E";
-        ctx.font = "800 18px system-ui, -apple-system, sans-serif";
+        ctx.font = "800 17px system-ui, -apple-system, sans-serif";
         ctx.textAlign = "left";
-        ctx.fillText(`#${h.round + 1} ${pose?.emoji ?? "✨"} ${pose?.name ?? h.poseId}`, pad, y + 28);
+        ctx.fillText(title, pad, y + 28);
         y += rowLabelH;
 
-        for (let c = 0; c < g.players.length; c++) {
-          const pid = g.players[c];
+        const cells: { label: string; sub: string; url: string | null }[] =
+          g.mode === "telephone" && h.chain
+            ? h.chain
+                .filter((c) => c.kind === "pose")
+                .slice(0, 2)
+                .map((c) => ({
+                  label: g.names[c.playerId] ?? "Player",
+                  sub: c.prompt ?? "",
+                  url: c.snapKey ? g.snaps[c.snapKey]?.url ?? null : null,
+                }))
+            : g.players.slice(0, cols).map((pid) => {
+                const res = h.results.find((r) => r.playerId === pid);
+                return {
+                  label: g.names[pid] ?? "Player",
+                  sub: `${res?.totalScore ?? 0} pts`,
+                  url: g.snaps[`${h.round}:${pid}`]?.url ?? null,
+                };
+              });
+
+        for (let c = 0; c < cells.length; c++) {
+          const item = cells[c];
           const x = pad + c * (cellW + gap);
-          // Polaroid frame
           ctx.fillStyle = "#FFFFFF";
           ctx.strokeStyle = "#EADFD0";
           ctx.lineWidth = 2;
@@ -191,10 +264,8 @@ export function PosePlay({ room }: { room: PoseView }) {
           ctx.fill();
           ctx.stroke();
 
-          const snap = g.snaps[`${h.round}:${pid}`];
-          const res = h.results.find((r) => r.playerId === pid);
-          if (snap?.url) {
-            const im = await loadImg(snap.url);
+          if (item.url) {
+            const im = await loadImg(item.url);
             if (im) {
               ctx.save();
               ctx.beginPath();
@@ -209,16 +280,16 @@ export function PosePlay({ room }: { room: PoseView }) {
             ctx.fillStyle = "#9A8BA3";
             ctx.font = "700 15px system-ui, sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText("Skipped", x + cellW / 2, y + 130);
+            ctx.fillText("No photo", x + cellW / 2, y + 130);
           }
 
           ctx.fillStyle = "#34283E";
-          ctx.font = "800 15px system-ui, sans-serif";
+          ctx.font = "800 14px system-ui, sans-serif";
           ctx.textAlign = "left";
-          ctx.fillText(g.names[pid] ?? "Player", x + 14, y + cellH - 18);
+          ctx.fillText(item.label, x + 14, y + cellH - 18);
           ctx.fillStyle = "#E0485C";
           ctx.textAlign = "right";
-          ctx.fillText(`${res?.totalScore ?? 0} pts`, x + cellW - 14, y + cellH - 18);
+          ctx.fillText(item.sub.slice(0, 18), x + cellW - 14, y + cellH - 18);
         }
         y += cellH + 22;
       }
@@ -226,7 +297,7 @@ export function PosePlay({ room }: { room: PoseView }) {
       const dataUrl = canvas.toDataURL("image/png");
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `pose-match-${room.code.toLowerCase()}.png`;
+      a.download = `pose-match-${g.mode}-${room.code.toLowerCase()}.png`;
       a.click();
       feedback.correct();
     } finally {
@@ -258,7 +329,7 @@ export function PosePlay({ room }: { room: PoseView }) {
         </header>
 
         <section className="rise ps-finish-hero">
-          <span className="ps-kicker">{multi ? "COUPLE & SQUAD RECAP" : "SOLO PRACTICE COMPLETE"}</span>
+          <span className="ps-kicker">{modeMeta.emoji} {modeMeta.label.toUpperCase()} COMPLETE</span>
           <h1 className="display" style={{ margin: 0, fontSize: 32, lineHeight: 1.05 }}>
             {multi
               ? g.done.winners.length === 1
@@ -277,42 +348,58 @@ export function PosePlay({ room }: { room: PoseView }) {
           </div>
         </section>
 
-        <button
-          type="button"
-          className="btn btn-sun"
-          disabled={downloading}
-          onClick={downloadPhotobooth}
-        >
+        <button type="button" className="btn btn-sun" disabled={downloading} onClick={downloadPhotobooth}>
           {downloading ? "Building photobooth strip…" : "📸 Save Photobooth Strip"}
         </button>
 
-        {/* Full Scrapbook */}
         <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <span className="label">Your {g.history.length} matched poses</span>
+          <span className="label">Your {g.history.length} rounds</span>
           {g.history.map((h) => {
             const pose = POSE_BY_ID[h.poseId];
+            if (g.mode === "telephone" && h.chain) {
+              return (
+                <div key={h.round} className="ps-collage-card">
+                  <div className="ps-collage-head">
+                    <span className="ps-stepicon">🎭</span>
+                    <div style={{ flex: 1 }}>
+                      <b>Round #{h.round + 1}: &ldquo;{h.prompt}&rdquo;</b>
+                      <small>How the pose drifted down the chain</small>
+                    </div>
+                  </div>
+                  <TelephoneTimeline chain={h.chain} names={g.names} snaps={g.snaps} />
+                </div>
+              );
+            }
             return (
               <div key={h.round} className="ps-collage-card">
                 <div className="ps-collage-head">
-                  {pose && <PoseFigure pose={pose} variant="mini" />}
+                  {pose ? <PoseFigure pose={pose} variant="mini" /> : <span className="ps-stepicon">{modeMeta.emoji}</span>}
                   <div style={{ flex: 1 }}>
-                    <b>#{h.round + 1} {pose?.name ?? h.poseId}</b>
-                    <small>{pose?.emoji} {pose?.cue}</small>
+                    <b>
+                      #{h.round + 1}{" "}
+                      {pose ? pose.name : g.mode === "copycat" ? `${g.names[h.leaderId ?? ""] ?? "Leader"}'s Custom Pose` : `"${h.prompt ?? ""}"`}
+                    </b>
+                    <small>{pose ? `${pose.emoji} ${pose.cue}` : modeMeta.label}</small>
                   </div>
                 </div>
-                <div className="ps-collage-grid" style={{ gridTemplateColumns: `repeat(${Math.min(2, h.results.length)}, 1fr)` }}>
-                  {h.results.map((r) => {
+                <div
+                  className="ps-collage-grid"
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.min(2, g.mode === "secret" ? 1 : Math.max(1, h.results.length))}, 1fr)`,
+                  }}
+                >
+                  {(g.mode === "secret" ? h.results.filter((r) => r.role === "act") : h.results).map((r) => {
                     const snap = g.snaps[`${h.round}:${r.playerId}`];
                     return (
                       <div key={r.playerId} className="ps-polaroid mini">
                         {snap?.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={snap.url} alt={`${g.names[r.playerId]} matching ${pose?.name ?? "pose"}`} />
+                          <img src={snap.url} alt={`${g.names[r.playerId]} pose`} />
                         ) : (
                           <div className="ps-polaroid-empty">Skipped 😅</div>
                         )}
                         <div className="ps-polaroid-foot">
-                          <span>{g.names[r.playerId]}</span>
+                          <span>{r.role === "lead" ? "🪞 " : ""}{g.names[r.playerId]}</span>
                           <b>{r.totalScore} pts</b>
                         </div>
                       </div>
@@ -352,10 +439,16 @@ export function PosePlay({ room }: { room: PoseView }) {
 
   // ---------- PLAYING ----------
   const currentSnap = g.snaps[`${g.round}:${g.currentTurn.playerId}`];
+  const leaderSnap = g.leaderId ? g.snaps[`${g.round}:${g.leaderId}`] : undefined;
   const myRating = g.currentTurn.ratings[room.meId];
   const liveScore = computeTurnScore(g.currentTurn);
   const latestSummary = g.history[g.history.length - 1];
   const summaryPose = latestSummary ? POSE_BY_ID[latestSummary.poseId] : undefined;
+
+  const headerTitle =
+    g.mode === "classic" && currentPose
+      ? `${currentPose.emoji} ${currentPose.name}`
+      : `${modeMeta.emoji} ${modeMeta.label}`;
 
   return (
     <main className="screen tight">
@@ -373,23 +466,20 @@ export function PosePlay({ room }: { room: PoseView }) {
         </button>
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <span className="label" style={{ fontSize: 11.5 }}>
-            Pose {g.round + 1} of {g.rounds}
+            Round {g.round + 1} of {g.rounds}
+            {g.mode === "telephone" && g.phase !== "chainReveal" ? ` · Step ${g.chainStep + 1}/${TELEPHONE_STEPS}` : ""}
           </span>
-          <span style={{ fontSize: 17, fontWeight: 900 }}>
-            {currentPose ? `${currentPose.emoji} ${currentPose.name}` : GAME_NAME}
-          </span>
+          <span style={{ fontSize: 17, fontWeight: 900 }}>{headerTitle}</span>
         </div>
-        {secsLeft !== null && g.phase === "posing" && (
-          <span className={`ps-timer-pill ${secsLeft <= 4 ? "urgent" : ""}`}>
-            ⏱ {secsLeft}s
-          </span>
+        {secsLeft !== null && (g.phase === "posing" || g.phase === "guessing") && (
+          <span className={`ps-timer-pill ${secsLeft <= 4 ? "urgent" : ""}`}>⏱ {secsLeft}s</span>
         )}
       </header>
 
       {/* Score Strip */}
       <div className="ps-mini-scores">
         {g.players.map((pid) => {
-          const active = g.phase !== "roundSummary" && g.currentTurn.playerId === pid;
+          const active = g.phase !== "roundSummary" && g.phase !== "chainReveal" && g.currentTurn.playerId === pid;
           return (
             <div key={pid} className={`ps-mini-player ${active ? "active" : ""}`}>
               <Avatar name={g.names[pid] ?? "P"} paint={paints.get(pid)} size={24} />
@@ -403,8 +493,12 @@ export function PosePlay({ room }: { room: PoseView }) {
       {/* Start Countdown */}
       {countingDown && (
         <section className="ps-countdown-card">
-          {currentPose && <PoseFigure pose={currentPose} variant="card" />}
-          <span className="ps-kicker">GET READY TO POSE!</span>
+          {currentPose ? (
+            <PoseFigure pose={currentPose} variant="card" />
+          ) : (
+            <span style={{ fontSize: 64 }}>{modeMeta.emoji}</span>
+          )}
+          <span className="ps-kicker">GET READY FOR {modeMeta.label.toUpperCase()}!</span>
           <h2 className="display" style={{ margin: 0, fontSize: 48 }}>{countNum}</h2>
           <p style={{ margin: 0, fontWeight: 800, color: "var(--muted)" }}>
             First up: <b>{activeName}</b>
@@ -412,40 +506,70 @@ export function PosePlay({ room }: { room: PoseView }) {
         </section>
       )}
 
-      {/* PHASE 1: POSING */}
-      {!countingDown && g.phase === "posing" && currentPose && (
+      {/* PHASE 1: POSING (All 4 Modes) */}
+      {!countingDown && g.phase === "posing" && (
         <>
           {isMyTurn ? (
             <section className="ps-stage-col">
+              {/* Mode-specific Prompt Bar */}
               <div className="ps-prompt-bar">
-                <PoseFigure pose={currentPose} variant="mini" />
+                {g.mode === "classic" && currentPose && <PoseFigure pose={currentPose} variant="mini" />}
+                {g.mode === "copycat" && g.currentTurn.role === "copy" && leaderSnap?.url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={leaderSnap.url} alt="Leader pose" className="ps-thumb-mini" />
+                )}
+                {(g.mode === "secret" || g.mode === "telephone" || (g.mode === "copycat" && g.currentTurn.role === "lead")) && (
+                  <span className="ps-stepicon">{modeMeta.emoji}</span>
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <b>Your turn! {currentPose.name}</b>
-                  <small>{currentPose.cue}</small>
+                  {g.mode === "classic" && currentPose && (
+                    <>
+                      <b>Your turn! {currentPose.name}</b>
+                      <small>{currentPose.cue}</small>
+                    </>
+                  )}
+                  {g.mode === "copycat" && g.currentTurn.role === "lead" && (
+                    <>
+                      <b>Invent ANY pose!</b>
+                      <small>Strike something funny or tricky — your partner has to mirror it!</small>
+                    </>
+                  )}
+                  {g.mode === "copycat" && g.currentTurn.role === "copy" && (
+                    <>
+                      <b>Mirror {leaderName}&apos;s pose!</b>
+                      <small>Match their exact silhouette on camera.</small>
+                    </>
+                  )}
+                  {g.mode === "secret" && (
+                    <>
+                      <b>Secret: &ldquo;{g.visiblePrompt}&rdquo;</b>
+                      <small>Act it out in 1 frozen photo — no words!</small>
+                    </>
+                  )}
+                  {g.mode === "telephone" && (
+                    <>
+                      <b>Pose: &ldquo;{g.visiblePrompt}&rdquo;</b>
+                      <small>Only your skeleton gets passed to the next player!</small>
+                    </>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  className="ps-skip-btn"
-                  disabled={busy}
-                  onClick={handleSkip}
-                >
+                <button type="button" className="ps-skip-btn" disabled={busy} onClick={handleSkip}>
                   Skip
                 </button>
               </div>
 
-              {/* Floating live hype from partner */}
               {g.hype.length > 0 && (
                 <div className="ps-hype-bar" aria-live="polite">
                   {g.hype.slice(-5).map((h, i) => (
-                    <span key={`${h.at}-${i}`} className="ps-hype-bubble">
-                      {h.emoji}
-                    </span>
+                    <span key={`${h.at}-${i}`} className="ps-hype-bubble">{h.emoji}</span>
                   ))}
                 </div>
               )}
 
               <CameraStage
                 pose={currentPose}
+                targetJoints={g.mode === "copycat" && g.currentTurn.role === "copy" ? g.leaderJoints : null}
+                turnKey={`${g.round}-${g.turnIndex}-${g.chainStep}-${g.currentTurn.playerId}`}
                 busy={busy}
                 secsLeft={secsLeft}
                 onCapture={handleCapture}
@@ -454,24 +578,45 @@ export function PosePlay({ room }: { room: PoseView }) {
           ) : (
             <section className="ps-wait-card">
               <span className="ps-kicker">WATCHING {activeName.toUpperCase()} POSE</span>
-              <div className="ps-target-big">
-                <PoseFigure pose={currentPose} variant="card" />
-              </div>
-              <h2 className="display" style={{ margin: 0, fontSize: 24 }}>{currentPose.emoji} {currentPose.name}</h2>
-              <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
-                {currentPose.cue}
-              </p>
+              {g.mode === "classic" && currentPose ? (
+                <>
+                  <div className="ps-target-big"><PoseFigure pose={currentPose} variant="card" /></div>
+                  <h2 className="display" style={{ margin: 0, fontSize: 24 }}>{currentPose.emoji} {currentPose.name}</h2>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
+                    {currentPose.cue}
+                  </p>
+                </>
+              ) : g.mode === "copycat" && g.currentTurn.role === "copy" && leaderSnap?.url ? (
+                <>
+                  <div className="ps-polaroid" style={{ width: 170 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={leaderSnap.url} alt="Leader pose" />
+                  </div>
+                  <h2 className="display" style={{ margin: 0, fontSize: 22 }}>
+                    {activeName} is mirroring {leaderName}!
+                  </h2>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 64 }}>{modeMeta.emoji}</span>
+                  <h2 className="display" style={{ margin: 0, fontSize: 22 }}>
+                    {g.mode === "copycat"
+                      ? `${activeName} is inventing a pose…`
+                      : g.mode === "secret"
+                        ? `${activeName} is acting out a secret prompt…`
+                        : `${activeName} is striking a secret pose…`}
+                  </h2>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
+                    Get ready — your turn is up next!
+                  </p>
+                </>
+              )}
 
               <div className="ps-hype-box">
                 <span className="label" style={{ textAlign: "center" }}>Send live hype to {activeName}!</span>
                 <div className="ps-emoji-row">
                   {HYPE_EMOJIS.map((em) => (
-                    <button
-                      key={em}
-                      type="button"
-                      className="ps-emoji-btn"
-                      onClick={() => handleReact(em)}
-                    >
+                    <button key={em} type="button" className="ps-emoji-btn" onClick={() => handleReact(em)}>
                       {em}
                     </button>
                   ))}
@@ -482,114 +627,259 @@ export function PosePlay({ room }: { room: PoseView }) {
         </>
       )}
 
-      {/* PHASE 2: REVEAL & PARTNER RATING */}
-      {!countingDown && g.phase === "reveal" && currentPose && (
+      {/* PHASE 2: GUESSING (Secret Prompt & Pose Telephone) */}
+      {!countingDown && g.phase === "guessing" && g.mode === "secret" && (
         <section className="ps-reveal-col">
-          <div className="ps-reveal-grid">
-            <div className="ps-polaroid target">
-              <div className="ps-polaroid-art">
-                <PoseFigure pose={currentPose} variant="card" />
-              </div>
-              <div className="ps-polaroid-foot">
-                <span>Target</span>
-                <b>{currentPose.emoji}</b>
-              </div>
-            </div>
-
-            <div className="ps-polaroid snap">
-              {currentSnap?.url && !g.currentTurn.skipped ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={currentSnap.url} alt={`${activeName} pose snap`} />
-              ) : (
-                <div className="ps-polaroid-empty">
-                  {g.currentTurn.skipped ? "Skipped 😅" : "Loading photo…"}
-                </div>
-              )}
-              {g.currentTurn.aiScore !== undefined && !g.currentTurn.skipped && (
-                <span className="ps-ai-badge">🤖 {g.currentTurn.aiScore}%</span>
-              )}
-              {g.currentTurn.reactions.length > 0 && (
-                <div className="ps-stamp-row">
-                  {g.currentTurn.reactions.slice(-6).map((r, i) => (
-                    <span key={`${r.at}-${i}`} className="ps-stamp">{r.emoji}</span>
-                  ))}
-                </div>
-              )}
-              <div className="ps-polaroid-foot">
-                <span>{activeName}</span>
-                <b>+{liveScore.totalScore} pts</b>
-              </div>
+          <div className="ps-polaroid" style={{ maxWidth: 300, width: "100%", margin: "0 auto" }}>
+            {currentSnap?.url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={currentSnap.url} alt={`${activeName} acting secret prompt`} />
+            ) : (
+              <div className="ps-polaroid-empty">Loading photo…</div>
+            )}
+            <div className="ps-polaroid-foot">
+              <span>🕵️ {activeName}&apos;s clue</span>
+              <b>{isMyTurn ? `"${g.visiblePrompt}"` : "What is it?"}</b>
             </div>
           </div>
 
-          {/* Partner rating */}
-          {!isMyTurn && !g.currentTurn.skipped && g.isPlayer && (
-            <div className="ps-rate-card">
-              <span className="label" style={{ textAlign: "center" }}>
-                {myRating ? "Your verdict (tap to change)" : `Rate ${activeName}'s pose!`}
-              </span>
-              <div className="ps-rate-row">
-                {(["nailed", "close", "chaotic"] as const).map((k) => {
-                  const meta = RATING_SCORE[k];
-                  const picked = myRating?.kind === k;
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      className={`ps-rate-btn ${picked ? "on" : ""}`}
-                      onClick={() => handleRate(k)}
-                    >
-                      <span style={{ fontSize: 22 }}>{meta.emoji}</span>
-                      <b>{meta.label}</b>
-                      <small>+{meta.score}</small>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          {!isMyTurn && g.isPlayer && (
+            <form onSubmit={handleGuessSubmit} className="ps-guess-form">
+              <input
+                className="input"
+                placeholder="Type what they're acting out…"
+                value={guessText}
+                maxLength={60}
+                onChange={(e) => setGuessText(e.target.value)}
+                autoFocus
+              />
+              <button className="btn btn-green btn-sm" disabled={busy || !guessText.trim()}>
+                Guess
+              </button>
+            </form>
           )}
 
-          {/* Quick reaction stamps */}
-          {!g.currentTurn.skipped && (
-            <div className="ps-emoji-row">
-              {HYPE_EMOJIS.map((em) => (
-                <button
-                  key={em}
-                  type="button"
-                  className="ps-emoji-btn"
-                  onClick={() => handleReact(em)}
-                >
-                  {em}
-                </button>
+          {g.guesses.length > 0 && (
+            <div className="ps-guess-list">
+              <span className="label">Guesses</span>
+              {g.guesses.map((gs, idx) => (
+                <div key={`${gs.at}-${idx}`} className="ps-guess-item">
+                  <span>
+                    <b>{g.names[gs.by] ?? "Player"}:</b> {gs.text}
+                  </span>
+                  {isMyTurn && (
+                    <button
+                      type="button"
+                      className="ps-accept-btn"
+                      disabled={busy}
+                      onClick={() => handleAcceptGuess(gs.by)}
+                    >
+                      ✅ Close enough!
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}
 
-          <button
-            type="button"
-            className="btn btn-green"
-            disabled={busy}
-            onClick={handleNext}
-          >
-            {g.turnIndex + 1 < g.players.length - g.out.length
-              ? `Next: ${g.names[g.players.filter((p) => !g.out.includes(p))[g.turnIndex + 1]]}'s turn →`
-              : g.players.length >= 2
-                ? "See side-by-side collage ✨"
-                : g.round + 1 < g.rounds
-                  ? "Next pose →"
-                  : "Finish & view strip 🏆"}
-          </button>
+          {(isMyTurn || room.isHost) && (
+            <button type="button" className="btn btn-white" disabled={busy} onClick={handleReveal}>
+              Reveal Answer
+            </button>
+          )}
         </section>
       )}
 
-      {/* PHASE 3: ROUND SUMMARY COLLAGE */}
-      {!countingDown && g.phase === "roundSummary" && latestSummary && summaryPose && (
+      {!countingDown && g.phase === "guessing" && g.mode === "telephone" && (
+        <section className="ps-wait-card">
+          {isMyTurn ? (
+            <>
+              <span className="ps-kicker">DECODE THE SKELETON · STEP {g.chainStep + 1}/{TELEPHONE_STEPS}</span>
+              {g.telephoneGuessTarget?.joints ? (
+                <div className="ps-skeleton-mystery">
+                  <PoseFigure joints={g.telephoneGuessTarget.joints} accent="#FF5B8A" variant="card" />
+                </div>
+              ) : g.telephoneGuessTarget?.fallbackSnapKey && g.snaps[g.telephoneGuessTarget.fallbackSnapKey]?.url ? (
+                <div className="ps-polaroid" style={{ width: 190 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={g.snaps[g.telephoneGuessTarget.fallbackSnapKey].url!}
+                    alt="Blurred pose clue"
+                    style={{ filter: "blur(9px) contrast(1.4)" }}
+                  />
+                </div>
+              ) : (
+                <span style={{ fontSize: 54 }}>🦴</span>
+              )}
+              <h2 className="display" style={{ margin: 0, fontSize: 22 }}>What pose is this?</h2>
+              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
+                Your guess becomes the next player&apos;s prompt!
+              </p>
+              <form onSubmit={handleGuessSubmit} className="ps-guess-form" style={{ width: "100%" }}>
+                <input
+                  className="input"
+                  placeholder="e.g. Dodging a bee…"
+                  value={guessText}
+                  maxLength={60}
+                  onChange={(e) => setGuessText(e.target.value)}
+                  autoFocus
+                />
+                <button className="btn btn-green btn-sm" disabled={busy || !guessText.trim()}>
+                  Pass it on
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <span className="ps-kicker">POSE TELEPHONE · STEP {g.chainStep + 1}/{TELEPHONE_STEPS}</span>
+              <span style={{ fontSize: 60 }}>🦴</span>
+              <h2 className="display" style={{ margin: 0, fontSize: 22 }}>
+                {activeName} is decoding the skeleton…
+              </h2>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
+                They can only see the stick-figure joints — no photo!
+              </p>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* PHASE 3: REVEAL (Classic, Copycat, Secret Prompt) */}
+      {!countingDown && g.phase === "reveal" && (
+        <section className="ps-reveal-col">
+          {g.mode === "secret" ? (
+            <div className="ps-collage-card">
+              <div style={{ textAlign: "center" }}>
+                <span className="ps-kicker" style={{ background: "var(--cherry-soft)", color: "var(--cherry-edge)" }}>
+                  {g.solvedBy ? `🎉 ${g.names[g.solvedBy]} NAILED IT!` : "TIME'S UP — ANSWER REVEALED!"}
+                </span>
+                <h2 className="display" style={{ margin: "6px 0 0", fontSize: 26 }}>
+                  &ldquo;{g.visiblePrompt}&rdquo;
+                </h2>
+              </div>
+              {currentSnap?.url && (
+                <div className="ps-polaroid" style={{ maxWidth: 260, width: "100%", margin: "0 auto" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={currentSnap.url} alt={`${activeName} secret pose`} />
+                  <div className="ps-polaroid-foot">
+                    <span>Acted by {activeName}</span>
+                    <b>{g.solvedBy ? "+95 pts" : "+45 pts"}</b>
+                  </div>
+                </div>
+              )}
+              <button type="button" className="btn btn-green" disabled={busy} onClick={handleNext}>
+                {g.round + 1 < g.rounds ? `Next round (${g.round + 2}/${g.rounds}) →` : "Finish & view strip 🏆"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="ps-reveal-grid">
+                <div className="ps-polaroid target">
+                  {g.mode === "copycat" && leaderSnap?.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={leaderSnap.url} alt="Leader pose" />
+                  ) : (
+                    <div className="ps-polaroid-art">
+                      <PoseFigure pose={currentPose} joints={g.leaderJoints} variant="card" />
+                    </div>
+                  )}
+                  <div className="ps-polaroid-foot">
+                    <span>{g.mode === "copycat" ? `🪞 ${leaderName}` : "Target"}</span>
+                    <b>{currentPose?.emoji ?? "✨"}</b>
+                  </div>
+                </div>
+
+                <div className="ps-polaroid snap">
+                  {currentSnap?.url && !g.currentTurn.skipped ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={currentSnap.url} alt={`${activeName} pose snap`} />
+                  ) : (
+                    <div className="ps-polaroid-empty">
+                      {g.currentTurn.skipped ? "Skipped 😅" : "Loading photo…"}
+                    </div>
+                  )}
+                  {g.currentTurn.aiScore !== undefined && !g.currentTurn.skipped && (
+                    <span className="ps-ai-badge">🤖 {g.currentTurn.aiScore}%</span>
+                  )}
+                  {g.currentTurn.reactions.length > 0 && (
+                    <div className="ps-stamp-row">
+                      {g.currentTurn.reactions.slice(-6).map((r, i) => (
+                        <span key={`${r.at}-${i}`} className="ps-stamp">{r.emoji}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="ps-polaroid-foot">
+                    <span>{activeName}</span>
+                    <b>+{liveScore.totalScore} pts</b>
+                  </div>
+                </div>
+              </div>
+
+              {!isMyTurn && !g.currentTurn.skipped && g.isPlayer && (
+                <div className="ps-rate-card">
+                  <span className="label" style={{ textAlign: "center" }}>
+                    {myRating ? "Your verdict (tap to change)" : `Rate ${activeName}'s pose!`}
+                  </span>
+                  <div className="ps-rate-row">
+                    {(["nailed", "close", "chaotic"] as const).map((k) => {
+                      const meta = RATING_SCORE[k];
+                      const picked = myRating?.kind === k;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          className={`ps-rate-btn ${picked ? "on" : ""}`}
+                          onClick={() => handleRate(k)}
+                        >
+                          <span style={{ fontSize: 22 }}>{meta.emoji}</span>
+                          <b>{meta.label}</b>
+                          <small>+{meta.score}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!g.currentTurn.skipped && (
+                <div className="ps-emoji-row">
+                  {HYPE_EMOJIS.map((em) => (
+                    <button key={em} type="button" className="ps-emoji-btn" onClick={() => handleReact(em)}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button type="button" className="btn btn-green" disabled={busy} onClick={handleNext}>
+                {g.turnIndex + 1 < g.players.length - g.out.length
+                  ? "Next player →"
+                  : g.players.length >= 2
+                    ? "See side-by-side collage ✨"
+                    : g.round + 1 < g.rounds
+                      ? "Next pose →"
+                      : "Finish & view strip 🏆"}
+              </button>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* PHASE 4: ROUND SUMMARY COLLAGE (Classic & Copycat) */}
+      {!countingDown && g.phase === "roundSummary" && latestSummary && (
         <section className="ps-collage-card rise">
           <div className="ps-collage-head">
-            <PoseFigure pose={summaryPose} variant="mini" />
+            {summaryPose ? (
+              <PoseFigure pose={summaryPose} variant="mini" />
+            ) : (
+              <span className="ps-stepicon">🪞</span>
+            )}
             <div style={{ flex: 1 }}>
-              <b>Pose #{latestSummary.round + 1}: {summaryPose.name}</b>
-              <small>Who matched it best?</small>
+              <b>
+                Round #{latestSummary.round + 1}:{" "}
+                {summaryPose ? summaryPose.name : `${g.names[latestSummary.leaderId ?? ""] ?? "Leader"}'s Pose`}
+              </b>
+              <small>{g.mode === "copycat" ? "Original vs. Copycat!" : "Who matched it best?"}</small>
             </div>
           </div>
 
@@ -600,7 +890,7 @@ export function PosePlay({ room }: { room: PoseView }) {
             {latestSummary.results.map((r) => {
               const snap = g.snaps[`${latestSummary.round}:${r.playerId}`];
               const maxScore = Math.max(...latestSummary.results.map((x) => x.totalScore));
-              const best = r.totalScore === maxScore && maxScore > 0;
+              const best = r.totalScore === maxScore && maxScore > 0 && r.role !== "lead";
               return (
                 <div key={r.playerId} className={`ps-polaroid ${best ? "winner" : ""}`}>
                   {snap?.url && !r.skipped ? (
@@ -609,6 +899,7 @@ export function PosePlay({ room }: { room: PoseView }) {
                   ) : (
                     <div className="ps-polaroid-empty">Skipped 😅</div>
                   )}
+                  {r.role === "lead" && <span className="ps-ai-badge">🪞 Original</span>}
                   {best && <span className="ps-best-badge">👑 Best!</span>}
                   <div className="ps-polaroid-foot">
                     <span>{g.names[r.playerId]}</span>
@@ -619,13 +910,27 @@ export function PosePlay({ room }: { room: PoseView }) {
             })}
           </div>
 
-          <button
-            type="button"
-            className="btn btn-green"
-            disabled={busy}
-            onClick={handleNext}
-          >
-            {g.round + 1 < g.rounds ? `Next pose (${g.round + 2}/${g.rounds}) →` : "See final photobooth strip 🏆"}
+          <button type="button" className="btn btn-green" disabled={busy} onClick={handleNext}>
+            {g.round + 1 < g.rounds ? `Next round (${g.round + 2}/${g.rounds}) →` : "See final photobooth strip 🏆"}
+          </button>
+        </section>
+      )}
+
+      {/* PHASE 5: TELEPHONE CHAIN REVEAL */}
+      {!countingDown && g.phase === "chainReveal" && (
+        <section className="ps-collage-card rise">
+          <div className="ps-collage-head">
+            <span className="ps-stepicon">🎭</span>
+            <div style={{ flex: 1 }}>
+              <b>Telephone Reveal!</b>
+              <small>Started as: &ldquo;{g.visiblePrompt}&rdquo;</small>
+            </div>
+          </div>
+
+          <TelephoneTimeline chain={g.chain} names={g.names} snaps={g.snaps} />
+
+          <button type="button" className="btn btn-green" disabled={busy} onClick={handleNext}>
+            {g.round + 1 < g.rounds ? `Next chain (${g.round + 2}/${g.rounds}) →` : "Finish & view strip 🏆"}
           </button>
         </section>
       )}
@@ -636,5 +941,68 @@ export function PosePlay({ room }: { room: PoseView }) {
         </p>
       )}
     </main>
+  );
+}
+
+function TelephoneTimeline({
+  chain,
+  names,
+  snaps,
+}: {
+  chain: {
+    step: number;
+    kind: "pose" | "guess";
+    playerId: string;
+    prompt?: string;
+    guess?: string;
+    snapKey?: string;
+    joints?: PoseJoints;
+    skipped?: boolean;
+  }[];
+  names: Record<string, string>;
+  snaps: Record<string, { url: string | null }>;
+}) {
+  return (
+    <div className="ps-chain-list">
+      {chain.map((item) => {
+        const who = names[item.playerId] ?? "Player";
+        if (item.kind === "guess") {
+          return (
+            <div key={item.step} className="ps-chain-guess">
+              <span className="ps-chain-tag">💬 {who} guessed</span>
+              <b>&ldquo;{item.guess ?? "???"}&rdquo;</b>
+            </div>
+          );
+        }
+        const snap = item.snapKey ? snaps[item.snapKey] : undefined;
+        return (
+          <div key={item.step} className="ps-chain-pose">
+            <div className="ps-chain-pose-head">
+              <span className="ps-chain-tag">📸 {who} posed</span>
+              <small>&ldquo;{item.prompt}&rdquo;</small>
+            </div>
+            <div className="ps-chain-pair">
+              <div className="ps-polaroid mini">
+                {snap?.url && !item.skipped ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={snap.url} alt={`${who} telephone pose`} />
+                ) : (
+                  <div className="ps-polaroid-empty">Skipped</div>
+                )}
+              </div>
+              <div className="ps-polaroid mini">
+                <div className="ps-polaroid-art">
+                  {item.joints ? (
+                    <PoseFigure joints={item.joints} accent="#FF5B8A" variant="card" />
+                  ) : (
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "var(--muted)" }}>No skeleton</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

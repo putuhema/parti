@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { PACK_META, type PosePack } from "../../../convex/lib/pose/poses";
-import { PACK_CHOICES, POSE_MAX, ROUND_CHOICES, TIMER_CHOICES } from "../../../convex/lib/pose/rules";
+import {
+  MODE_CHOICES,
+  MODE_META,
+  PACK_CHOICES,
+  POSE_MAX,
+  ROUND_CHOICES,
+  TIMER_CHOICES,
+  type PoseMode,
+} from "../../../convex/lib/pose/rules";
 import { InviteFriends } from "@/components/InviteFriends";
 import { Avatar, Icon, roomPaints } from "@/components/ui";
 import { errorText } from "@/lib/errors";
@@ -25,6 +33,8 @@ export function PoseLobby({ room }: { room: PoseView }) {
 
   const host = room.isHost;
   const paints = roomPaints(room.members);
+  const modeMeta = MODE_META[room.mode];
+  const needsMorePlayers = room.members.length < modeMeta.minPlayers;
 
   async function share() {
     feedback.tap();
@@ -51,6 +61,12 @@ export function PoseLobby({ room }: { room: PoseView }) {
       setError(errorText(e));
       setStarting(false);
     }
+  }
+
+  function pickMode(mode: PoseMode) {
+    if (!host) return;
+    feedback.tap();
+    void settings({ code: room.code, mode }).catch((e) => setError(errorText(e)));
   }
 
   function pickPack(pack: PosePack) {
@@ -99,37 +115,62 @@ export function PoseLobby({ room }: { room: PoseView }) {
       </header>
 
       <section className="rise ps-lobbycard">
-        <span className="ps-kicker">1–{POSE_MAX} PLAYERS · LDR COUPLES &amp; FRIENDS</span>
+        <span className="ps-kicker">4 CAMERA MODES · LDR COUPLES &amp; FRIENDS</span>
         <h1 className="display" style={{ margin: 0, fontSize: 30, lineHeight: 1.05 }}>{GAME_NAME}</h1>
-        <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, opacity: 0.9, lineHeight: 1.35 }}>{RULE}</p>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, opacity: 0.9, lineHeight: 1.35 }}>{RULE}</p>
       </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <span className="label">Pose vibe</span>
+        <span className="label">Game mode</span>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {PACK_CHOICES.map((p) => {
-            const meta = PACK_META[p];
+          {MODE_CHOICES.map((m) => {
+            const meta = MODE_META[m];
             return (
               <button
-                key={p}
+                key={m}
                 type="button"
                 className="seg"
-                aria-pressed={room.pack === p}
+                aria-pressed={room.mode === m}
                 disabled={!host}
-                style={{ minHeight: 58, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2 }}
-                onClick={() => pickPack(p)}
+                style={{ minHeight: 62, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, padding: "8px 6px" }}
+                onClick={() => pickMode(m)}
               >
                 <span>{meta.emoji} {meta.label}</span>
-                <span style={{ fontSize: 11.5, opacity: 0.75 }}>{meta.sub}</span>
+                <span style={{ fontSize: 11, opacity: 0.75, lineHeight: 1.2 }}>{meta.sub}</span>
               </button>
             );
           })}
         </div>
       </section>
 
+      {room.mode === "classic" && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span className="label">Pose vibe (48 poses)</span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {PACK_CHOICES.map((p) => {
+              const meta = PACK_META[p];
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  className="seg"
+                  aria-pressed={room.pack === p}
+                  disabled={!host}
+                  style={{ minHeight: 54, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2 }}
+                  onClick={() => pickPack(p)}
+                >
+                  <span>{meta.emoji} {meta.label}</span>
+                  <span style={{ fontSize: 11, opacity: 0.75 }}>{meta.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <section style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span className="label">Poses</span>
+          <span className="label">Rounds</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
             {ROUND_CHOICES.map((r) => (
               <button
@@ -194,12 +235,14 @@ export function PoseLobby({ room }: { room: PoseView }) {
       <div className="grow" />
       {error && <p role="alert" style={{ margin: 0, color: "var(--cherry-edge)", fontWeight: 800, textAlign: "center" }}>{error}</p>}
       {host ? (
-        <button className="btn btn-green" disabled={starting} onClick={go}>
+        <button className="btn btn-green" disabled={starting || needsMorePlayers} onClick={go}>
           {starting
             ? "Setting up camera stage…"
-            : room.members.length === 1
-              ? "Start solo practice"
-              : `Start with ${room.members.length} players`}
+            : needsMorePlayers
+              ? `Invite a partner for ${modeMeta.label}`
+              : room.members.length === 1
+                ? "Start solo practice"
+                : `Start ${modeMeta.label} (${room.members.length}p)`}
         </button>
       ) : (
         <p style={{ margin: 0, textAlign: "center", fontWeight: 800, color: "var(--muted)", padding: "12px 0" }}>

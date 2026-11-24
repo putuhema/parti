@@ -1,8 +1,19 @@
-import { POSES, posesForPack, type PosePack } from "./poses";
+import { POSES, posesForPack, type PoseJoints, type PosePack } from "./poses";
+import { PROMPTS, isCloseGuess } from "./prompts";
 
 export const POSE_MAX = 6;
+export const MODE_CHOICES = ["classic", "copycat", "secret", "telephone"] as const;
+export type PoseMode = (typeof MODE_CHOICES)[number];
+
+export const MODE_META: Record<PoseMode, { label: string; emoji: string; sub: string; minPlayers: number }> = {
+  classic: { label: "Classic Match", emoji: "📸", sub: "Match preset poses & rate snaps", minPlayers: 1 },
+  copycat: { label: "Copycat", emoji: "🪞", sub: "Invent a pose, partner mirrors it", minPlayers: 2 },
+  secret: { label: "Secret Prompt", emoji: "🕵️", sub: "Act a secret word in 1 photo", minPlayers: 2 },
+  telephone: { label: "Pose Telephone", emoji: "🎭", sub: "Pose → skeleton → guess chain", minPlayers: 2 },
+};
+
 export const PACK_CHOICES: readonly PosePack[] = ["mix", "cute", "silly", "active"];
-export const ROUND_CHOICES = [5, 7, 10] as const;
+export const ROUND_CHOICES = [3, 5, 7] as const;
 export const TIMER_CHOICES = [10, 15, 20] as const;
 
 export type RatingKind = "nailed" | "close" | "chaotic";
@@ -15,7 +26,7 @@ export const RATING_SCORE: Record<RatingKind, { score: number; label: string; em
 
 export const HYPE_EMOJIS = ["🔥", "😍", "😂", "👏", "🫶", "💀"] as const;
 
-export type PosePhase = "posing" | "reveal" | "roundSummary";
+export type PosePhase = "posing" | "guessing" | "reveal" | "roundSummary" | "chainReveal";
 
 export type TurnReaction = {
   by: string;
@@ -28,9 +39,28 @@ export type TurnRating = {
   score: number;
 };
 
+export type GuessEntry = {
+  by: string;
+  text: string;
+  correct: boolean;
+  at: number;
+};
+
+export type ChainEntry = {
+  step: number;
+  kind: "pose" | "guess";
+  playerId: string;
+  prompt?: string;
+  guess?: string;
+  snapKey?: string;
+  joints?: PoseJoints;
+  skipped?: boolean;
+};
+
 export type ActiveTurn = {
   playerId: string;
-  poseId: string;
+  poseId: string; // preset pose id, or "custom" / "secret" / "telephone"
+  role?: "lead" | "copy" | "act" | "chain";
   snapped: boolean;
   skipped: boolean;
   aiScore?: number;
@@ -44,27 +74,41 @@ export type TurnResult = {
   partnerScore?: number;
   totalScore: number;
   skipped: boolean;
+  role?: "lead" | "copy" | "act";
 };
 
 export type RoundHistory = {
   round: number;
   poseId: string;
+  prompt?: string;
+  leaderId?: string;
   results: TurnResult[];
+  chain?: ChainEntry[];
 };
 
 export type PoseGame = {
   seq: number;
+  mode: PoseMode;
   pack: PosePack;
   rounds: number;
   turnSec: number;
   players: string[];
   out: string[];
-  poseIds: string[];
+  poseIds: string[]; // classic pose ids
+  prompts: string[]; // secret & telephone prompts per round
   round: number; // 0-indexed
-  turnIndex: number; // index into activePlayers()
+  turnIndex: number; // index into roundOrder()
   phase: PosePhase;
   scores: Record<string, number>;
   currentTurn: ActiveTurn;
+  // Mode-specific round state:
+  leaderId?: string; // copycat
+  leaderJoints?: PoseJoints; // copycat leader's extracted skeleton
+  secretPrompt?: string; // secret prompt mode
+  guesses: GuessEntry[]; // secret prompt guesses
+  solvedBy?: string; // secret prompt solver
+  chain: ChainEntry[]; // telephone mode steps for current round
+  chainStep: number; // 0..CHAIN_LEN-1
   roundResults: TurnResult[];
   history: RoundHistory[];
   hype: TurnReaction[];
@@ -77,13 +121,22 @@ export type PoseGame = {
   };
 };
 
-// Give client 4 seconds of grace past the visible timer so auto-snap + upload completes cleanly.
 const SNAP_GRACE_MS = 4500;
+const GUESS_MS = 40_000;
 const REVEAL_MAX_MS = 45_000;
 const SUMMARY_MAX_MS = 60_000;
+export const TELEPHONE_STEPS = 4; // Pose -> Guess -> Pose -> Guess
 
 export function activePlayers(g: PoseGame): string[] {
   return g.players.filter((p) => !g.out.includes(p));
+}
+
+/** Order of players for the current round (rotates starter each round). */
+export function roundOrder(g: PoseGame): string[] {
+  const active = activePlayers(g);
+  if (active.length === 0) return [];
+  const shift = g.round % active.length;
+  return [...active.slice(shift), ...active.slice(0, shift)];
 }
 
 function shuffle<T>(arr: readonly T[], rng: () => number): T[] {
@@ -99,14 +152,96 @@ function pickPoses(pack: PosePack, rounds: number, rng: () => number): string[] 
   const pool = shuffle(posesForPack(pack), rng);
   const chosen: string[] = [];
   for (let i = 0; i < rounds; i++) {
-    if (i < pool.length) {
-      chosen.push(pool[i].id);
-    } else {
+    if (i < pool.length) chosen.push(pool[i].id);
+    else {
       const extra = shuffle(POSES, rng).find((p) => !chosen.includes(p.id)) ?? POSES[i % POSES.length];
       chosen.push(extra.id);
     }
   }
   return chosen;
+}
+
+function pickPrompts(rounds: number, rng: () => number): string[] {
+  const pool = shuffle(PROMPTS, rng);
+  return Array.from({ length: rounds }, (_, i) => pool[i % pool.length]);
+}
+
+function initRound(g: PoseGame, now: number, extraDelayMs = 0) {
+  const order = roundOrder(g);
+  const starter = order[0];
+  g.turnIndex = 0;
+  g.roundResults = [];
+  g.hype = [];
+  g.guesses = [];
+  g.solvedBy = undefined;
+  g.leaderJoints = undefined;
+  g.chain = [];
+  g.chainStep = 0;
+
+  if (g.mode === "classic") {
+    g.leaderId = undefined;
+    g.secretPrompt = undefined;
+    g.phase = "posing";
+    g.currentTurn = {
+      playerId: starter,
+      poseId: g.poseIds[g.round],
+      snapped: false,
+      skipped: false,
+      ratings: {},
+      reactions: [],
+    };
+    g.deadline = now + extraDelayMs + g.turnSec * 1000 + SNAP_GRACE_MS;
+    return;
+  }
+
+  if (g.mode === "copycat") {
+    g.leaderId = starter;
+    g.secretPrompt = undefined;
+    g.phase = "posing";
+    g.currentTurn = {
+      playerId: starter,
+      poseId: "custom",
+      role: "lead",
+      snapped: false,
+      skipped: false,
+      ratings: {},
+      reactions: [],
+    };
+    g.deadline = now + extraDelayMs + g.turnSec * 1000 + SNAP_GRACE_MS;
+    return;
+  }
+
+  if (g.mode === "secret") {
+    g.leaderId = starter;
+    g.secretPrompt = g.prompts[g.round];
+    g.phase = "posing";
+    g.currentTurn = {
+      playerId: starter,
+      poseId: "secret",
+      role: "act",
+      snapped: false,
+      skipped: false,
+      ratings: {},
+      reactions: [],
+    };
+    g.deadline = now + extraDelayMs + g.turnSec * 1000 + SNAP_GRACE_MS;
+    return;
+  }
+
+  // telephone
+  g.leaderId = starter;
+  g.secretPrompt = g.prompts[g.round];
+  g.phase = "posing";
+  g.currentTurn = {
+    playerId: starter,
+    poseId: "telephone",
+    role: "chain",
+    snapped: false,
+    skipped: false,
+    ratings: {},
+    reactions: [],
+  };
+  g.deadline = now + extraDelayMs + g.turnSec * 1000 + SNAP_GRACE_MS;
 }
 
 export function newGame(
@@ -117,19 +252,25 @@ export function newGame(
   now: number,
   countdownMs: number,
   rng: () => number,
+  mode: PoseMode = "classic",
 ): PoseGame {
-  if (players.length < 1) throw new Error("Need at least 1 player");
+  const minP = MODE_META[mode].minPlayers;
+  if (players.length < minP) throw new Error(`Need at least ${minP} players for ${MODE_META[mode].label}`);
   const poseIds = pickPoses(pack, rounds, rng);
+  const prompts = pickPrompts(rounds, rng);
   const scores: Record<string, number> = {};
   for (const p of players) scores[p] = 0;
-  return {
+
+  const g: PoseGame = {
     seq: 0,
+    mode,
     pack,
     rounds,
     turnSec,
     players: [...players],
     out: [],
     poseIds,
+    prompts,
     round: 0,
     turnIndex: 0,
     phase: "posing",
@@ -142,11 +283,15 @@ export function newGame(
       ratings: {},
       reactions: [],
     },
+    guesses: [],
+    chain: [],
+    chainStep: 0,
     roundResults: [],
     history: [],
     hype: [],
-    deadline: now + countdownMs + turnSec * 1000 + SNAP_GRACE_MS,
   };
+  initRound(g, now, countdownMs);
+  return g;
 }
 
 export function computeTurnScore(turn: ActiveTurn): { partnerScore?: number; totalScore: number } {
@@ -158,7 +303,6 @@ export function computeTurnScore(turn: ActiveTurn): { partnerScore?: number; tot
   const ai = turn.aiScore;
 
   if (ai !== undefined && partnerScore !== undefined) {
-    // 55% live pose AI match + 45% partner vibe rating!
     return { partnerScore, totalScore: Math.round(ai * 0.55 + partnerScore * 0.45) };
   }
   if (partnerScore !== undefined) return { partnerScore, totalScore: partnerScore };
@@ -166,7 +310,13 @@ export function computeTurnScore(turn: ActiveTurn): { partnerScore?: number; tot
   return { totalScore: 75 };
 }
 
-export function submitSnap(g: PoseGame, playerId: string, aiScore: number | undefined, now: number) {
+export function submitSnap(
+  g: PoseGame,
+  playerId: string,
+  aiScore: number | undefined,
+  now: number,
+  joints?: PoseJoints,
+) {
   if (g.done) throw new Error("The game is over");
   if (g.phase !== "posing") throw new Error("Not accepting a snap right now");
   if (g.currentTurn.playerId !== playerId) throw new Error("It's not your turn to pose");
@@ -176,6 +326,176 @@ export function submitSnap(g: PoseGame, playerId: string, aiScore: number | unde
   g.currentTurn.snapped = true;
   g.currentTurn.skipped = false;
   g.currentTurn.aiScore = clampedAi;
+
+  if (g.mode === "copycat" && g.currentTurn.role === "lead") {
+    g.leaderJoints = joints;
+    // Leader gets +80 creative points and we move straight to Copycat #1!
+    g.scores[playerId] = (g.scores[playerId] ?? 0) + 80;
+    g.roundResults.push({ playerId, totalScore: 80, skipped: false, role: "lead" });
+    const order = roundOrder(g);
+    if (order.length >= 2) {
+      g.turnIndex = 1;
+      startCopyTurn(g, order[1], now);
+    } else {
+      g.phase = "reveal";
+      g.deadline = now + REVEAL_MAX_MS;
+    }
+    return;
+  }
+
+  if (g.mode === "secret") {
+    g.phase = "guessing";
+    g.deadline = now + GUESS_MS;
+    return;
+  }
+
+  if (g.mode === "telephone") {
+    const promptForStep =
+      g.chainStep === 0 ? g.secretPrompt : g.chain[g.chain.length - 1]?.guess ?? g.secretPrompt;
+    g.chain.push({
+      step: g.chainStep,
+      kind: "pose",
+      playerId,
+      prompt: promptForStep,
+      snapKey: `${g.round}:${playerId}:s${g.chainStep}`,
+      joints,
+    });
+    advanceTelephoneStep(g, now);
+    return;
+  }
+
+  // Classic or Copycat copyer -> reveal & rate
+  g.phase = "reveal";
+  g.deadline = now + REVEAL_MAX_MS;
+}
+
+function startCopyTurn(g: PoseGame, playerId: string, now: number) {
+  g.phase = "posing";
+  g.hype = [];
+  g.currentTurn = {
+    playerId,
+    poseId: "custom",
+    role: "copy",
+    snapped: false,
+    skipped: false,
+    ratings: {},
+    reactions: [],
+  };
+  g.deadline = now + g.turnSec * 1000 + SNAP_GRACE_MS;
+}
+
+function advanceTelephoneStep(g: PoseGame, now: number) {
+  const order = roundOrder(g);
+  g.chainStep += 1;
+  if (g.chainStep >= TELEPHONE_STEPS || order.length < 2) {
+    // Finish the telephone round and reveal the whole chain!
+    const orig = g.secretPrompt ?? "";
+    const finalGuess = [...g.chain].reverse().find((c) => c.kind === "guess")?.guess ?? "";
+    const matched = isCloseGuess(finalGuess, orig);
+    const pts = matched ? 100 : 80;
+    const results: TurnResult[] = order.map((pid) => {
+      g.scores[pid] = (g.scores[pid] ?? 0) + pts;
+      return { playerId: pid, totalScore: pts, skipped: false };
+    });
+    g.history.push({
+      round: g.round,
+      poseId: "telephone",
+      prompt: orig,
+      results,
+      chain: [...g.chain],
+    });
+    g.phase = "chainReveal";
+    g.deadline = now + SUMMARY_MAX_MS;
+    return;
+  }
+
+  const nextPlayer = order[g.chainStep % order.length];
+  const nextIsGuess = g.chainStep % 2 === 1;
+  g.hype = [];
+  g.currentTurn = {
+    playerId: nextPlayer,
+    poseId: "telephone",
+    role: "chain",
+    snapped: false,
+    skipped: false,
+    ratings: {},
+    reactions: [],
+  };
+  g.phase = nextIsGuess ? "guessing" : "posing";
+  g.deadline = now + (nextIsGuess ? GUESS_MS : g.turnSec * 1000 + SNAP_GRACE_MS);
+}
+
+export function submitGuess(g: PoseGame, playerId: string, rawText: string, now: number) {
+  if (g.done) throw new Error("The game is over");
+  if (g.phase !== "guessing") throw new Error("Not guessing right now");
+  const text = rawText.trim().slice(0, 60);
+  if (!text) throw new Error("Type a guess first");
+
+  if (g.mode === "telephone") {
+    if (g.currentTurn.playerId !== playerId) throw new Error("It's not your turn to guess");
+    g.chain.push({
+      step: g.chainStep,
+      kind: "guess",
+      playerId,
+      guess: text,
+    });
+    advanceTelephoneStep(g, now);
+    return;
+  }
+
+  if (g.mode === "secret") {
+    if (g.currentTurn.playerId === playerId) throw new Error("You're the actor!");
+    if (!g.players.includes(playerId) || g.out.includes(playerId)) throw new Error("You're watching this game");
+    const correct = isCloseGuess(text, g.secretPrompt ?? "");
+    g.guesses = [...g.guesses.slice(-19), { by: playerId, text, correct, at: now }];
+    if (correct) {
+      finishSecretGuessing(g, playerId, now);
+    }
+    return;
+  }
+
+  throw new Error("Guessing isn't used in this mode");
+}
+
+export function acceptSecretGuess(g: PoseGame, actorId: string, guesserId: string, now: number) {
+  if (g.done) throw new Error("The game is over");
+  if (g.mode !== "secret" || g.phase !== "guessing") throw new Error("Not guessing right now");
+  if (g.currentTurn.playerId !== actorId) throw new Error("Only the actor can accept a guess");
+  finishSecretGuessing(g, guesserId, now);
+}
+
+export function revealSecret(g: PoseGame, now: number) {
+  if (g.done || g.mode !== "secret" || g.phase !== "guessing") return;
+  finishSecretGuessing(g, undefined, now);
+}
+
+function finishSecretGuessing(g: PoseGame, solverId: string | undefined, now: number) {
+  g.solvedBy = solverId;
+  const actorId = g.currentTurn.playerId;
+  const order = roundOrder(g);
+  const results: TurnResult[] = [];
+
+  if (solverId) {
+    g.scores[actorId] = (g.scores[actorId] ?? 0) + 95;
+    g.scores[solverId] = (g.scores[solverId] ?? 0) + 100;
+    results.push({ playerId: actorId, totalScore: 95, skipped: false, role: "act" });
+    results.push({ playerId: solverId, totalScore: 100, skipped: false });
+  } else {
+    g.scores[actorId] = (g.scores[actorId] ?? 0) + 45;
+    results.push({ playerId: actorId, totalScore: 45, skipped: false, role: "act" });
+  }
+  for (const pid of order) {
+    if (!results.some((r) => r.playerId === pid)) {
+      results.push({ playerId: pid, totalScore: 0, skipped: false });
+    }
+  }
+  g.history.push({
+    round: g.round,
+    poseId: "secret",
+    prompt: g.secretPrompt,
+    leaderId: actorId,
+    results,
+  });
   g.phase = "reveal";
   g.deadline = now + REVEAL_MAX_MS;
 }
@@ -184,6 +504,36 @@ export function skipTurn(g: PoseGame, playerId: string, now: number) {
   if (g.done) throw new Error("The game is over");
   if (g.phase !== "posing") throw new Error("Not posing right now");
   if (g.currentTurn.playerId !== playerId) throw new Error("It's not your turn");
+
+  if (g.mode === "telephone") {
+    g.chain.push({
+      step: g.chainStep,
+      kind: "pose",
+      playerId,
+      prompt: g.chainStep === 0 ? g.secretPrompt : g.chain[g.chain.length - 1]?.guess,
+      skipped: true,
+    });
+    advanceTelephoneStep(g, now);
+    return;
+  }
+
+  if (g.mode === "secret") {
+    g.currentTurn.skipped = true;
+    finishSecretGuessing(g, undefined, now);
+    return;
+  }
+
+  if (g.mode === "copycat" && g.currentTurn.role === "lead") {
+    // If leader skips, skip the whole round cleanly
+    g.currentTurn.skipped = true;
+    g.history.push({ round: g.round, poseId: "custom", leaderId: playerId, results: [] });
+    if (g.round + 1 >= g.rounds) finishGame(g);
+    else {
+      g.round += 1;
+      initRound(g, now);
+    }
+    return;
+  }
 
   g.currentTurn.snapped = false;
   g.currentTurn.skipped = true;
@@ -194,12 +544,12 @@ export function skipTurn(g: PoseGame, playerId: string, now: number) {
 export function rateSnap(g: PoseGame, raterId: string, kind: RatingKind, now: number) {
   if (g.done) throw new Error("The game is over");
   if (g.phase !== "reveal") throw new Error("Nothing to rate right now");
+  if (g.mode === "secret") throw new Error("Secret Prompt uses guesses, not ratings");
   if (g.currentTurn.skipped) throw new Error("This turn was skipped");
   if (g.currentTurn.playerId === raterId) throw new Error("You can't rate your own pose");
   if (!g.players.includes(raterId) || g.out.includes(raterId)) throw new Error("You're watching this game");
 
   g.currentTurn.ratings[raterId] = { kind, score: RATING_SCORE[kind].score };
-  // Give a moment to admire reactions before auto-advancing if needed
   const others = activePlayers(g).filter((p) => p !== g.currentTurn.playerId);
   const allRated = others.every((p) => !!g.currentTurn.ratings[p]);
   if (allRated) {
@@ -212,7 +562,7 @@ export function addReaction(g: PoseGame, playerId: string, emoji: string, now: n
   if (!(HYPE_EMOJIS as readonly string[]).includes(emoji)) throw new Error("Unknown reaction");
   if (g.phase === "posing") {
     g.hype = [...g.hype.slice(-7), { by: playerId, emoji, at: now }];
-  } else if (g.phase === "reveal") {
+  } else if (g.phase === "reveal" || g.phase === "guessing") {
     g.currentTurn.reactions = [...g.currentTurn.reactions.slice(-11), { by: playerId, emoji, at: now }];
   }
 }
@@ -227,6 +577,7 @@ function finalizeCurrentTurn(g: PoseGame) {
     partnerScore,
     totalScore,
     skipped: g.currentTurn.skipped,
+    role: g.currentTurn.role === "copy" ? "copy" : undefined,
   });
 }
 
@@ -236,7 +587,6 @@ function finishGame(g: PoseGame) {
   const best = Math.max(...pool.map((p) => g.scores[p] ?? 0));
   const winners = pool.filter((p) => (g.scores[p] ?? 0) === best);
 
-  // Couple Sync = average of all non-skipped turn scores across the game (0..100)
   const allScores = g.history.flatMap((h) => h.results.map((r) => r.totalScore));
   const coupleSync = allScores.length
     ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length)
@@ -250,69 +600,73 @@ function finishGame(g: PoseGame) {
   g.deadline = undefined;
 }
 
-function startTurn(g: PoseGame, playerId: string, now: number) {
-  g.phase = "posing";
-  g.hype = [];
-  g.currentTurn = {
-    playerId,
-    poseId: g.poseIds[g.round],
-    snapped: false,
-    skipped: false,
-    ratings: {},
-    reactions: [],
-  };
-  g.deadline = now + g.turnSec * 1000 + SNAP_GRACE_MS;
-}
-
 export function advance(g: PoseGame, now: number) {
   if (g.done) return;
-  const active = activePlayers(g);
-  if (active.length === 0) {
+  const order = roundOrder(g);
+  if (order.length === 0) {
     finishGame(g);
     return;
   }
 
   if (g.phase === "reveal") {
-    finalizeCurrentTurn(g);
-    const nextIdx = g.turnIndex + 1;
-    if (nextIdx < active.length) {
-      g.turnIndex = nextIdx;
-      startTurn(g, active[nextIdx], now);
+    if (g.mode === "secret") {
+      // Secret prompt already logged history in finishSecretGuessing
+      if (g.round + 1 >= g.rounds) finishGame(g);
+      else {
+        g.round += 1;
+        initRound(g, now);
+      }
       return;
     }
-    // Everyone has gone this round
+
+    finalizeCurrentTurn(g);
+    const nextIdx = g.turnIndex + 1;
+    if (nextIdx < order.length) {
+      g.turnIndex = nextIdx;
+      if (g.mode === "copycat") startCopyTurn(g, order[nextIdx], now);
+      else {
+        g.phase = "posing";
+        g.hype = [];
+        g.currentTurn = {
+          playerId: order[nextIdx],
+          poseId: g.poseIds[g.round],
+          snapped: false,
+          skipped: false,
+          ratings: {},
+          reactions: [],
+        };
+        g.deadline = now + g.turnSec * 1000 + SNAP_GRACE_MS;
+      }
+      return;
+    }
+
     g.history.push({
       round: g.round,
-      poseId: g.poseIds[g.round],
+      poseId: g.mode === "copycat" ? "custom" : g.poseIds[g.round],
+      leaderId: g.leaderId,
       results: [...g.roundResults],
     });
     g.roundResults = [];
 
-    // Show side-by-side collage when 2+ players are playing
-    if (active.length >= 2) {
+    if (order.length >= 2) {
       g.phase = "roundSummary";
       g.deadline = now + SUMMARY_MAX_MS;
       return;
     }
 
-    // Solo mode: jump straight to next pose or finish
-    if (g.round + 1 >= g.rounds) {
-      finishGame(g);
-    } else {
+    if (g.round + 1 >= g.rounds) finishGame(g);
+    else {
       g.round += 1;
-      g.turnIndex = 0;
-      startTurn(g, active[0], now);
+      initRound(g, now);
     }
     return;
   }
 
-  if (g.phase === "roundSummary") {
-    if (g.round + 1 >= g.rounds) {
-      finishGame(g);
-    } else {
+  if (g.phase === "roundSummary" || g.phase === "chainReveal") {
+    if (g.round + 1 >= g.rounds) finishGame(g);
+    else {
       g.round += 1;
-      g.turnIndex = 0;
-      startTurn(g, active[0], now);
+      initRound(g, now);
     }
   }
 }
@@ -320,11 +674,25 @@ export function advance(g: PoseGame, now: number) {
 export function onDeadline(g: PoseGame, now: number) {
   if (g.done) return;
   if (g.phase === "posing") {
-    g.currentTurn.snapped = false;
-    g.currentTurn.skipped = true;
-    g.phase = "reveal";
-    g.deadline = now + 10_000;
+    skipTurn(g, g.currentTurn.playerId, now);
     return;
+  }
+  if (g.phase === "guessing") {
+    if (g.mode === "secret") {
+      revealSecret(g, now);
+      return;
+    }
+    if (g.mode === "telephone") {
+      g.chain.push({
+        step: g.chainStep,
+        kind: "guess",
+        playerId: g.currentTurn.playerId,
+        guess: "???",
+        skipped: true,
+      });
+      advanceTelephoneStep(g, now);
+      return;
+    }
   }
   advance(g, now);
 }
@@ -338,10 +706,10 @@ export function leaveGame(g: PoseGame, playerId: string, now: number) {
     return;
   }
   if (g.phase === "posing" && g.currentTurn.playerId === playerId) {
-    g.currentTurn.skipped = true;
-    g.phase = "reveal";
-    advance(g, now);
-  } else if (g.turnIndex >= active.length) {
-    g.turnIndex = Math.max(0, active.length - 1);
+    skipTurn(g, playerId, now);
+    if ((g.phase as PosePhase) === "reveal") advance(g, now);
+  } else if (g.phase === "guessing" && g.mode === "telephone" && g.currentTurn.playerId === playerId) {
+    g.chain.push({ step: g.chainStep, kind: "guess", playerId, guess: "???", skipped: true });
+    advanceTelephoneStep(g, now);
   }
 }

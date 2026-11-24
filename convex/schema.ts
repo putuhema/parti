@@ -260,6 +260,9 @@ export default defineSchema({
   poseRooms: defineTable({
     code: v.string(),
     hostId: v.id("players"),
+    mode: v.optional(
+      v.union(v.literal("classic"), v.literal("copycat"), v.literal("secret"), v.literal("telephone")),
+    ),
     pack: v.union(v.literal("mix"), v.literal("cute"), v.literal("silly"), v.literal("active")),
     rounds: v.number(),
     turnSec: v.number(),
@@ -275,10 +278,12 @@ export default defineSchema({
     roomId: v.id("poseRooms"),
     gameNo: v.number(),
     round: v.number(),
+    step: v.optional(v.number()), // used in Pose Telephone chains
     playerId: v.id("players"),
     poseId: v.string(),
     storageId: v.id("_storage"),
     aiScore: v.optional(v.number()),
+    joints: v.optional(v.any()), // extracted PoseJoints for Copycat & Telephone
     takenAt: v.number(),
   }).index("by_roomId_and_gameNo", ["roomId", "gameNo"]),
 

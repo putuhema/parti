@@ -14,9 +14,9 @@ import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
 
 const STEPS: [string, string, string][] = [
-  ["🫶", "Get a surprise pose", "Each round gives you a cute, silly, or active silhouette to match right on your camera."],
-  ["📸", "Take turns striking it", "Align with the live ghost guide — AI scores your match in real time and snaps your polaroid!"],
-  ["💞", "Rate & save your strip", "React to your partner's snaps, compare side-by-side, and download a shared photobooth strip."],
+  ["📸", "Classic Match & Copycat", "Match 48 preset poses with live AI scoring, or invent your own pose for your partner to mirror!"],
+  ["🕵️", "Secret Prompt & Telephone", "Act out secret prompts in 1 photo, or decode your partner's mystery skeleton in Pose Telephone!"],
+  ["💞", "Rate & save your strip", "Send live hype, compare photos side-by-side, and download your shared photobooth strip."],
 ];
 
 export default function PoseHome() {

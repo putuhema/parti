@@ -44,6 +44,7 @@ import type * as lib_island_rules from "../lib/island/rules.js";
 import type * as lib_orb_rules from "../lib/orb/rules.js";
 import type * as lib_party_rules from "../lib/party/rules.js";
 import type * as lib_pose_poses from "../lib/pose/poses.js";
+import type * as lib_pose_prompts from "../lib/pose/prompts.js";
 import type * as lib_pose_rules from "../lib/pose/rules.js";
 import type * as lib_potato_rules from "../lib/potato/rules.js";
 import type * as lib_risk_map from "../lib/risk/map.js";
@@ -134,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   "lib/orb/rules": typeof lib_orb_rules;
   "lib/party/rules": typeof lib_party_rules;
   "lib/pose/poses": typeof lib_pose_poses;
+  "lib/pose/prompts": typeof lib_pose_prompts;
   "lib/pose/rules": typeof lib_pose_rules;
   "lib/potato/rules": typeof lib_potato_rules;
   "lib/risk/map": typeof lib_risk_map;
