@@ -16,6 +16,7 @@ export const GAMES = {
   boom: { name: "Juragan Nusantara", path: "/boom/room/" },
   ular: { name: "Ular Tangga Nusantara", path: "/ular/room/" },
   risk: { name: "Risk", path: "/risk/room/" },
+  pose: { name: "Pose Match", path: "/pose/room/" },
   sketch: { name: "Sketch Match", path: "/sketch/room/" },
   sync: { name: "In Sync", path: "/sync/room/" },
   heist: { name: "Heist Night", path: "/heist/room/" },

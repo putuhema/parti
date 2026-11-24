@@ -32,6 +32,7 @@ import { TILES_MAX } from "./lib/tiles/rules";
 import { BOOM_MAX } from "./lib/boom/rules";
 import { ULAR_MAX } from "./lib/ular/board";
 import { RISK_MAX } from "./lib/risk/rules";
+import { POSE_MAX } from "./lib/pose/rules";
 import { SKETCH_MAX } from "./lib/sketch/rules";
 import { MAX_PLAYERS as PARTY_MAX } from "./lib/party/rules";
 import { MAX_PLAYERS as POTATO_MAX } from "./lib/potato/rules";
@@ -256,6 +257,7 @@ export const joinAny = mutation({
     const boom = await ctx.db.query("boomRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const ular = await ctx.db.query("ularRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const risk = await ctx.db.query("riskRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
+    const pose = await ctx.db.query("poseRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const sketch = await ctx.db.query("sketchRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const island = await ctx.db.query("islandRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const chain = await ctx.db.query("chainRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
@@ -270,7 +272,17 @@ export const joinAny = mutation({
     const brain = await ctx.db.query("brainRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const heist = await ctx.db.query("heistRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
     const sync = await ctx.db.query("syncRooms").withIndex("by_code", (q) => q.eq("code", c)).order("desc").first();
-    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0, ular?._creationTime ?? 0, risk?._creationTime ?? 0, sketch?._creationTime ?? 0, sync?._creationTime ?? 0, heist?._creationTime ?? 0, brain?._creationTime ?? 0, story?._creationTime ?? 0, truth?._creationTime ?? 0, emoji?._creationTime ?? 0, party?._creationTime ?? 0, potato?._creationTime ?? 0, island?._creationTime ?? 0, chain?._creationTime ?? 0, bluff?._creationTime ?? 0, stack?._creationTime ?? 0, orb?._creationTime ?? 0);
+    const newest = Math.max(chessRoom?._creationTime ?? 0, sudoku?._creationTime ?? 0, words?._creationTime ?? 0, trivia?._creationTime ?? 0, buzz?._creationTime ?? 0, face?._creationTime ?? 0, grid?._creationTime ?? 0, tile?._creationTime ?? 0, boom?._creationTime ?? 0, ular?._creationTime ?? 0, risk?._creationTime ?? 0, pose?._creationTime ?? 0, sketch?._creationTime ?? 0, sync?._creationTime ?? 0, heist?._creationTime ?? 0, brain?._creationTime ?? 0, story?._creationTime ?? 0, truth?._creationTime ?? 0, emoji?._creationTime ?? 0, party?._creationTime ?? 0, potato?._creationTime ?? 0, island?._creationTime ?? 0, chain?._creationTime ?? 0, bluff?._creationTime ?? 0, stack?._creationTime ?? 0, orb?._creationTime ?? 0);
+    if (pose && pose._creationTime === newest) {
+      if (!pose.members.some((m) => m.playerId === me._id)) {
+        if (pose.members.length >= POSE_MAX) throw new ConvexError("This room is full");
+        const taken = new Set(pose.members.map((m) => m.seat));
+        let seat = 0;
+        while (taken.has(seat)) seat++;
+        await ctx.db.patch(pose._id, { members: [...pose.members, { playerId: me._id, seat, lastSeen: Date.now() }] });
+      }
+      return `/pose/room/${pose.code}`;
+    }
     if (orb && orb._creationTime === newest) {
       if (!orb.members.some((m) => m.playerId === me._id)) {
         if (orb.members.length >= ORB_MAX) throw new ConvexError("This room is full");

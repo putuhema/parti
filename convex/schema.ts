@@ -257,6 +257,31 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  poseRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    pack: v.union(v.literal("mix"), v.literal("cute"), v.literal("silly"), v.literal("active")),
+    rounds: v.number(),
+    turnSec: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see PoseGame in convex/lib/pose/rules.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  poseSnaps: defineTable({
+    roomId: v.id("poseRooms"),
+    gameNo: v.number(),
+    round: v.number(),
+    playerId: v.id("players"),
+    poseId: v.string(),
+    storageId: v.id("_storage"),
+    aiScore: v.optional(v.number()),
+    takenAt: v.number(),
+  }).index("by_roomId_and_gameNo", ["roomId", "gameNo"]),
+
   sketchRooms: defineTable({
     code: v.string(),
     hostId: v.id("players"),

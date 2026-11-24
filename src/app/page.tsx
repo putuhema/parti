@@ -32,6 +32,23 @@ type Game = {
 
 const GAMES: Game[] = [
   {
+    href: "/pose",
+    name: "Pose Match",
+    sub: "Strike poses on camera together",
+    face: "#FF5B8A",
+    edge: "#D63366",
+    ink: "#B32453",
+    cats: ["duo", "party"],
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 106, height: 92, display: "flex", alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+        <span style={{ position: "absolute", left: 6, top: 10, width: 46, height: 58, borderRadius: 12, background: "#FFFDF8", boxShadow: "0 4px 0 rgba(0,0,0,.18)", transform: "rotate(-10deg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🫶</span>
+        <span style={{ position: "absolute", right: 6, top: 16, width: 46, height: 58, borderRadius: 12, background: "#FFFDF8", boxShadow: "0 4px 0 rgba(0,0,0,.18)", transform: "rotate(9deg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontSize: 24 }}>✌️</span>
+        <span style={{ position: "relative", fontSize: 30, transform: "translateY(14px)", filter: "drop-shadow(0 3px 0 rgba(0,0,0,.22))" }}>📸</span>
+      </span>
+    ),
+  },
+  {
     href: "/risk",
     name: "Risk",
     sub: "Conquer 6 continents & clash dice",
