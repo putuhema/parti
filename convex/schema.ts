@@ -287,6 +287,78 @@ export default defineSchema({
     takenAt: v.number(),
   }).index("by_roomId_and_gameNo", ["roomId", "gameNo"]),
 
+  emfaceRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    rounds: v.number(),
+    turnSec: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()),
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  emfaceSnaps: defineTable({
+    roomId: v.id("emfaceRooms"),
+    gameNo: v.number(),
+    round: v.number(),
+    playerId: v.id("players"),
+    exprId: v.string(),
+    storageId: v.id("_storage"),
+    aiScore: v.optional(v.number()),
+    takenAt: v.number(),
+  }).index("by_roomId_and_gameNo", ["roomId", "gameNo"]),
+
+  doodleRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    rounds: v.number(),
+    turnSec: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    strokes: v.optional(v.array(v.array(v.number()))),
+    game: v.optional(v.any()),
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  splitRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    rounds: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
+  splitSnaps: defineTable({
+    roomId: v.id("splitRooms"),
+    gameNo: v.number(),
+    round: v.number(),
+    side: v.union(v.literal("left"), v.literal("right")),
+    playerId: v.id("players"),
+    storageId: v.id("_storage"),
+    takenAt: v.number(),
+  }).index("by_roomId_and_gameNo", ["roomId", "gameNo"]),
+
+  headsRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    deck: v.union(v.literal("mix"), v.literal("couple"), v.literal("actions"), v.literal("movies"), v.literal("animals")),
+    rounds: v.number(),
+    roundSec: v.number(),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
   sketchRooms: defineTable({
     code: v.string(),
     hostId: v.id("players"),

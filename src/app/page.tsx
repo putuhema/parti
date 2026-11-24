@@ -49,6 +49,71 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/emface",
+    name: "Emoji Face",
+    sub: "Match goofy emojis with face AI",
+    face: "#FFB020",
+    edge: "#D98200",
+    ink: "#9A5B00",
+    cats: ["duo", "party"],
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 36 }} aria-hidden="true">
+        <span style={{ transform: "rotate(-10deg)" }}>😉</span>
+        <span style={{ transform: "translateY(-6px) scale(1.1)" }}>🐡</span>
+        <span style={{ transform: "rotate(10deg)" }}>🥺</span>
+      </span>
+    ),
+  },
+  {
+    href: "/doodle",
+    name: "Air Doodle",
+    sub: "Draw neon in mid-air with hands",
+    face: "#7C5CFF",
+    edge: "#5938D6",
+    ink: "#4A2BB8",
+    cats: ["duo", "party"],
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 100, height: 84, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 38 }} aria-hidden="true">
+        <span style={{ transform: "rotate(-10deg)" }}>☝️</span>
+        <span style={{ transform: "translate(-4px, -12px)" }}>✨</span>
+      </span>
+    ),
+  },
+  {
+    href: "/split",
+    name: "Split Booth",
+    sub: "Stitch 2-half LDR couple photos",
+    face: "#F05A9A",
+    edge: "#C93A78",
+    ink: "#A82A60",
+    cats: ["duo"],
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", alignItems: "center", gap: 2 }} aria-hidden="true">
+        <span style={{ width: 42, height: 58, borderRadius: "12px 0 0 12px", background: "#FFFDF8", display: "grid", placeItems: "center", fontSize: 24, boxShadow: "0 4px 0 rgba(0,0,0,.18)" }}>🫶</span>
+        <span style={{ width: 42, height: 58, borderRadius: "0 12px 12px 0", background: "#FFE6F0", display: "grid", placeItems: "center", fontSize: 24, boxShadow: "0 4px 0 rgba(0,0,0,.18)" }}>💞</span>
+      </span>
+    ),
+  },
+  {
+    href: "/heads",
+    name: "Heads Up!",
+    sub: "Forehead charades & tilt clues",
+    face: "#28A6FF",
+    edge: "#0F7FD6",
+    ink: "#0B64AB",
+    cats: ["duo", "party"],
+    tag: "NEW",
+    art: (
+      <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 36 }} aria-hidden="true">
+        <span style={{ transform: "rotate(-8deg)" }}>🗣️</span>
+        <span style={{ transform: "rotate(8deg)" }}>📱</span>
+      </span>
+    ),
+  },
+  {
     href: "/risk",
     name: "Risk",
     sub: "Conquer 6 continents & clash dice",
