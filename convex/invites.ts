@@ -15,6 +15,7 @@ export const GAMES = {
   tiles: { name: "Tile Town", path: "/tiles/room/" },
   boom: { name: "Juragan Nusantara", path: "/boom/room/" },
   ular: { name: "Ular Tangga Nusantara", path: "/ular/room/" },
+  risk: { name: "Risk", path: "/risk/room/" },
   sketch: { name: "Sketch Match", path: "/sketch/room/" },
   sync: { name: "In Sync", path: "/sync/room/" },
   heist: { name: "Heist Night", path: "/heist/room/" },

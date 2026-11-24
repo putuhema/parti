@@ -32,6 +32,25 @@ type Game = {
 
 const GAMES: Game[] = [
   {
+    href: "/risk",
+    name: "Risk",
+    sub: "Conquer 6 continents & clash dice",
+    face: "#E0485C",
+    edge: "#B2273C",
+    ink: "#991E32",
+    cats: ["brain", "party"],
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 106, height: 92, display: "flex", alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+        <span style={{ position: "absolute", width: 82, height: 64, borderRadius: 20, background: "linear-gradient(180deg,#8EDBFF,#4BB0EC)", boxShadow: "inset 0 2px 0 rgba(255,255,255,.65), 0 4px 0 rgba(0,0,0,.22)", transform: "rotate(-6deg)" }} />
+        <span style={{ position: "absolute", left: 16, top: 22, width: 32, height: 22, borderRadius: 8, background: "#2CC770", boxShadow: "0 3px 0 #1B9B53", transform: "rotate(-6deg)" }} />
+        <span style={{ position: "absolute", right: 16, top: 34, width: 34, height: 24, borderRadius: 8, background: "#FFBE3B", boxShadow: "0 3px 0 #DF8E00", transform: "rotate(5deg)" }} />
+        <span style={{ position: "relative", fontSize: 34, transform: "translate(-4px, -4px) rotate(-10deg)", filter: "drop-shadow(0 3px 0 rgba(0,0,0,.25))" }}>⚔️</span>
+        <span style={{ position: "absolute", right: 8, bottom: 6, width: 28, height: 28, borderRadius: 9, background: "#FFFDF8", color: "#E0485C", fontSize: 16, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 0 rgba(0,0,0,.22)", transform: "rotate(10deg)" }}>6</span>
+      </span>
+    ),
+  },
+  {
     href: "/orb",
     name: "Orbwick",
     sub: "Domino duels for wizards",

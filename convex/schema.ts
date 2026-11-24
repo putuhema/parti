@@ -244,6 +244,19 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
+  riskRooms: defineTable({
+    code: v.string(),
+    hostId: v.id("players"),
+    mode: v.union(v.literal("blitz"), v.literal("domination")),
+    bots: v.number(), // 0..3 AI generals
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished")),
+    gameNo: v.number(),
+    members: v.array(v.object({ playerId: v.id("players"), seat: v.number(), lastSeen: v.number() })),
+    game: v.optional(v.any()), // see RiskGame in convex/lib/risk/rules.ts
+    startAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  }).index("by_code", ["code"]),
+
   sketchRooms: defineTable({
     code: v.string(),
     hostId: v.id("players"),
