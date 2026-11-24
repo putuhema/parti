@@ -14,6 +14,7 @@ export function SplitCamera({ side, leftPhotoUrl, busy, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [facing, setFacing] = useState<"user" | "environment">("user");
+  const [timerMode, setTimerMode] = useState(true);
   const [camState, setCamState] = useState<"loading" | "ready" | "error">("loading");
   const [shutterCount, setShutterCount] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
@@ -186,11 +187,30 @@ export function SplitCamera({ side, leftPhotoUrl, busy, onCapture }: Props) {
 
       {camState === "ready" && (
         <div className="ps-cam-controls">
-          <button type="button" className="ps-ctrl-btn soft" disabled={busy || shutterCount !== null} onClick={() => setShutterCount(3)}>
-            ⏱️ 3s Timer
+          <button
+            type="button"
+            className="ps-ctrl-btn soft"
+            disabled={busy}
+            onClick={() => {
+              feedback.tap();
+              setTimerMode((t) => !t);
+            }}
+          >
+            {timerMode ? "⏱️ 3s Timer" : "⚡ Instant"}
           </button>
-          <button type="button" className="ps-shutter-btn" disabled={busy} onClick={snapNow} aria-label="Snap half">
-            <span className="ps-shutter-inner">{busy ? "…" : "📸"}</span>
+          <button
+            type="button"
+            className="ps-shutter-btn"
+            disabled={busy}
+            onClick={() => {
+              feedback.tap();
+              if (shutterCount !== null) setShutterCount(null);
+              else if (timerMode) setShutterCount(3);
+              else snapNow();
+            }}
+            aria-label={shutterCount !== null ? "Cancel countdown" : timerMode ? "Start 3-second countdown" : "Snap half"}
+          >
+            <span className="ps-shutter-inner">{busy ? "…" : shutterCount !== null ? "✕" : "📸"}</span>
           </button>
           <button
             type="button"

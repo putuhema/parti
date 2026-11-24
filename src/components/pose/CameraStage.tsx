@@ -19,8 +19,9 @@ type Props = {
   onCapture: (blob: Blob, aiScore?: number, joints?: PoseJoints) => void;
 };
 
-const AUTO_HOLD_THRESHOLD = 80;
-const AUTO_HOLD_MS = 1100;
+const AUTO_HOLD_THRESHOLD = 82;
+const AUTO_HOLD_MS = 2200;
+const WARMUP_MS = 3500;
 
 export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -32,6 +33,8 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
 
   const [facing, setFacing] = useState<"user" | "environment">("user");
   const [showGhost, setShowGhost] = useState(true);
+  const [autoSnap, setAutoSnap] = useState(false);
+  const [timerMode, setTimerMode] = useState(true); // 3-2-1 countdown by default so mobile players have time to pose!
   const [camState, setCamState] = useState<"loading" | "ready" | "error">("loading");
   const [camError, setCamError] = useState("");
   const [aiStatus, setAiStatus] = useState<"loading" | "live" | "off">("loading");
@@ -46,6 +49,16 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
   const capturedRef = useRef(false);
   const holdStartRef = useRef<number | null>(null);
   const smoothScoreRef = useRef<number | null>(null);
+  const readyAtRef = useRef<number>(0);
+  const autoSnapRef = useRef(autoSnap);
+
+  useEffect(() => {
+    autoSnapRef.current = autoSnap;
+    if (!autoSnap) {
+      holdStartRef.current = null;
+      setHoldPct(0);
+    }
+  }, [autoSnap]);
 
   useEffect(() => {
     capturedRef.current = false;
@@ -53,6 +66,7 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
     smoothScoreRef.current = null;
     latestAiRef.current = undefined;
     latestJointsRef.current = undefined;
+    readyAtRef.current = performance.now();
     setMatchPct(null);
     setPoseDetected(false);
     setHoldPct(0);
@@ -90,6 +104,7 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
           v.srcObject = stream;
           await v.play().catch(() => {});
         }
+        readyAtRef.current = performance.now();
         setCamState("ready");
       } catch (err) {
         if (!active) return;
@@ -227,7 +242,8 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
         setMatchPct(smoothed);
         color = smoothed >= AUTO_HOLD_THRESHOLD ? "#2CC770" : smoothed >= 60 ? "#FFBE3B" : "#FF5B74";
 
-        if (!capturedRef.current && !busy && smoothed >= AUTO_HOLD_THRESHOLD) {
+        const warmedUp = now - readyAtRef.current >= WARMUP_MS;
+        if (autoSnapRef.current && warmedUp && !capturedRef.current && !busy && smoothed >= AUTO_HOLD_THRESHOLD) {
           if (holdStartRef.current === null) holdStartRef.current = now;
           const held = now - holdStartRef.current;
           const pct = Math.min(100, Math.round((held / AUTO_HOLD_MS) * 100));
@@ -296,7 +312,8 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
   }, [shutterCount, snapNow]);
 
   useEffect(() => {
-    if (secsLeft === 0 && camState === "ready" && !capturedRef.current && !busy) {
+    const warmedUp = performance.now() - readyAtRef.current >= 3000;
+    if (secsLeft === 0 && camState === "ready" && warmedUp && !capturedRef.current && !busy) {
       snapNow();
     }
   }, [secsLeft, camState, busy, snapNow]);
@@ -400,18 +417,32 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
 
           <div style={{ display: "flex", gap: 6 }}>
             {hasTarget && (
-              <button
-                type="button"
-                className={`ps-hud-btn ${showGhost ? "on" : ""}`}
-                onClick={() => {
-                  feedback.tap();
-                  setShowGhost((v) => !v);
-                }}
-                aria-label={showGhost ? "Hide pose guide" : "Show pose guide"}
-                title="Toggle pose guide overlay"
-              >
-                👻
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={`ps-hud-btn ${autoSnap ? "on" : ""}`}
+                  onClick={() => {
+                    feedback.tap();
+                    setAutoSnap((v) => !v);
+                  }}
+                  aria-label={autoSnap ? "Disable auto-snap" : "Enable auto-snap"}
+                  title={autoSnap ? "Auto-snap ON" : "Auto-snap OFF (tap to enable)"}
+                >
+                  ⚡
+                </button>
+                <button
+                  type="button"
+                  className={`ps-hud-btn ${showGhost ? "on" : ""}`}
+                  onClick={() => {
+                    feedback.tap();
+                    setShowGhost((v) => !v);
+                  }}
+                  aria-label={showGhost ? "Hide pose guide" : "Show pose guide"}
+                  title="Toggle pose guide overlay"
+                >
+                  👻
+                </button>
+              </>
             )}
             {camState === "ready" && (
               <button
@@ -453,22 +484,27 @@ export function CameraStage({ pose, targetJoints, turnKey, busy, secsLeft, onCap
           <button
             type="button"
             className="ps-ctrl-btn soft"
-            disabled={busy || shutterCount !== null}
+            disabled={busy}
             onClick={() => {
               feedback.tap();
-              setShutterCount(3);
+              setTimerMode((t) => !t);
             }}
           >
-            ⏱️ 3s Timer
+            {timerMode ? "⏱️ 3s Timer" : "⚡ Instant"}
           </button>
           <button
             type="button"
             className="ps-shutter-btn"
             disabled={busy}
-            onClick={snapNow}
-            aria-label="Snap pose now"
+            onClick={() => {
+              feedback.tap();
+              if (shutterCount !== null) setShutterCount(null);
+              else if (timerMode) setShutterCount(3);
+              else snapNow();
+            }}
+            aria-label={shutterCount !== null ? "Cancel countdown" : timerMode ? "Start 3-second countdown" : "Snap pose now"}
           >
-            <span className="ps-shutter-inner">{busy ? "…" : "📸"}</span>
+            <span className="ps-shutter-inner">{busy ? "…" : shutterCount !== null ? "✕" : "📸"}</span>
           </button>
           <button
             type="button"

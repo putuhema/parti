@@ -13,13 +13,16 @@ type Props = {
   onCapture: (blob: Blob, aiScore?: number) => void;
 };
 
-const AUTO_HOLD_THRESHOLD = 78;
-const AUTO_HOLD_MS = 900;
+const AUTO_HOLD_THRESHOLD = 82;
+const AUTO_HOLD_MS = 2000;
+const WARMUP_MS = 3500;
 
 export function FaceCamera({ expr, turnKey, busy, secsLeft, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [facing, setFacing] = useState<"user" | "environment">("user");
+  const [autoSnap, setAutoSnap] = useState(false);
+  const [timerMode, setTimerMode] = useState(true);
   const [camState, setCamState] = useState<"loading" | "ready" | "error">("loading");
   const [camError, setCamError] = useState("");
   const [aiStatus, setAiStatus] = useState<"loading" | "live" | "off">("loading");
@@ -32,12 +35,23 @@ export function FaceCamera({ expr, turnKey, busy, secsLeft, onCapture }: Props) 
   const capturedRef = useRef(false);
   const holdStartRef = useRef<number | null>(null);
   const smoothRef = useRef<number | null>(null);
+  const readyAtRef = useRef<number>(0);
+  const autoSnapRef = useRef(autoSnap);
+
+  useEffect(() => {
+    autoSnapRef.current = autoSnap;
+    if (!autoSnap) {
+      holdStartRef.current = null;
+      setHoldPct(0);
+    }
+  }, [autoSnap]);
 
   useEffect(() => {
     capturedRef.current = false;
     holdStartRef.current = null;
     smoothRef.current = null;
     latestAiRef.current = undefined;
+    readyAtRef.current = performance.now();
     setMatchPct(null);
     setHoldPct(0);
     setShutterCount(null);
@@ -68,6 +82,7 @@ export function FaceCamera({ expr, turnKey, busy, secsLeft, onCapture }: Props) 
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => {});
         }
+        readyAtRef.current = performance.now();
         setCamState("ready");
       } catch {
         if (!active) return;
@@ -147,7 +162,8 @@ export function FaceCamera({ expr, turnKey, busy, secsLeft, onCapture }: Props) 
       latestAiRef.current = smoothed;
       setMatchPct(smoothed);
 
-      if (!capturedRef.current && !busy && smoothed >= AUTO_HOLD_THRESHOLD) {
+      const warmedUp = now - readyAtRef.current >= WARMUP_MS;
+      if (autoSnapRef.current && warmedUp && !capturedRef.current && !busy && smoothed >= AUTO_HOLD_THRESHOLD) {
         if (holdStartRef.current === null) holdStartRef.current = now;
         const held = now - holdStartRef.current;
         setHoldPct(Math.min(100, Math.round((held / AUTO_HOLD_MS) * 100)));
@@ -176,7 +192,8 @@ export function FaceCamera({ expr, turnKey, busy, secsLeft, onCapture }: Props) 
   }, [shutterCount, snapNow]);
 
   useEffect(() => {
-    if (secsLeft === 0 && camState === "ready" && !capturedRef.current && !busy) snapNow();
+    const warmedUp = performance.now() - readyAtRef.current >= 3000;
+    if (secsLeft === 0 && camState === "ready" && warmedUp && !capturedRef.current && !busy) snapNow();
   }, [secsLeft, camState, busy, snapNow]);
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -230,19 +247,33 @@ export function FaceCamera({ expr, turnKey, busy, secsLeft, onCapture }: Props) 
                 ? "Loading face AI…"
                 : "Camera ready"}
           </span>
-          {camState === "ready" && (
+          <div style={{ display: "flex", gap: 6 }}>
             <button
               type="button"
-              className="ps-hud-btn"
+              className={`ps-hud-btn ${autoSnap ? "on" : ""}`}
               onClick={() => {
                 feedback.tap();
-                setFacing((f) => (f === "user" ? "environment" : "user"));
+                setAutoSnap((v) => !v);
               }}
-              aria-label="Flip camera"
+              aria-label={autoSnap ? "Disable auto-snap" : "Enable auto-snap"}
+              title={autoSnap ? "Auto-snap ON" : "Auto-snap OFF (tap to enable)"}
             >
-              🔄
+              ⚡
             </button>
-          )}
+            {camState === "ready" && (
+              <button
+                type="button"
+                className="ps-hud-btn"
+                onClick={() => {
+                  feedback.tap();
+                  setFacing((f) => (f === "user" ? "environment" : "user"));
+                }}
+                aria-label="Flip camera"
+              >
+                🔄
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Floating target emoji badge */}
@@ -261,11 +292,30 @@ export function FaceCamera({ expr, turnKey, busy, secsLeft, onCapture }: Props) 
 
       {camState === "ready" && (
         <div className="ps-cam-controls">
-          <button type="button" className="ps-ctrl-btn soft" disabled={busy || shutterCount !== null} onClick={() => setShutterCount(3)}>
-            ⏱️ 3s Timer
+          <button
+            type="button"
+            className="ps-ctrl-btn soft"
+            disabled={busy}
+            onClick={() => {
+              feedback.tap();
+              setTimerMode((t) => !t);
+            }}
+          >
+            {timerMode ? "⏱️ 3s Timer" : "⚡ Instant"}
           </button>
-          <button type="button" className="ps-shutter-btn" disabled={busy} onClick={snapNow} aria-label="Snap face">
-            <span className="ps-shutter-inner">{busy ? "…" : "📸"}</span>
+          <button
+            type="button"
+            className="ps-shutter-btn"
+            disabled={busy}
+            onClick={() => {
+              feedback.tap();
+              if (shutterCount !== null) setShutterCount(null);
+              else if (timerMode) setShutterCount(3);
+              else snapNow();
+            }}
+            aria-label={shutterCount !== null ? "Cancel countdown" : timerMode ? "Start 3-second countdown" : "Snap face"}
+          >
+            <span className="ps-shutter-inner">{busy ? "…" : shutterCount !== null ? "✕" : "📸"}</span>
           </button>
           <button type="button" className="ps-ctrl-btn soft" disabled={busy} onClick={() => fileRef.current?.click()}>
             🖼️ Upload
