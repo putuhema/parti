@@ -1395,14 +1395,22 @@ body:has(.jn-play) { background: #E2D3B2; }
 .ul-sq { cursor: default; }
 .jn-world .ul-face { justify-content: center; gap: 0; padding: 6px 0 0; }
 .ul-num { font-size: 24px; font-weight: 900; line-height: 1; letter-spacing: -.02em; }
+.ul-qmark { font-size: 28px; line-height: .95; }
+.ul-stars { font-size: 11px; line-height: 1; letter-spacing: .04em; margin-top: 2px; text-shadow: 0 1px 0 rgba(35,27,26,.45); }
 .ul-cat { font-size: 12px; line-height: 1.1; font-weight: 900; }
 .ul-sl { position: absolute; left: 0; top: 0; z-index: 400; pointer-events: none; overflow: visible; }
+.ul-spawn { animation: ul-spawn 420ms cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes ul-spawn { from { opacity: 0; } to { opacity: 1; } }
 .ul-slither { animation: ul-slither 1.1s linear infinite; }
 @keyframes ul-slither { to { stroke-dashoffset: -32; } }
 .ul-tongue { animation: ul-tongue .9s steps(2) infinite; }
 @keyframes ul-tongue { 50% { opacity: 0; } }
 .ul-q { position: relative; overflow: hidden; width: min(360px, 100%); padding-top: 22px; text-align: left; }
+.ul-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .ul-cattag { background: var(--cat) !important; color: var(--ow-ink) !important; }
+.ul-diff { padding: 3px 9px; border-radius: 999px; border: 2px solid var(--ow-ink); font-size: 11px; font-weight: 900; letter-spacing: .05em; }
+.ul-stakes-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.ul-stakes-row .ul-stakes { margin: 0; text-align: center; font-size: 12px; padding: 6px 6px; }
 .ul-stakes { margin: 8px 0 0; padding: 5px 10px; border-radius: 10px; font-size: 13px; font-weight: 900; background: rgba(35,27,26,.06); }
 .ul-stakes.ladder { background: #E3F2EA; color: #2B7A50; }
 .ul-stakes.snake { background: #FBE3DF; color: #B23A2E; }

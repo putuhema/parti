@@ -1,33 +1,62 @@
 /**
- * Ular Tangga Nusantara: snakes and ladders with a trivia question on every landing.
+ * Ular Tangga Nusantara: dynamic snakes and ladders built from mystery question boxes.
  * Pure rules, no database: the server runs them, the tests replay them, and the phone reads the tables.
  *
- * Roll one die and move. Wherever you land, answer a question in that square's category:
- *  • at the foot of a tangga (ladder), a right answer climbs it;
- *  • on an ular's (snake's) head, a right answer dodges the bite, a wrong one slides you down;
- *  • anywhere else, a right answer earns a bonus step.
+ * The board starts empty of snakes and ladders, with Mystery Boxes (?) of Easy, Medium, and Hard difficulty
+ * scattered across random squares:
+ *  • Land on a plain square: stay put, next player rolls.
+ *  • Land on a Mystery Box (?): answer a trivia question matching its difficulty.
+ *      - Right answer: the box turns into a permanent tangga (ladder) and you climb it!
+ *      - Wrong answer / timeout: the box turns into a permanent ular (snake) and you slide down!
+ *      - Harder questions create much longer ladders and faster drops.
+ *  • Land on an already-spawned tangga: climb straight up!
+ *  • Land on an already-spawned ular: slide straight down!
  * First to square 100 wins (overshoot and you bounce back). If the rounds run out, whoever got furthest wins.
  */
 import { QUESTIONS } from "../trivia/questions";
+import {
+  ASK_MS,
+  BOT_MS,
+  DIFFICULTY_INFO,
+  GOAL,
+  ROLL_MS,
+  catOf,
+  generateBoxes,
+  isBot,
+  type Difficulty,
+  type Seat,
+} from "./board";
+import { difficultyOf } from "./difficulty";
 
-import { BOT_MS, BOT_RIGHT, BONUS_STEPS, GOAL, LADDERS, ROLL_MS, ASK_MS, SNAKES, catOf, isBot, kindOf, type Seat, type SquareKind } from "./board";
 export * from "./board";
 
 // ---------- The game ----------
-export type Ask = { q: number; order: [number, number, number, number]; at: number; kind: SquareKind; opened: number };
+export type Ask = {
+  q: number;
+  order: [number, number, number, number];
+  at: number;
+  diff: Difficulty;
+  upTo: number;
+  downTo: number;
+  opened: number;
+};
 
 export type UlarEvent = {
   n: number;
-  kind: "roll" | "ask" | "answer" | "climb" | "bite" | "bonus" | "win" | "left";
+  kind: "roll" | "ask" | "answer" | "climb" | "bite" | "win" | "left";
   by: Seat;
   dice?: number;
   from?: number;
   to?: number;
   bounced?: boolean;
-  // A question: which one, where, and (on the answer) what was picked and which choice was right.
+  // Question / Mystery Box details
   q?: number;
   cat?: number;
   at?: number;
+  diff?: Difficulty;
+  upTo?: number;
+  downTo?: number;
+  spawned?: boolean; // true when a Mystery Box just turned into this ladder or snake
   pick?: number;
   right?: number;
   ok?: boolean;
@@ -41,6 +70,9 @@ export interface UlarGame {
   players: Seat[];
   out: Seat[];
   pos: Record<string, number>;
+  boxes: Record<number, Difficulty>; // unrevealed mystery boxes on the board
+  ladders: Record<number, number>; // spawned ladders: foot -> top
+  snakes: Record<number, number>; // spawned snakes: head -> tail
   turn: Seat;
   phase: "roll" | "ask";
   ask?: Ask;
@@ -59,11 +91,10 @@ export type Rng = () => number;
 /** How long phones spend showing one event; the server waits this long before the next deadline starts. */
 export function eventMs(e: UlarEvent): number {
   if (e.kind === "roll") return 750 + Math.abs((e.to ?? 0) - (e.from ?? 0)) * 230;
-  if (e.kind === "ask") return 250;
+  if (e.kind === "ask") return 300;
   if (e.kind === "answer") return 1700;
-  if (e.kind === "climb") return 1300;
-  if (e.kind === "bite") return 1500;
-  if (e.kind === "bonus") return 500;
+  if (e.kind === "climb") return e.spawned ? 1550 : 1300;
+  if (e.kind === "bite") return e.spawned ? 1650 : 1500;
   if (e.kind === "win") return 1500;
   return 600;
 }
@@ -77,13 +108,16 @@ function note(g: UlarGame, e: Omit<UlarEvent, "n">) {
   return full;
 }
 
-export function newGame(players: Seat[], maxRounds: number, now: number, lead = 0): UlarGame {
+export function newGame(players: Seat[], maxRounds: number, now: number, lead = 0, rng: Rng = Math.random): UlarGame {
   return {
     seq: 0,
     evn: 0,
     players,
     out: [],
     pos: Object.fromEntries(players.map((p) => [p, 0])),
+    boxes: generateBoxes(rng),
+    ladders: {},
+    snakes: {},
     turn: players[0],
     phase: "roll",
     used: [],
@@ -127,13 +161,18 @@ function settle(g: UlarGame, now: number, pass: boolean) {
   g.deadline = now + g.busy + wait;
 }
 
-/** Pick a question from the square's category that hasn't come up yet (and reshuffle the category when it runs dry). */
-function pickQuestion(g: UlarGame, cat: number, rng: Rng) {
-  const pool = QUESTIONS.filter((q) => q.cat === cat);
-  let fresh = pool.filter((q) => !g.used.includes(q.id));
+/** Pick an unused question matching the box's difficulty (preferring the square's category). */
+function pickQuestion(g: UlarGame, cat: number, diff: Difficulty, rng: Rng) {
+  const byCatDiff = QUESTIONS.filter((q) => q.cat === cat && difficultyOf(q.id) === diff);
+  let fresh = byCatDiff.filter((q) => !g.used.includes(q.id));
   if (!fresh.length) {
-    g.used = g.used.filter((id) => QUESTIONS[id].cat !== cat);
-    fresh = pool;
+    // Try any category at this exact difficulty so hardness always matches the box's distance stakes
+    const byDiff = QUESTIONS.filter((q) => difficultyOf(q.id) === diff);
+    fresh = byDiff.filter((q) => !g.used.includes(q.id));
+    if (!fresh.length) {
+      g.used = g.used.filter((id) => difficultyOf(id) !== diff);
+      fresh = byCatDiff.length ? byCatDiff : byDiff;
+    }
   }
   const q = fresh[Math.floor(rng() * fresh.length)];
   g.used = [...g.used, q.id];
@@ -147,6 +186,22 @@ function shuffled(rng: Rng): [number, number, number, number] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a as [number, number, number, number];
+}
+
+/** Find a clean landing square near `ideal` inside [lo, hi] that doesn't collide with another special square. */
+function cleanTarget(g: UlarGame, ideal: number, lo: number, hi: number): number {
+  const clamped = Math.max(lo, Math.min(hi, ideal));
+  const isBusy = (sq: number) => Boolean(g.boxes[sq] || g.ladders[sq] || g.snakes[sq]);
+  if (!isBusy(clamped)) return clamped;
+  for (let d = 1; d <= 6; d++) {
+    if (clamped + d <= hi && !isBusy(clamped + d)) return clamped + d;
+    if (clamped - d >= lo && !isBusy(clamped - d)) return clamped - d;
+  }
+  return clamped;
+}
+
+function rollSpan(min: number, max: number, rng: Rng): number {
+  return min + Math.floor(rng() * (max - min + 1));
 }
 
 function win(g: UlarGame, p: Seat) {
@@ -166,16 +221,45 @@ export function roll(g: UlarGame, rng: Rng, now: number) {
   g.pos[p] = to;
   note(g, { kind: "roll", by: p, dice, from, to, bounced });
   if (to === GOAL) return win(g, p);
-  // A question for this square.
-  const cat = catOf(to);
-  const q = pickQuestion(g, cat, rng);
-  g.ask = { q, order: shuffled(rng), at: to, kind: kindOf(to), opened: now };
-  g.phase = "ask";
-  note(g, { kind: "ask", by: p, q, cat, at: to });
-  settle(g, now, false);
+
+  // Landed on an already-spawned ladder? Climb straight up!
+  if (g.ladders[to]) {
+    const top = g.ladders[to];
+    g.pos[p] = top;
+    note(g, { kind: "climb", by: p, from: to, to: top, spawned: false });
+    if (top === GOAL) return win(g, p);
+    return settle(g, now, true);
+  }
+
+  // Landed on an already-spawned snake? Slide straight down!
+  if (g.snakes[to]) {
+    const tail = g.snakes[to];
+    g.pos[p] = tail;
+    note(g, { kind: "bite", by: p, from: to, to: tail, spawned: false });
+    return settle(g, now, true);
+  }
+
+  // Landed on a Mystery Box? Open a trivia question scaled by its difficulty!
+  const diff = g.boxes[to];
+  if (diff) {
+    const info = DIFFICULTY_INFO[diff];
+    const cat = catOf(to);
+    const q = pickQuestion(g, cat, diff, rng);
+    const upSpan = rollSpan(info.upMin, info.upMax, rng);
+    const downSpan = rollSpan(info.downMin, info.downMax, rng);
+    const upTo = cleanTarget(g, to + upSpan, Math.min(GOAL, to + 2), GOAL);
+    const downTo = cleanTarget(g, to - downSpan, 1, Math.max(1, to - 2));
+    g.ask = { q, order: shuffled(rng), at: to, diff, upTo, downTo, opened: now };
+    g.phase = "ask";
+    note(g, { kind: "ask", by: p, q, cat: QUESTIONS[q].cat, at: to, diff, upTo, downTo });
+    return settle(g, now, false);
+  }
+
+  // Plain square: pass turn cleanly.
+  settle(g, now, true);
 }
 
-/** Answer the question: `pick` is the index of the choice as shown (or -1 for no answer). */
+/** Answer the Mystery Box question: `pick` is the index of the choice as shown (or -1 for no answer). */
 export function answer(g: UlarGame, pick: number, now: number) {
   if (g.done || g.phase !== "ask" || !g.ask) return;
   g.busy = 0;
@@ -184,26 +268,37 @@ export function answer(g: UlarGame, pick: number, now: number) {
   const q = QUESTIONS[a.q];
   const right = a.order.indexOf(0);
   const ok = pick === right;
-  note(g, { kind: "answer", by: p, q: a.q, cat: q.cat, at: a.at, pick, right, ok, text: q.text, choices: a.order.map((k) => q.choices[k]) });
+  note(g, {
+    kind: "answer",
+    by: p,
+    q: a.q,
+    cat: q.cat,
+    at: a.at,
+    diff: a.diff,
+    upTo: a.upTo,
+    downTo: a.downTo,
+    pick,
+    right,
+    ok,
+    text: q.text,
+    choices: a.order.map((k) => q.choices[k]),
+  });
+
+  // Consume the Mystery Box and permanently spawn a Ladder (if right) or Snake (if wrong).
+  delete g.boxes[a.at];
   g.ask = undefined;
   g.phase = "roll";
-  if (a.kind === "ladder" && ok) {
-    g.pos[p] = LADDERS[a.at];
-    note(g, { kind: "climb", by: p, from: a.at, to: g.pos[p] });
-  } else if (a.kind === "snake" && !ok) {
-    g.pos[p] = SNAKES[a.at];
-    note(g, { kind: "bite", by: p, from: a.at, to: g.pos[p] });
-  } else if (a.kind === "plain" && ok) {
-    // A bonus step; a ladder at the end of it is a free climb, and a snake there lets you be.
-    let to = Math.min(GOAL, a.at + BONUS_STEPS);
-    note(g, { kind: "bonus", by: p, from: a.at, to });
-    if (LADDERS[to]) {
-      const top = LADDERS[to];
-      note(g, { kind: "climb", by: p, from: to, to: top });
-      to = top;
-    }
-    g.pos[p] = to;
+
+  if (ok) {
+    g.ladders[a.at] = a.upTo;
+    g.pos[p] = a.upTo;
+    note(g, { kind: "climb", by: p, from: a.at, to: a.upTo, diff: a.diff, spawned: true });
+  } else {
+    g.snakes[a.at] = a.downTo;
+    g.pos[p] = a.downTo;
+    note(g, { kind: "bite", by: p, from: a.at, to: a.downTo, diff: a.diff, spawned: true });
   }
+
   if (g.pos[p] === GOAL) return win(g, p);
   settle(g, now, true);
 }
@@ -214,10 +309,10 @@ export function onDeadline(g: UlarGame, rng: Rng, now: number) {
   if (!g.ask) return;
   if (isBot(g.turn)) {
     const right = g.ask.order.indexOf(0);
-    const knows = rng() < BOT_RIGHT;
+    const knows = rng() < DIFFICULTY_INFO[g.ask.diff].botRight;
     return answer(g, knows ? right : (right + 1 + Math.floor(rng() * 3)) % 4, now);
   }
-  answer(g, -1, now); // no answer counts as wrong
+  answer(g, -1, now); // no answer counts as wrong -> spawns snake
 }
 
 /** A player walks away. */

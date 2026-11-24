@@ -6,7 +6,7 @@ import { addXp, befriend, findPlayer, freeCode, requirePlayer } from "./lib/help
 import { QUESTIONS } from "./lib/trivia/questions";
 import { BOTS, ROUND_CHOICES, ULAR_MAX, answer, isBot, leaveGame, newGame, onDeadline, roll, type Seat, type UlarGame } from "./lib/ular/rules";
 
-// Ular Tangga Nusantara: snakes and ladders with a trivia question on every landing.
+// Ular Tangga Nusantara: dynamic snakes and ladders spawned from Mystery Box questions.
 type Room = Doc<"ularRooms">;
 
 const COUNTDOWN_MS = 3000;
@@ -110,7 +110,7 @@ export const start = mutation({
     const now = Date.now();
     const fresh = { ...room, gameNo: room.gameNo + 1, status: "playing" as const, startAt: now + COUNTDOWN_MS, endedAt: undefined };
     await ctx.db.patch(room._id, { gameNo: fresh.gameNo, status: "playing", startAt: fresh.startAt, endedAt: undefined });
-    await commit(ctx, fresh, newGame(players, room.rounds, now, COUNTDOWN_MS));
+    await commit(ctx, fresh, newGame(players, room.rounds, now, COUNTDOWN_MS, Math.random));
   },
 });
 
@@ -243,12 +243,25 @@ export const view = query({
         out: g.out,
         isPlayer: g.players.includes(me._id) && !g.out.includes(me._id),
         pos: g.pos,
+        boxes: g.boxes ?? {},
+        ladders: g.ladders ?? {},
+        snakes: g.snakes ?? {},
         turn: g.turn,
         phase: g.phase,
         round: g.round,
         maxRounds: g.maxRounds,
         log: g.log,
-        ask: g.ask && q ? { at: g.ask.at, kind: g.ask.kind, cat: q.cat, text: q.text, choices: g.ask.order.map((k) => q.choices[k]) } : null,
+        ask: g.ask && q
+          ? {
+              at: g.ask.at,
+              diff: g.ask.diff,
+              upTo: g.ask.upTo,
+              downTo: g.ask.downTo,
+              cat: q.cat,
+              text: q.text,
+              choices: g.ask.order.map((k) => q.choices[k]),
+            }
+          : null,
         deadline: g.deadline ?? null,
         done: g.done ?? null,
       },

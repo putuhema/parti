@@ -424,7 +424,7 @@ const GAMES: Game[] = [
   {
     href: "/ular",
     name: "Ular Tangga",
-    sub: "Snakes, ladders and a quiz on every square",
+    sub: "Mystery boxes spawn snakes & ladders",
     face: "#3FA77A",
     edge: "#2B7A50",
     ink: "#1F5C3B",

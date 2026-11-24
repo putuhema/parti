@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { api } from "../../../convex/_generated/api";
-import { ASK_MS, GOAL, GRID, LADDERS, ROLL_MS, SNAKES, catOf, cellOf, isBot, kindOf, onIsland } from "../../../convex/lib/ular/board";
+import { ASK_MS, DIFFICULTY_INFO, GOAL, GRID, ROLL_MS, catOf, cellOf, isBot, onIsland, type Difficulty } from "../../../convex/lib/ular/board";
 import { CATS } from "../../../convex/lib/trivia/board";
 import { Countdown, Toast } from "@/components/words/common";
 import { Confetti, Icon, Sheet } from "@/components/ui";
@@ -19,6 +19,11 @@ import { GAME_NAME, describe, useNameOf, type UlarEventView, type UlarGameView, 
 
 type NameOf = (id?: string | null) => string;
 type Banner = { n: number; text: string; tone: "good" | "bad" | "info"; e: UlarEventView };
+type BoardFeatures = {
+  boxes: Record<string, Difficulty>;
+  ladders: Record<string, number>;
+  snakes: Record<string, number>;
+};
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Orbwick's player inks: you are always plum; everyone else gets the next ink in seat order.
@@ -53,6 +58,14 @@ function pathOf(from: number, dice: number) {
     out.push(at);
   }
   return out;
+}
+
+function featuresOf(g: UlarGameView): BoardFeatures {
+  return {
+    boxes: { ...(g.boxes as Record<string, Difficulty>) },
+    ladders: { ...(g.ladders as Record<string, number>) },
+    snakes: { ...(g.snakes as Record<string, number>) },
+  };
 }
 
 export function UlarPlay({ room }: { room: UlarView }) {
@@ -107,9 +120,10 @@ export function UlarPlay({ room }: { room: UlarView }) {
     setTimeout(() => { setRot((r) => ((((r + d) % 4) + 4) % 4) as Rot); setTimeout(() => setFading(false), 30); }, 140);
   }
 
-  // ---- the board on screen lags the server while dice roll and figures hop, then catches up ----
+  // ---- the board on screen lags the server while dice roll, boxes spawn ladders/snakes, and figures move ----
   const [shown, setShown] = useState(live);
   const [tokens, setTokens] = useState<Record<string, number>>(live.pos);
+  const [board, setBoard] = useState<BoardFeatures>(() => featuresOf(live));
   const [dice, setDice] = useState({ face: 3, rolling: false });
   const [banner, setBanner] = useState<Banner | null>(null);
   const [stageEvent, setStageEvent] = useState<StageEvent>(null);
@@ -132,7 +146,12 @@ export function UlarPlay({ room }: { room: UlarView }) {
       setBanner(b);
       if (e.kind !== "roll" && e.kind !== "ask") setHistory((h) => [...h, b].slice(-5));
     };
-    setStageEvent({ n: e.n, kind: e.kind === "climb" ? "jackpot" : e.kind === "bite" ? "jail" : e.kind === "answer" ? (e.ok ? "lobby" : "skip") : e.kind, by: e.by, success: e.ok ?? undefined });
+    setStageEvent({
+      n: e.n,
+      kind: e.kind === "climb" ? "jackpot" : e.kind === "bite" ? "jail" : e.kind === "answer" ? (e.ok ? "lobby" : "skip") : e.kind,
+      by: e.by,
+      success: e.ok ?? undefined,
+    });
     if (e.kind === "roll") {
       setDice({ face: e.dice!, rolling: true });
       feedback.tick();
@@ -152,13 +171,29 @@ export function UlarPlay({ room }: { room: UlarView }) {
       if (e.ok) feedback.correct();
       else feedback.wrong();
     }
-    if (e.kind === "climb" || e.kind === "bite" || e.kind === "bonus") {
-      await sleep(e.kind === "bonus" ? 150 : 350);
+    if (e.kind === "climb" || e.kind === "bite") {
+      // Reveal the newly spawned ladder or snake right as the Mystery Box resolves!
+      if (e.spawned && e.from !== undefined && e.to !== undefined) {
+        const fromKey = String(e.from);
+        const dest = e.to;
+        setBoard((prev) => {
+          const nextBoxes = { ...prev.boxes };
+          delete nextBoxes[fromKey];
+          return {
+            boxes: nextBoxes,
+            ladders: e.kind === "climb" ? { ...prev.ladders, [fromKey]: dest } : prev.ladders,
+            snakes: e.kind === "bite" ? { ...prev.snakes, [fromKey]: dest } : prev.snakes,
+          };
+        });
+        await sleep(420);
+      } else {
+        await sleep(320);
+      }
       setTokens((t) => ({ ...t, [e.by]: e.to! }));
       if (e.kind === "climb" && e.by === room.meId) feedback.correct();
       if (e.kind === "bite" && e.by === room.meId) feedback.wrong();
     }
-    await sleep(e.kind === "answer" ? 1700 : e.kind === "climb" ? 1000 : e.kind === "bite" ? 1200 : e.kind === "win" ? 1200 : 450);
+    await sleep(e.kind === "answer" ? 1700 : e.kind === "climb" ? 1050 : e.kind === "bite" ? 1200 : e.kind === "win" ? 1200 : 450);
   }
 
   useEffect(() => {
@@ -173,6 +208,7 @@ export function UlarPlay({ room }: { room: UlarView }) {
           lastN.current = g.log.at(-1)?.n ?? lastN.current;
           setShown(g);
           setTokens(g.pos);
+          setBoard(featuresOf(g));
           break;
         }
         for (const e of fresh) {
@@ -225,7 +261,9 @@ export function UlarPlay({ room }: { room: UlarView }) {
   const headline = g.done ? "Game over." : g.turn === room.meId ? "Your move." : `${nameOf(g.turn)}'s move.`;
   const mine = g.turn === room.meId;
   const status = ask
-    ? mine ? `${CATS[ask.cat].icon} ${CATS[ask.cat].name}: answer to ${ask.kind === "ladder" ? "climb!" : ask.kind === "snake" ? "dodge the ular!" : "earn a bonus step"}` : `${nameOf(g.turn)} is answering…`
+    ? mine
+      ? `🎁 ${"★".repeat(DIFFICULTY_INFO[ask.diff].stars)} Mystery Box: right = 🪜 #${ask.upTo}, wrong = 🐍 #${ask.downTo}`
+      : `${nameOf(g.turn)} opened a Mystery Box…`
     : !settled ? "…" : g.done ? "" : mine ? "Roll the die!" : `${nameOf(g.turn)} is rolling…`;
 
   const players = (
@@ -251,7 +289,7 @@ export function UlarPlay({ room }: { room: UlarView }) {
         <div className="ow-log jn-log">
           <span className="ow-loglabel">Kabar terbaru</span>
           <ol className="jn-history">
-            {history.length ? [...history].reverse().map((h) => <li key={h.n} className={h.tone}><i style={{ background: inkOf(h.e.by) }} />{h.text}</li>) : <li>Roll, answer, climb. Mind the ular.</li>}
+            {history.length ? [...history].reverse().map((h) => <li key={h.n} className={h.tone}><i style={{ background: inkOf(h.e.by) }} />{h.text}</li>) : <li>Hit Mystery Boxes (?) to spawn ladders — miss and unleash snakes!</li>}
           </ol>
         </div>
       </aside>
@@ -282,10 +320,20 @@ export function UlarPlay({ room }: { room: UlarView }) {
                 <span key={`s${p.x},${p.y}`} className="jn-dioprop sea" style={{ left: p.x, top: p.y + DEPTH + SLAB, zIndex: 1 }} aria-hidden="true"><Diorama scene={p.scene} /></span>
               ))}
               {Array.from({ length: GOAL }, (_, k) => k + 1).map((sq) => (
-                <Square key={sq} sq={sq} x={at[sq].x} y={at[sq].y} z={at[sq].z} hot={ask?.at === sq} />
+                <Square
+                  key={sq}
+                  sq={sq}
+                  x={at[sq].x}
+                  y={at[sq].y}
+                  z={at[sq].z}
+                  hot={ask?.at === sq}
+                  box={board.boxes[String(sq)]}
+                  hasLadder={Boolean(board.ladders[String(sq)])}
+                  hasSnake={Boolean(board.snakes[String(sq)])}
+                />
               ))}
               <span className="jn-dioprop" style={{ left: at[0].x, top: at[0].y + DEPTH - 6, zIndex: at[0].z * 2 + 1 }} aria-hidden="true"><Diorama scene="start" /></span>
-              <SnakesAndLadders at={at} w={world.w} h={world.h} />
+              <SnakesAndLadders at={at} w={world.w} h={world.h} ladders={board.ladders} snakes={board.snakes} />
               <BoardStage
                 boardRef={boardRef}
                 centers={at}
@@ -325,43 +373,88 @@ export function UlarPlay({ room }: { room: UlarView }) {
   );
 }
 
-/** One numbered square: a block in its category's colour, the number and category laid flat on top. */
-function Square({ sq, x, y, z, hot }: { sq: number; x: number; y: number; z: number; hot: boolean }) {
+/** One numbered square: clean island tiles for plain squares, glowing Mystery Box tiles for unrevealed questions. */
+function Square({
+  sq,
+  x,
+  y,
+  z,
+  hot,
+  box,
+  hasLadder,
+  hasSnake,
+}: {
+  sq: number;
+  x: number;
+  y: number;
+  z: number;
+  hot: boolean;
+  box?: Difficulty;
+  hasLadder: boolean;
+  hasSnake: boolean;
+}) {
   const c = CATS[catOf(sq)];
-  const k = kindOf(sq);
+  const info = box ? DIFFICULTY_INFO[box] : null;
   const { x: ax, y: ay } = ANCHOR;
   const l = ax - TW / 2, r = ax + TW / 2, t = ay - TH / 2, b = ay + TH / 2;
   const S = { stroke: "#231B1A", strokeWidth: 2, strokeLinejoin: "round" as const };
-  const top = sq === GOAL ? "#F4C64E" : c.soft;
+  const top = sq === GOAL ? "#F4C64E" : info ? "#FFF7DC" : sq % 2 === 0 ? "#F7F1E3" : "#EFE6D2";
+  const sideL = info ? info.color : c.face;
+  const sideR = info ? info.ink : c.edge;
+  const label = `Square ${sq}${info ? `, ${info.label} mystery box` : hasLadder ? ", foot of a ladder" : hasSnake ? ", snake's head" : ""}`;
+
   return (
-    <div className={`jn-it ul-sq${hot ? " offer" : ""}`} style={{ left: x - ANCHOR.x, top: y - ANCHOR.y, zIndex: z * 2 }} aria-label={`Square ${sq}, ${c.name}${k === "ladder" ? ", foot of a ladder" : k === "snake" ? ", a snake's head" : ""}`}>
+    <div className={`jn-it ul-sq${hot ? " offer" : ""}${info ? ` ul-box ul-box-${box}` : ""}`} style={{ left: x - ANCHOR.x, top: y - ANCHOR.y, zIndex: z * 2 }} aria-label={label}>
       <svg className="jn-itart" viewBox={`0 0 ${TILE} ${TILE}`} aria-hidden="true">
-        <polygon points={`${l},${ay} ${ax},${b} ${ax},${b + DEPTH} ${l},${ay + DEPTH}`} fill={c.face} {...S} />
-        <polygon points={`${ax},${b} ${r},${ay} ${r},${ay + DEPTH} ${ax},${b + DEPTH}`} fill={c.edge} {...S} />
+        <polygon points={`${l},${ay} ${ax},${b} ${ax},${b + DEPTH} ${l},${ay + DEPTH}`} fill={sideL} {...S} />
+        <polygon points={`${ax},${b} ${r},${ay} ${r},${ay + DEPTH} ${ax},${b + DEPTH}`} fill={sideR} {...S} />
         <polygon points={`${ax},${t} ${r},${ay} ${ax},${b} ${l},${ay}`} fill={top} {...S} />
       </svg>
       <span className="jn-itface ul-face">
-        <i className="jn-itband" style={{ background: c.face }} />
-        <b className="ul-num">{sq === GOAL ? "🏁" : sq}</b>
-        <span className="ul-cat">{sq === GOAL ? "FINISH" : c.icon}</span>
+        <i className="jn-itband" style={{ background: info ? info.color : c.face, opacity: info ? 1 : 0.45 }} />
+        {info ? (
+          <>
+            <b className="ul-num ul-qmark" style={{ color: info.ink }}>?</b>
+            <span className="ul-stars" style={{ color: info.color }}>{"★".repeat(info.stars)}</span>
+          </>
+        ) : (
+          <>
+            <b className="ul-num">{sq === GOAL ? "🏁" : sq}</b>
+            {sq === GOAL && <span className="ul-cat">FINISH</span>}
+          </>
+        )}
       </span>
     </div>
   );
 }
 
-/** Ladders (wooden, lying across the squares) and snakes (slithering), drawn over the board in world pixels. */
-function SnakesAndLadders({ at, w, h }: { at: { x: number; y: number }[]; w: number; h: number }) {
-  const ladders = Object.entries(LADDERS).map(([f, t]) => [Number(f), t] as const);
-  const snakes = Object.entries(SNAKES).map(([hd, tl]) => [Number(hd), tl] as const);
+/** Dynamically spawned ladders (wooden, lying across the squares) and snakes (slithering), drawn in world pixels. */
+function SnakesAndLadders({
+  at,
+  w,
+  h,
+  ladders: ladderMap,
+  snakes: snakeMap,
+}: {
+  at: { x: number; y: number }[];
+  w: number;
+  h: number;
+  ladders: Record<string, number>;
+  snakes: Record<string, number>;
+}) {
+  const ladders = Object.entries(ladderMap).map(([f, t]) => [Number(f), t] as const);
+  const snakes = Object.entries(snakeMap).map(([hd, tl]) => [Number(hd), tl] as const);
+  if (!ladders.length && !snakes.length) return null;
   return (
     <svg className="ul-sl" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
       {ladders.map(([f, t]) => {
         const a = at[f], b = at[t];
-        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len, nx = -uy * 11, ny = ux * 11;
+        if (!a || !b) return null;
+        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, nx = -uy * 11, ny = ux * 11;
         const rungs = Math.max(2, Math.floor(len / 22));
         const rail = (s: number) => `M${a.x + nx * s} ${a.y + ny * s} L${b.x + nx * s} ${b.y + ny * s}`;
         return (
-          <g key={`l${f}`} className="ul-ladder">
+          <g key={`l${f}`} className="ul-ladder ul-spawn">
             <path d={`${rail(1)} ${rail(-1)}`} transform="translate(0 7)" stroke="#231B1A" strokeOpacity=".18" strokeWidth="8" strokeLinecap="round" />
             {Array.from({ length: rungs }, (_, k) => {
               const p = (k + 0.5) / rungs, cx = a.x + dx * p, cy = a.y + dy * p;
@@ -378,13 +471,14 @@ function SnakesAndLadders({ at, w, h }: { at: { x: number; y: number }[]; w: num
       })}
       {snakes.map(([hd, tl], k) => {
         const a = at[hd], b = at[tl];
-        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy), nx = -dy / len, ny = dx / len;
-        const amp = Math.min(70, len * 0.28) * (k % 2 ? 1 : -1);
+        if (!a || !b) return null;
+        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
+        const amp = Math.min(70, len * 0.28) * (hd % 2 ? 1 : -1);
         const d = `M${a.x} ${a.y} C${a.x + dx * 0.3 + nx * amp} ${a.y + dy * 0.3 + ny * amp} ${a.x + dx * 0.7 - nx * amp} ${a.y + dy * 0.7 - ny * amp} ${b.x} ${b.y}`;
-        const col = SNAKE_COLS[k % SNAKE_COLS.length];
+        const col = SNAKE_COLS[(hd + k) % SNAKE_COLS.length];
         const ang = (Math.atan2(dy * 0.3 + ny * amp, dx * 0.3 + nx * amp) * 180) / Math.PI;
         return (
-          <g key={`s${hd}`} className="ul-snake">
+          <g key={`s${hd}`} className="ul-snake ul-spawn">
             <path d={d} transform="translate(0 7)" fill="none" stroke="#231B1A" strokeOpacity=".16" strokeWidth="16" strokeLinecap="round" />
             <path d={d} fill="none" stroke="#231B1A" strokeWidth="17" strokeLinecap="round" />
             <path d={d} fill="none" stroke={col} strokeWidth="12" strokeLinecap="round" />
@@ -402,17 +496,27 @@ function SnakesAndLadders({ at, w, h }: { at: { x: number; y: number }[]; w: num
   );
 }
 
-/** The question for whoever landed: four choices for them, a read-along for everyone else. */
+/** The Mystery Box question: shows difficulty & exact ladder/snake stakes before answering. */
 function QuestionCard({ ask, act, busy, who, ink, deadline, picked, onPick }: {
   ask: NonNullable<UlarGameView["ask"]>; act: boolean; busy: boolean; who: string; ink: string; deadline?: number | null; picked: number | null; onPick: (k: number) => void;
 }) {
   const c = CATS[ask.cat];
-  const stakes = ask.kind === "ladder" ? `🪜 Tangga! Right answer climbs to ${LADDERS[ask.at]}` : ask.kind === "snake" ? `🐍 Kepala ular! Wrong answer slides to ${SNAKES[ask.at]}` : "✨ Right answer: a bonus step";
+  const info = DIFFICULTY_INFO[ask.diff];
+  const upDist = ask.upTo - ask.at;
+  const downDist = ask.at - ask.downTo;
   return (
     <div className={`jn-card ul-q${act ? " act" : ""}`} style={{ "--cat": c.face, "--catsoft": c.soft, "--catink": c.ink, "--f": ink } as CSSProperties}>
-      <span className="jn-landband" style={{ background: c.face }} />
-      <span className="jn-cardtag ul-cattag">{c.icon} {c.name.toUpperCase()} · KOTAK {ask.at}</span>
-      <p className={`ul-stakes ${ask.kind}`}>{stakes}</p>
+      <span className="jn-landband" style={{ background: info.color }} />
+      <div className="ul-cardhead">
+        <span className="jn-cardtag ul-cattag">{c.icon} {c.name.toUpperCase()} · #{ask.at}</span>
+        <span className="ul-diff" style={{ background: info.color, color: ask.diff === "medium" ? "#231B1A" : "#F3EDE0" }}>
+          {"★".repeat(info.stars)} {info.label.toUpperCase()}
+        </span>
+      </div>
+      <div className="ul-stakes-row">
+        <span className="ul-stakes ladder">🪜 Right → #{ask.upTo} (+{upDist})</span>
+        <span className="ul-stakes snake">🐍 Wrong → #{ask.downTo} (−{downDist})</span>
+      </div>
       <p className="ul-qtext">{ask.text}</p>
       <div className="ul-choices">
         {ask.choices.map((ch, k) => (
@@ -450,17 +554,19 @@ function QTimer({ deadline }: { deadline?: number | null }) {
 /** The answer, revealed for everyone: the right choice in green, a wrong pick in coral. */
 function Reveal({ e, who }: { e: UlarEventView; who: string }) {
   const c = CATS[e.cat ?? 0];
+  const outcome = e.ok && e.upTo ? `🪜 Tangga spawned → #${e.upTo}!` : !e.ok && e.downTo ? `🐍 Ular unleashed → #${e.downTo}!` : "";
   return (
     <div className="jn-card ul-q reveal" style={{ "--cat": c.face, "--catsoft": c.soft } as CSSProperties}>
-      <span className="jn-landband" style={{ background: c.face }} />
+      <span className="jn-landband" style={{ background: e.ok ? "#3FA77A" : "#E2574C" }} />
       <span className="jn-cardtag ul-cattag">{c.icon} {c.name.toUpperCase()}</span>
+      {outcome && <p className={`ul-stakes ${e.ok ? "ladder" : "snake"}`}>{outcome}</p>}
       <p className="ul-qtext">{e.text}</p>
       <div className="ul-choices">
         {(e.choices ?? []).map((ch, k) => (
           <span key={k} className={`ul-choice${k === e.right ? " right" : k === e.pick ? " wrong" : ""}`}><i>{"ABCD"[k]}</i>{ch}</span>
         ))}
       </div>
-      <b className={`jn-qtestamp ul-stamp${e.ok ? " ok" : ""}`}>{e.ok ? "BENAR!" : e.pick === -1 ? "WAKTU HABIS" : "SALAH!"}</b>
+      <b className={`jn-qtestamp ul-stamp${e.ok ? " ok" : ""}`}>{e.ok ? "TANGGA!" : e.pick === -1 ? "ULAR!" : "ULAR!"}</b>
       <p className="jn-cardwho">{who}</p>
     </div>
   );

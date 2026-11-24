@@ -12,9 +12,9 @@ import { feedback } from "@/lib/feedback";
 import { useIdentity } from "@/lib/identity";
 
 const STEPS: [string, string][] = [
-  ["Roll and answer", "Roll the die and move. Every square you land on asks a trivia question in its colour's category."],
-  ["Climb the tangga", "Land at the foot of a ladder and answer right to climb it. Anywhere plain, a right answer is a bonus step."],
-  ["Dodge the ular", "Land on a snake's head and answer right to stay put, or slide all the way down its tail."],
+  ["Clean board, random boxes", "The island starts with no snakes or ladders — only scattered Mystery Boxes (?) rated ★ Easy, ★★ Medium, or ★★★ Hard."],
+  ["Right answer = Tangga", "Answer a Mystery Box correctly and it permanently turns into a ladder that you climb right away."],
+  ["Wrong answer = Ular", "Miss the question and it spawns a permanent snake that slides you down. Harder questions mean huge climbs or brutal drops!"],
 ];
 
 export default function UlarHome() {
