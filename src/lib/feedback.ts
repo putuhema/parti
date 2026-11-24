@@ -151,4 +151,35 @@ export const feedback = {
   ping() {
     tone(1200, 0, 0.06, "sine", 0.07);
   },
+  /** Tactile 3D dice toss rattle: quick organic clicks as the die tumbles in the air. */
+  diceToss() {
+    const clicks = [
+      [520, 0.0],
+      [680, 0.07],
+      [590, 0.15],
+      [760, 0.24],
+      [640, 0.35],
+    ];
+    for (const [f, t] of clicks) {
+      tone(f, t, 0.032, "triangle", 0.085);
+      tone(f * 0.42, t, 0.028, "sine", 0.07);
+    }
+    buzz([8, 45, 8, 55, 10]);
+  },
+  /** Satisfying woody vinyl thud + crisp snap when the 3D die lands (extra sparkle chime on a 6). */
+  diceLand(face: number) {
+    // Bounce 1 thud + click
+    tone(135, 0, 0.11, "sine", 0.19);
+    tone(480, 0.005, 0.045, "triangle", 0.12);
+    // Bounce 2 smaller settle tap
+    tone(175, 0.17, 0.065, "sine", 0.11);
+    tone(560, 0.175, 0.032, "triangle", 0.08);
+    if (face === 6) {
+      tone(880, 0.20, 0.12, "triangle", 0.14);
+      tone(1318, 0.27, 0.18, "triangle", 0.14);
+      buzz([20, 35, 28]);
+    } else {
+      buzz([16, 40, 10]);
+    }
+  },
 };

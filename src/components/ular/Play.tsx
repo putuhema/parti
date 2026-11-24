@@ -13,7 +13,8 @@ import { feedback } from "@/lib/feedback";
 import { BoardStage, type StageEvent } from "@/components/boom/BoardStage";
 import { IsoGround, type LandCell } from "@/components/boom/IsoBoard";
 import { Diorama } from "@/components/boom/Diorama";
-import { Die, Head, TimerRing } from "@/components/boom/Play";
+import { Head, TimerRing } from "@/components/boom/Play";
+import { Dice3D } from "./Dice3D";
 import { ANCHOR, DEPTH, SLAB, TH, TILE, TW, place, turn, turnedSize, worldSize, type Rot } from "@/components/boom/iso";
 import { GAME_NAME, describe, useNameOf, type UlarEventView, type UlarGameView, type UlarView } from "./common";
 
@@ -124,7 +125,7 @@ export function UlarPlay({ room }: { room: UlarView }) {
   const [shown, setShown] = useState(live);
   const [tokens, setTokens] = useState<Record<string, number>>(live.pos);
   const [board, setBoard] = useState<BoardFeatures>(() => featuresOf(live));
-  const [dice, setDice] = useState({ face: 3, rolling: false });
+  const [dice, setDice] = useState({ face: 3, spinId: 0, rolling: false });
   const [banner, setBanner] = useState<Banner | null>(null);
   const [stageEvent, setStageEvent] = useState<StageEvent>(null);
   const [history, setHistory] = useState<Banner[]>([]);
@@ -153,12 +154,11 @@ export function UlarPlay({ room }: { room: UlarView }) {
       success: e.ok ?? undefined,
     });
     if (e.kind === "roll") {
-      setDice({ face: e.dice!, rolling: true });
-      feedback.tick();
-      await sleep(600);
-      setDice({ face: e.dice!, rolling: false });
+      setDice((prev) => ({ face: e.dice!, spinId: prev.spinId + 1, rolling: true }));
+      await sleep(860);
       say();
-      await sleep(200);
+      await sleep(340);
+      setDice((prev) => ({ ...prev, rolling: false }));
       for (const sq of pathOf(e.from!, e.dice!)) {
         setTokens((t) => ({ ...t, [e.by]: sq }));
         if (e.by === room.meId) feedback.tap();
@@ -258,6 +258,8 @@ export function UlarPlay({ room }: { room: UlarView }) {
   }
   const camera = `translate(${(hud.left + viewW / 2 - camX * sc).toFixed(1)}px, ${(hud.top + viewH / 2 - camY * sc).toFixed(1)}px) scale(${sc.toFixed(4)})`;
 
+  const canRollNow = myTurn && g.phase === "roll" && !dice.rolling;
+  const showDie = !g.done && !ask && !reveal && (dice.rolling || sending || canRollNow);
   const headline = g.done ? "Game over." : g.turn === room.meId ? "Your move." : `${nameOf(g.turn)}'s move.`;
   const mine = g.turn === room.meId;
   const status = ask
@@ -301,7 +303,6 @@ export function UlarPlay({ room }: { room: UlarView }) {
             <h2 className="jn-headline">{headline}</h2>
             <p className="jn-turnpill" style={{ "--f": inkOf(g.turn) } as CSSProperties} aria-live="polite"><i />{status || headline}</p>
             <div className="jn-hudrow">
-              <span className="jn-dice" role="img" aria-label={dice.rolling ? "Die rolling" : `Die shows ${dice.face}`}><Die face={dice.face} rolling={dice.rolling} /></span>
               <p key={banner?.n ?? "hello"} className={`jn-banner ${banner?.tone ?? ""}`} aria-live="polite">{banner?.text ?? "First to 100 wins."}</p>
             </div>
           </div>
@@ -353,18 +354,30 @@ export function UlarPlay({ room }: { room: UlarView }) {
                 <Reveal key={reveal.n} e={reveal} who={nameOf(reveal.by)} />
               </div>
             ) : null}
+            {!g.done && (
+              <div className={`ul-centerdie${dice.rolling ? " spinning" : ""}${showDie ? "" : " hide"}`} aria-hidden={!showDie || undefined}>
+                <Dice3D
+                  face={dice.face}
+                  spinId={dice.spinId}
+                  canRoll={canRollNow}
+                  busy={sending && g.phase === "roll"}
+                  visible={showDie}
+                  ink={inkOf(g.turn)}
+                  onRoll={() => send({ kind: "roll" })}
+                />
+                {canRollNow && (
+                  <div className="ul-rollcta">
+                    <span className="ul-rollring"><TimerRing deadline={live.deadline} total={ROLL_MS} /></span>
+                    <button type="button" className="ul-rollpill" disabled={sending} onClick={() => send({ kind: "roll" })}>
+                      TAP TO ROLL
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
-
-      {myTurn && g.phase === "roll" && (
-        <div className="jn-act roll">
-          <TimerRing deadline={live.deadline} total={ROLL_MS} />
-          <button type="button" className="jn-rollbtn" disabled={sending} onClick={() => send({ kind: "roll" })} aria-label="Roll the die">
-            <span aria-hidden="true">🎲</span><b>ROLL</b>
-          </button>
-        </div>
-      )}
 
       <Toast toast={toast} onDone={() => setToast(null)} />
       {room.startAt && !g.done && <Countdown startAt={room.startAt} label={live.turn === room.meId ? "You roll first" : `${nameOf(live.turn)} rolls first`} />}

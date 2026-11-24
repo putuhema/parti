@@ -1432,13 +1432,55 @@ button.ul-choice:disabled { cursor: default; }
 .ul-stamp { top: 58%; background: var(--ow-coral); color: var(--ow-bone); font-size: 24px; }
 .ul-stamp.ok { background: var(--ow-moss); }
 .ul-q.reveal .ul-choice { box-shadow: 2px 2px 0 var(--ow-ink); }
+.ul-centerdie {
+  position: absolute; inset: 0; z-index: 22; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  opacity: 1; transform: scale(1);
+  transition: opacity 220ms ease, transform 280ms cubic-bezier(.34,1.56,.64,1);
+}
+.ul-centerdie.hide { opacity: 0; transform: scale(.74); pointer-events: none; }
+.ul-centerdie.hide * { pointer-events: none !important; }
+.ul-die3d { position: relative; width: 196px; height: 196px; display: grid; place-items: center; }
+.ul-die3d-hit {
+  position: relative; width: 100%; height: 100%; border: 0; padding: 0; background: none;
+  display: grid; place-items: center; pointer-events: none;
+}
+.ul-die3d.ready .ul-die3d-hit { pointer-events: auto; cursor: pointer; }
+.ul-die3d.ready::before {
+  content: ""; position: absolute; width: 136px; height: 136px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(244, 198, 78, 0.36) 0%, rgba(244, 198, 78, 0) 70%);
+  pointer-events: none; animation: ul-diehalo 1.8s ease-in-out infinite;
+}
+@keyframes ul-diehalo { 0%, 100% { transform: scale(.92); opacity: .75; } 50% { transform: scale(1.12); opacity: 1; } }
+.ul-die3d-canvas { width: 196px; height: 196px; display: block; filter: drop-shadow(0 12px 18px rgba(35, 27, 26, 0.24)); }
+.ul-die3d-num {
+  position: absolute; top: 8px; right: 14px; padding: 4px 12px; border-radius: 999px;
+  background: #FAF0E2; color: var(--ow-ink); border: 2.5px solid var(--ow-ink);
+  box-shadow: 0 3px 0 var(--ow-ink); font-size: 20px; font-weight: 900; line-height: 1.1;
+  animation: jn-bidpop 340ms cubic-bezier(.3,1.7,.5,1) both;
+}
+.ul-die3d-num.six { background: #F4C64E; color: #3D2400; font-size: 22px; }
+.ul-rollcta {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; margin-top: -12px;
+}
+.ul-rollring { position: relative; width: 40px; height: 40px; display: grid; place-items: center; flex-shrink: 0; }
+.ul-rollpill {
+  border: 2.5px solid var(--ow-ink); border-radius: 999px; padding: 10px 22px;
+  background: linear-gradient(180deg, #FFD35C 0%, #F4B82E 100%); color: #231B1A;
+  font-size: 14px; font-weight: 900; letter-spacing: .08em; cursor: pointer;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 4px 0 var(--ow-ink), 0 10px 18px rgba(35,27,26,0.24);
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+}
+.ul-rollpill:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+.ul-rollpill:disabled { opacity: .65; cursor: default; }
 @media (min-width: 1000px) {
+  .ul-die3d, .ul-die3d-canvas { width: 224px; height: 224px; }
   .ul-q { width: 460px; }
   .ul-qtext { font-size: 20px; }
   .ul-choices { grid-template-columns: 1fr 1fr; }
   .ul-choice { min-height: 52px; font-size: 16px; }
 }
-@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .ul-slither, .ul-tongue { animation: none; } [class*="jn-anim-"], .jn-fronds, .jn-flag, .jn-bob, .jn-sheet, .jn-bobber, .jn-ripple, .jn-catchart { animation: none !important; } .jn-leap { opacity: 1; animation: none; } .jn-dioblink { animation: none; } .jn-gavel, .jn-bid { animation: none; } .jn-slottop i, .jn-slot, .jn-reel.stop b { animation: none; } .jn-rollbtn, .jn-act { animation: none; } .jn-tapcall { animation: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .ul-slither, .ul-tongue, .ul-die3d.ready::before, .ul-die3d-num, .ul-spawn { animation: none; } .ul-centerdie { transition: none; } [class*="jn-anim-"], .jn-fronds, .jn-flag, .jn-bob, .jn-sheet, .jn-bobber, .jn-ripple, .jn-catchart { animation: none !important; } .jn-leap { opacity: 1; animation: none; } .jn-dioblink { animation: none; } .jn-gavel, .jn-bid { animation: none; } .jn-slottop i, .jn-slot, .jn-reel.stop b { animation: none; } .jn-rollbtn, .jn-act { animation: none; } .jn-tapcall { animation: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
 
 /* ---------- Sketch Match ---------- */
 .sk-screen { min-height: 100dvh; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }

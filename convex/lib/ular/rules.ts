@@ -90,7 +90,7 @@ export type Rng = () => number;
 
 /** How long phones spend showing one event; the server waits this long before the next deadline starts. */
 export function eventMs(e: UlarEvent): number {
-  if (e.kind === "roll") return 750 + Math.abs((e.to ?? 0) - (e.from ?? 0)) * 230;
+  if (e.kind === "roll") return 1200 + Math.abs((e.to ?? 0) - (e.from ?? 0)) * 230;
   if (e.kind === "ask") return 300;
   if (e.kind === "answer") return 1700;
   if (e.kind === "climb") return e.spawned ? 1550 : 1300;
