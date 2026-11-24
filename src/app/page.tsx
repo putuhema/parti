@@ -40,6 +40,7 @@ const GAMES: Game[] = [
     ink: "#991E32",
     cats: ["brain", "party"],
     tag: "NEW",
+    thumb: "/games/risk.jpg",
     art: (
       <span style={{ position: "relative", width: 106, height: 92, display: "flex", alignItems: "center", justifyContent: "center" }} aria-hidden="true">
         <span style={{ position: "absolute", width: 82, height: 64, borderRadius: 20, background: "linear-gradient(180deg,#8EDBFF,#4BB0EC)", boxShadow: "inset 0 2px 0 rgba(255,255,255,.65), 0 4px 0 rgba(0,0,0,.22)", transform: "rotate(-6deg)" }} />
@@ -448,6 +449,7 @@ const GAMES: Game[] = [
     edge: "#2B7A50",
     ink: "#1F5C3B",
     cats: ["party", "brain"],
+    thumb: "/games/ular.jpg",
     art: (
       <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gridTemplateRows: "repeat(3, 28px)", gap: 3, transform: "rotate(-6deg)" }} aria-hidden="true">
         {["#1CB0F6", "#58CC02", "#FFC800", "#CE82FF", "#FF9600", "#FF4B4B", "#58CC02", "#1CB0F6", "#FFC800"].map((c, i) => (

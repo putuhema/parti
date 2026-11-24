@@ -35,7 +35,12 @@ const SLUGS = [
   "sketch",
   "boom",
   "tiles",
+  "ular",
+  "risk",
 ];
+
+const ONLY = process.argv.slice(2).filter((s) => SLUGS.includes(s));
+const TARGET_SLUGS = ONLY.length ? ONLY : SLUGS;
 
 const RENDER_HTML = `<!doctype html>
 <html>
@@ -991,14 +996,164 @@ const BUILDERS = {
     stage.add(grp);
     return scene;
   },
+
+  ular() {
+    const { scene, stage } = makeScene("#47c98d", "#1b744b");
+    const board = new THREE.Group();
+    board.rotation.set(0.54, -0.44, 0.14);
+    board.position.set(0, -0.14, 0);
+    board.scale.setScalar(0.92);
+
+    // Chunky cream vinyl island board slab
+    const slab = new THREE.Mesh(new RoundedBoxGeometry(2.15, 0.24, 2.15, 5, 0.16), matVinyl(C.cream, 0.44));
+    board.add(slab);
+
+    // 4x4 miniature toy tiles
+    const tileCols = [C.creamWarm, C.sky, C.butter, C.mint, C.coral, C.iris, C.creamWarm, C.butter];
+    for (let gx = 0; gx < 4; gx++) {
+      for (let gz = 0; gz < 4; gz++) {
+        const isBox = gx === 1 && gz === 2;
+        if (isBox) continue;
+        const t = new THREE.Mesh(
+          new RoundedBoxGeometry(0.42, 0.08, 0.42, 3, 0.05),
+          matVinyl(tileCols[(gx * 3 + gz) % tileCols.length], 0.46),
+        );
+        t.position.set(-0.69 + gx * 0.46, 0.14, -0.69 + gz * 0.46);
+        board.add(t);
+      }
+    }
+
+    // Golden Mystery Box ("?") standing proud in the front-center-left
+    const mbox = makeLetterTile("?", "#ffbe3b", "#4a2d00", "", 0.48, 0.48, 0.48);
+    mbox.position.set(-0.18, 0.40, 0.44);
+    mbox.rotation.set(-0.14, 0.28, 0.04);
+    board.add(mbox);
+
+    // Sculpted honey-wood 3D ladder leaning cleanly along the left side (all rungs clearly visible!)
+    const ladder = new THREE.Group();
+    const woodMat = matVinyl(0xc97b2e, 0.36);
+    const railGeo = new THREE.CylinderGeometry(0.056, 0.056, 1.56, 14);
+    const rL = new THREE.Mesh(railGeo, woodMat); rL.position.x = -0.19;
+    const rR = new THREE.Mesh(railGeo, woodMat); rR.position.x = 0.19;
+    ladder.add(rL, rR);
+    const rungGeo = new THREE.CylinderGeometry(0.044, 0.044, 0.40, 12);
+    for (let i = -2; i <= 2; i++) {
+      const rung = new THREE.Mesh(rungGeo, matVinyl(0xf5bf6c, 0.34));
+      rung.rotation.z = Math.PI / 2;
+      rung.position.y = i * 0.27;
+      ladder.add(rung);
+    }
+    ladder.position.set(-0.78, 0.66, -0.34);
+    ladder.rotation.set(0.55, 0.42, -0.22);
+    board.add(ladder);
+
+    // Glossy S-curved coral toy snake on the right side
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.64, 0.30, -0.56),
+      new THREE.Vector3(0.28, 0.34, -0.18),
+      new THREE.Vector3(0.74, 0.32, 0.24),
+      new THREE.Vector3(0.38, 0.24, 0.62),
+      new THREE.Vector3(0.68, 0.21, 0.84),
+    ]);
+    const snakeBody = new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.11, 14, false), matGloss(C.coral, 0.22));
+    board.add(snakeBody);
+    const snakeHead = new THREE.Mesh(new THREE.SphereGeometry(0.165, 20, 16), matGloss(C.coral, 0.2));
+    snakeHead.scale.set(1.1, 0.86, 1.2);
+    snakeHead.position.set(0.64, 0.34, -0.60);
+    board.add(snakeHead);
+    const eyeGeo = new THREE.SphereGeometry(0.052, 12, 10);
+    const pupilGeo = new THREE.SphereGeometry(0.028, 10, 8);
+    for (const sx of [-0.072, 0.072]) {
+      const ew = new THREE.Mesh(eyeGeo, matGloss(C.white, 0.15));
+      ew.position.set(0.64 + sx, 0.44, -0.56);
+      const ep = new THREE.Mesh(pupilGeo, matGloss(C.plum, 0.15));
+      ep.position.set(0.64 + sx, 0.46, -0.52);
+      board.add(ew, ep);
+    }
+
+    // Floating 3D vinyl die hovering above the board
+    const die = makeDie(0.54, C.cream, C.plum);
+    die.position.set(0.18, 1.06, -0.04);
+    die.rotation.set(0.42, 0.56, -0.22);
+    board.add(die);
+
+    const sp1 = makeSpark4(0.14, C.butter); sp1.position.set(-0.96, 1.08, 0.18); board.add(sp1);
+    const sp2 = makeSpark4(0.12, C.white); sp2.position.set(0.84, 0.98, -0.14); board.add(sp2);
+
+    stage.add(board);
+    return scene;
+  },
+
+  risk() {
+    const { scene, stage } = makeScene("#ff6a7e", "#a81e36");
+    const grp = new THREE.Group();
+    grp.rotation.set(0.46, -0.28, 0.04);
+    grp.position.set(0, -0.20, 0);
+    grp.scale.setScalar(0.90);
+
+    // Chunky circular Toybox Ocean table map
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(1.18, 1.22, 0.24, 48), matVinyl(C.cream, 0.4));
+    const sea = new THREE.Mesh(new THREE.CylinderGeometry(1.08, 1.08, 0.27, 48), matGloss(0x3ab6f7, 0.24));
+    grp.add(rim, sea);
+
+    // 3 sculpted colorful 3D continents rising cleanly from the sea
+    const addLand = (x, z, w, d, rotY, col) => {
+      const m = new THREE.Mesh(new RoundedBoxGeometry(w, 0.16, d, 4, 0.07), matVinyl(col, 0.42));
+      m.position.set(x, 0.16, z);
+      m.rotation.y = rotY;
+      grp.add(m);
+    };
+    addLand(-0.48, -0.16, 0.72, 0.62, 0.28, C.mint);
+    addLand(0.46, -0.18, 0.74, 0.58, -0.22, C.butter);
+    addLand(0.02, 0.48, 0.84, 0.48, 0.10, C.iris);
+
+    // Cute glossy Toybox Army Pawns standing cleanly in front of the continents
+    const makePawn = (col) => {
+      const p = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.15, 0.30, 18), matGloss(col, 0.22));
+      base.position.y = 0.15;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 18, 14), matGloss(col, 0.2));
+      head.position.y = 0.36;
+      p.add(base, head);
+      return p;
+    };
+    const p1 = makePawn(C.iris); p1.position.set(-0.58, 0.22, -0.02);
+    const p2 = makePawn(C.coral); p2.position.set(0.58, 0.22, -0.02);
+    const p3 = makePawn(C.mint); p3.position.set(-0.22, 0.22, 0.48);
+    grp.add(p1, p2, p3);
+
+    // Golden victory flag clearly separated on the front-right corner of purple continent
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.54, 10), matGloss(C.cream, 0.25));
+    pole.position.set(0.24, 0.48, 0.50);
+    const flag = new THREE.Mesh(new RoundedBoxGeometry(0.28, 0.18, 0.04, 3, 0.02), matGloss(C.mango, 0.22));
+    flag.position.set(0.38, 0.65, 0.50);
+    grp.add(pole, flag);
+
+    // Twin clashing 3D Battle Dice hovering high above the map with crisp separation
+    const atkDie = makeDie(0.50, C.coral, C.white);
+    atkDie.position.set(-0.36, 1.12, -0.04);
+    atkDie.rotation.set(0.36, 0.62, -0.24);
+    const defDie = makeDie(0.48, C.sky, C.white);
+    defDie.position.set(0.36, 1.06, -0.10);
+    defDie.rotation.set(-0.28, -0.52, 0.26);
+    grp.add(atkDie, defDie);
+
+    const sp1 = makeSpark4(0.16, C.butter); sp1.position.set(0.0, 1.32, 0.02); grp.add(sp1);
+    const sp2 = makeSpark4(0.11, C.white); sp2.position.set(-0.78, 1.04, -0.22); grp.add(sp2);
+
+    stage.add(grp);
+    return scene;
+  },
 };
 
 const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 30);
 camera.position.set(0, 0.45, 4.95);
 camera.lookAt(0, 0.0, 0);
 
+const TARGET_SLUGS = ${JSON.stringify(TARGET_SLUGS)};
+
 async function run() {
-  for (const slug of Object.keys(BUILDERS)) {
+  for (const slug of TARGET_SLUGS) {
     const scene = BUILDERS[slug]();
     addShadows(scene);
     renderer.render(scene, camera);
