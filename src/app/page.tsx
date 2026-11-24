@@ -422,6 +422,22 @@ const GAMES: Game[] = [
     ),
   },
   {
+    href: "/ular",
+    name: "Ular Tangga",
+    sub: "Snakes, ladders and a quiz on every square",
+    face: "#3FA77A",
+    edge: "#2B7A50",
+    ink: "#1F5C3B",
+    cats: ["party", "brain"],
+    art: (
+      <span style={{ display: "grid", gridTemplateColumns: "repeat(3, 28px)", gridTemplateRows: "repeat(3, 28px)", gap: 3, transform: "rotate(-6deg)" }} aria-hidden="true">
+        {["#1CB0F6", "#58CC02", "#FFC800", "#CE82FF", "#FF9600", "#FF4B4B", "#58CC02", "#1CB0F6", "#FFC800"].map((c, i) => (
+          <span key={i} style={{ borderRadius: 7, background: "#fff", borderTop: `8px solid ${c}`, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 0 rgba(0,0,0,.2)" }}>{i === 1 ? "🐍" : i === 6 ? "🪜" : i === 4 ? "❓" : ""}</span>
+        ))}
+      </span>
+    ),
+  },
+  {
     href: "/tiles",
     name: "Tile Town",
     sub: "Cross words, score big",

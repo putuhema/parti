@@ -66,7 +66,7 @@ const ZOOM_IN = 2.2;
 const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
 
 /** A tiny peci-wearing head for player cards. */
-function Head({ ink }: { ink: string }) {
+export function Head({ ink }: { ink: string }) {
   return (
     <span className="ow-hat" style={{ background: ink }} aria-hidden="true">
       <svg width="26" height="30" viewBox="0 0 26 30"><path d="M5 30 L5 22 Q13 17 21 22 L21 30 Z" fill={ink} stroke="#231B1A" strokeWidth="2" /><circle cx="13" cy="13" r="7" fill="#231B1A" /><path d="M6.4 9.6 L7.4 3 L18.6 3 L19.6 9.6 Z" fill="#231B1A" /><rect x="7" y="6.4" width="12" height="1.8" fill={ink} /></svg>
@@ -775,7 +775,7 @@ export function BoomPlay({ room }: { room: BoomView }) {
   );
 }
 
-function Die({ face, rolling, delay }: { face: number; rolling: boolean; delay?: boolean }) {
+export function Die({ face, rolling, delay }: { face: number; rolling: boolean; delay?: boolean }) {
   // While rolling, the face flickers through random numbers.
   const [flick, setFlick] = useState(face);
   useEffect(() => {
@@ -792,7 +792,7 @@ function Die({ face, rolling, delay }: { face: number; rolling: boolean; delay?:
 }
 
 /** The turn clock as a ring: it drains smoothly and turns coral in the last five seconds. */
-function TimerRing({ deadline, total }: { deadline?: number | null; total: number }) {
+export function TimerRing({ deadline, total }: { deadline?: number | null; total: number }) {
   const ring = useRef<SVGCircleElement>(null);
   useEffect(() => {
     let raf = 0;

@@ -14,6 +14,7 @@ export const GAMES = {
   scramble: { name: "Scramble", path: "/scramble/room/" },
   tiles: { name: "Tile Town", path: "/tiles/room/" },
   boom: { name: "Juragan Nusantara", path: "/boom/room/" },
+  ular: { name: "Ular Tangga Nusantara", path: "/ular/room/" },
   sketch: { name: "Sketch Match", path: "/sketch/room/" },
   sync: { name: "In Sync", path: "/sync/room/" },
   heist: { name: "Heist Night", path: "/heist/room/" },

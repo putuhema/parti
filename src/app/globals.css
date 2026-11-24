@@ -1390,7 +1390,47 @@ body:has(.jn-play) { background: #E2D3B2; }
 .jn-fishgift b { display: block; }
 .jn-fishgifticon { font-size: 26px; line-height: 1; }
 .jn-fishuses { margin: 6px 0 0; font-size: 12px; font-weight: 700; line-height: 1.4; opacity: .8; }
-@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } [class*="jn-anim-"], .jn-fronds, .jn-flag, .jn-bob, .jn-sheet, .jn-bobber, .jn-ripple, .jn-catchart { animation: none !important; } .jn-leap { opacity: 1; animation: none; } .jn-dioblink { animation: none; } .jn-gavel, .jn-bid { animation: none; } .jn-slottop i, .jn-slot, .jn-reel.stop b { animation: none; } .jn-rollbtn, .jn-act { animation: none; } .jn-tapcall { animation: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
+/* ---- Ular Tangga: squares, snakes and ladders, and the question card ---- */
+.ul-hero { display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 56px; background: #E9DFC9; }
+.ul-sq { cursor: default; }
+.jn-world .ul-face { justify-content: center; gap: 0; padding: 6px 0 0; }
+.ul-num { font-size: 24px; font-weight: 900; line-height: 1; letter-spacing: -.02em; }
+.ul-cat { font-size: 12px; line-height: 1.1; font-weight: 900; }
+.ul-sl { position: absolute; left: 0; top: 0; z-index: 400; pointer-events: none; overflow: visible; }
+.ul-slither { animation: ul-slither 1.1s linear infinite; }
+@keyframes ul-slither { to { stroke-dashoffset: -32; } }
+.ul-tongue { animation: ul-tongue .9s steps(2) infinite; }
+@keyframes ul-tongue { 50% { opacity: 0; } }
+.ul-q { position: relative; overflow: hidden; width: min(360px, 100%); padding-top: 22px; text-align: left; }
+.ul-cattag { background: var(--cat) !important; color: var(--ow-ink) !important; }
+.ul-stakes { margin: 8px 0 0; padding: 5px 10px; border-radius: 10px; font-size: 13px; font-weight: 900; background: rgba(35,27,26,.06); }
+.ul-stakes.ladder { background: #E3F2EA; color: #2B7A50; }
+.ul-stakes.snake { background: #FBE3DF; color: #B23A2E; }
+.ul-qtext { margin: 10px 0 0; font-size: 17px; line-height: 1.35; font-weight: 900; color: var(--ow-ink); }
+.ul-choices { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 10px; }
+.ul-choice { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 7px 12px 7px 8px; border-radius: 12px; background: var(--ow-bone); color: var(--ow-ink);
+  border: 2.5px solid var(--ow-ink); box-shadow: 3px 3px 0 var(--ow-ink); font: inherit; font-size: 15px; font-weight: 800; text-align: left; line-height: 1.25; }
+button.ul-choice { cursor: pointer; transition: transform 100ms, box-shadow 100ms, background 120ms; }
+button.ul-choice:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ow-ink); background: var(--catsoft); }
+button.ul-choice:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: none; }
+button.ul-choice:disabled { cursor: default; }
+.ul-choice i { flex-shrink: 0; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--ow-ink); background: var(--cat); font-style: normal; font-size: 13px; font-weight: 900; }
+.ul-choice.picked { background: var(--catsoft); transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ow-ink); }
+.ul-choice.right { background: var(--ow-moss); color: var(--ow-bone); animation: jn-bidpop 360ms cubic-bezier(.3,1.7,.5,1) both; }
+.ul-choice.wrong { background: var(--ow-coral); color: var(--ow-bone); opacity: .9; }
+.ul-qtimer { display: block; height: 8px; margin-top: 10px; border-radius: 999px; border: 2px solid var(--ow-ink); overflow: hidden; background: rgba(35,27,26,.08); }
+.ul-qtimer span { display: block; height: 100%; background: var(--ow-mustard); }
+.ul-qtimer span.low { background: var(--ow-coral); }
+.ul-stamp { top: 58%; background: var(--ow-coral); color: var(--ow-bone); font-size: 24px; }
+.ul-stamp.ok { background: var(--ow-moss); }
+.ul-q.reveal .ul-choice { box-shadow: 2px 2px 0 var(--ow-ink); }
+@media (min-width: 1000px) {
+  .ul-q { width: 460px; }
+  .ul-qtext { font-size: 20px; }
+  .ul-choices { grid-template-columns: 1fr 1fr; }
+  .ul-choice { min-height: 52px; font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .jn-world { transition: none; } .ul-slither, .ul-tongue { animation: none; } [class*="jn-anim-"], .jn-fronds, .jn-flag, .jn-bob, .jn-sheet, .jn-bobber, .jn-ripple, .jn-catchart { animation: none !important; } .jn-leap { opacity: 1; animation: none; } .jn-dioblink { animation: none; } .jn-gavel, .jn-bid { animation: none; } .jn-slottop i, .jn-slot, .jn-reel.stop b { animation: none; } .jn-rollbtn, .jn-act { animation: none; } .jn-tapcall { animation: none; } .jn-it.offer .jn-itface, .jn-die.rolling, .jn-tile.offer, .jn-card, .jn-cash, .jn-banner, .jn-bld.pop, .jn-qtestamp, .jn-qte.miss, .jn-tap, .jn-mash.miss, .jn-hold.over, .jn-mashcount b { animation: none; } .ow-root .sheet { animation: none; } }
 
 /* ---------- Sketch Match ---------- */
 .sk-screen { min-height: 100dvh; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
