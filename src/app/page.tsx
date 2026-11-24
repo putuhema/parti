@@ -32,6 +32,23 @@ type Game = {
 
 const GAMES: Game[] = [
   {
+    href: "/spell",
+    name: "Spellcaster",
+    sub: "Trace 3D air runes & duel wizards",
+    face: "#6B38E8",
+    edge: "#4A1FB8",
+    ink: "#3B1596",
+    cats: ["duo", "party"],
+    tag: "NEW",
+    art: (
+      <span style={{ position: "relative", width: 102, height: 88, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }} aria-hidden="true">
+        <span style={{ transform: "rotate(-12deg)" }}>🪄</span>
+        <span style={{ transform: "translate(-4px, -10px)" }}>⚡</span>
+        <span style={{ transform: "translate(-8px, 10px)", fontSize: 28 }}>🔥</span>
+      </span>
+    ),
+  },
+  {
     href: "/pose",
     name: "Pose Match",
     sub: "Strike poses on camera together",

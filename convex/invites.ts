@@ -21,6 +21,7 @@ export const GAMES = {
   doodle: { name: "Air Doodle", path: "/doodle/room/" },
   split: { name: "Split Photobooth", path: "/split/room/" },
   heads: { name: "Heads Up!", path: "/heads/room/" },
+  spell: { name: "Spellcaster Duel", path: "/spell/room/" },
   sketch: { name: "Sketch Match", path: "/sketch/room/" },
   sync: { name: "In Sync", path: "/sync/room/" },
   heist: { name: "Heist Night", path: "/heist/room/" },
